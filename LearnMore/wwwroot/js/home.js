@@ -214,12 +214,15 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
                 return;
             }
 
-            // 🆕 如果預覽卡片已經顯示，直接展開群組面板
-            if (preview.classList.contains('show') && currentPreviewUid === songUid) {
-                const panel = preview.querySelector('.preview-group-panel');
-                if (panel && !panel.classList.contains('expanded')) {
-                    expandGroupPanel(preview, songUid);
-                }
+            clearTimeout(hideTimer);
+            preview.classList.add('group-picker-open');
+            if (!preview.classList.contains('show') || currentPreviewUid !== songUid) {
+                showPreview(card, preview);
+            }
+
+            const panel = preview.querySelector('.preview-group-panel');
+            if (panel && !panel.classList.contains('expanded')) {
+                expandGroupPanel(preview, songUid);
             }
         });
 
@@ -745,6 +748,7 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
 
     function hidePreview(previewEl) {
         currentPreviewUid = null;
+        previewEl.classList.remove('group-picker-open');
 
         if (typeof previewEl._cleanup === 'function') {
             previewEl._cleanup();
@@ -787,7 +791,14 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
                 <div class="pgp-error" aria-live="polite"></div>
             </div>
             <ul class="pgp-list" role="listbox" aria-label="選擇群組"></ul>`;
-        panel.querySelector('.pgp-close').addEventListener('click', e => { e.stopPropagation(); collapseGroupPanel(panel.closest('.hover-card-preview')); });
+        panel.querySelector('.pgp-close').addEventListener('click', e => {
+            e.stopPropagation();
+            const preview = panel.closest('.hover-card-preview');
+            collapseGroupPanel(preview);
+            if (preview?.classList.contains('group-picker-open')) {
+                hidePreview(preview);
+            }
+        });
         return panel;
     }
 
@@ -1044,7 +1055,9 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
                 return false;
             }
 
-            paintMiniHeartFor(songUid, false);
+            await loadJoinedUids();
+            const remainsJoined = joinedUids.has(songUid);
+            paintMiniHeartFor(songUid, remainsJoined);
 
             const card = document.querySelector(`.card-hover[data-songuid="${songUid}"]`);
             if (card && card.dataset.inCurrentGroup === 'true') {
@@ -1053,6 +1066,19 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
                     col.style.transition = 'opacity .18s ease';
                     col.style.opacity = '0';
                     setTimeout(() => col.remove(), 200);
+                }
+            } else if (card && card.dataset.favoriteCard === 'true' && !remainsJoined) {
+                const col = card.closest('[data-favorite-column]');
+                if (col) {
+                    col.style.transition = 'opacity .18s ease, transform .18s ease';
+                    col.style.opacity = '0';
+                    col.style.transform = 'translateY(8px)';
+                    setTimeout(() => {
+                        col.remove();
+                        const hasFavorites = document.querySelector('[data-favorite-card="true"]');
+                        const emptyState = document.getElementById('favorites-empty');
+                        if (!hasFavorites && emptyState) emptyState.hidden = false;
+                    }, 200);
                 }
             }
 

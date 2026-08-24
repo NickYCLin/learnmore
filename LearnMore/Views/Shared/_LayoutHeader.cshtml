@@ -1460,6 +1460,7 @@
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
                                 <li><a class="dropdown-item" href="@Url.Action("Profile","User")"><i class="fas fa-user"></i> 個人資料</a></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Favorites","User")"><i class="fas fa-heart"></i> 我的收藏</a></li>
                                 <li class="dropdown-item d-flex align-items-center" style="cursor:default;">
                                     <i class="fas fa-adjust"></i><span style="flex:1;">主題切換</span>
                                     <div class="theme-toggle" id="themeToggle"><i class="fas fa-sun toggle-icon sun"></i><i class="fas fa-moon toggle-icon moon"></i><div class="toggle-indicator"></div></div>
@@ -1507,6 +1508,7 @@
                     @if (!string.IsNullOrEmpty(userName))
                     {
                         <li class="nav-item"><a class="nav-link" href="@Url.Action("Profile","User")"><i class="fas fa-user"></i> 個人資料</a></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Favorites","User")"><i class="fas fa-heart"></i> 我的收藏</a></li>
                         <li class="nav-item mobile-theme-toggle">
                             <span><i class="fas fa-adjust"></i> 主題切換</span>
                             <div class="theme-toggle" id="themeToggleMobile"><i class="fas fa-sun toggle-icon sun"></i><i class="fas fa-moon toggle-icon moon"></i><div class="toggle-indicator"></div></div>

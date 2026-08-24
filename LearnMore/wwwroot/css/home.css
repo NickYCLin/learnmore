@@ -1427,7 +1427,7 @@
     /* ============================================
            響應式設計
            ============================================ */
-    @@media (max-width: 991.98px) {
+    @media (max-width: 991.98px) {
         #group-buttons-container {
             justify-content: flex-start !important;
             flex-wrap: nowrap !important;
@@ -1460,7 +1460,7 @@
         }
     }
 
-    @@media (max-width: 768px) {
+    @media (max-width: 768px) {
         h1.my-4 {
             font-size: 1.45rem;
             margin-top: 1rem !important;
@@ -1502,7 +1502,7 @@
         }
     }
 
-    @@media (max-width: 480px) {
+    @media (max-width: 480px) {
         .container {
             padding-left: 0.25rem;
             padding-right: 0.25rem;
@@ -1548,5 +1548,24 @@
 
         .hover-card-preview {
             display: none !important;
+        }
+
+        .hover-card-preview.group-picker-open {
+            display: block !important;
+            top: 50% !important;
+            left: 12px !important;
+            width: calc(100vw - 24px) !important;
+            height: min(430px, calc(100vh - 24px)) !important;
+            transform: translateY(-50%) !important;
+        }
+
+        .hover-card-preview.group-picker-open .video-section,
+        .hover-card-preview.group-picker-open .preview-meta,
+        .hover-card-preview.group-picker-open .preview-progress {
+            display: none;
+        }
+
+        .hover-card-preview.group-picker-open .preview-group-panel.expanded {
+            max-height: calc(100% - var(--preview-footer-h));
         }
     }

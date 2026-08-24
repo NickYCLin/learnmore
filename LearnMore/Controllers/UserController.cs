@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Formats.Png;
 using SixLabors.ImageSharp.Processing;
+using System.Data;
 using System.Data.SqlClient;
 
 namespace LearnMore.Controllers
@@ -232,9 +233,71 @@ namespace LearnMore.Controllers
         /// 我的收藏
         /// </summary>
         /// <returns></returns>
-        public IActionResult Favorites()
+        public async Task<IActionResult> Favorites()
         {
-            return View();
+            string? userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return RedirectToAction("Index", "Login");
+            }
+
+            const string query = @"
+SELECT S.SongID,
+       S.Title,
+       S.Artist,
+       S.Performer,
+       S.YouTubeVideoUrl,
+       S.ChannelThumbnailUrl,
+       S.SongUid,
+       G.GroupId,
+       G.GroupUid,
+       G.GroupName
+FROM [language].[dbo].[SongGroupMapping] M
+INNER JOIN [language].[dbo].[SongGroup] G ON G.GroupId = M.GroupId
+INNER JOIN [language].[dbo].[Songs] S ON S.SongUid = M.SongUid
+WHERE G.UserId = @UserId
+ORDER BY S.SongID DESC, G.CreateTime DESC;";
+
+            var favorites = new List<FavoriteSongViewModel>();
+            var favoriteBySongUid = new Dictionary<string, FavoriteSongViewModel>(StringComparer.OrdinalIgnoreCase);
+
+            await using var connection = new SqlConnection(_connectionString);
+            await connection.OpenAsync(HttpContext.RequestAborted);
+            await using var command = new SqlCommand(query, connection);
+            command.Parameters.Add("@UserId", SqlDbType.NVarChar, 128).Value = userId;
+            await using var reader = await command.ExecuteReaderAsync(HttpContext.RequestAborted);
+
+            while (await reader.ReadAsync(HttpContext.RequestAborted))
+            {
+                string songUid = reader["SongUid"].ToString() ?? string.Empty;
+                if (!favoriteBySongUid.TryGetValue(songUid, out FavoriteSongViewModel? favorite))
+                {
+                    favorite = new FavoriteSongViewModel
+                    {
+                        Song = new Songs
+                        {
+                            SongID = Convert.ToInt32(reader["SongID"]),
+                            Title = reader["Title"].ToString() ?? string.Empty,
+                            Artist = reader["Artist"].ToString() ?? string.Empty,
+                            Performer = reader["Performer"].ToString(),
+                            YouTubeVideoUrl = reader["YouTubeVideoUrl"].ToString() ?? string.Empty,
+                            ChannelThumbnailUrl = reader["ChannelThumbnailUrl"].ToString() ?? string.Empty,
+                            SongUid = songUid
+                        }
+                    };
+                    favoriteBySongUid.Add(songUid, favorite);
+                    favorites.Add(favorite);
+                }
+
+                favorite.Groups.Add(new SongGroup
+                {
+                    GroupId = Convert.ToInt32(reader["GroupId"]),
+                    GroupUid = reader["GroupUid"].ToString() ?? string.Empty,
+                    GroupName = reader["GroupName"].ToString() ?? string.Empty
+                });
+            }
+
+            return View(favorites);
         }
         #endregion
 

@@ -1,5 +1,160 @@
-﻿@*
-    For more information on enabling MVC for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
-*@
+@model IReadOnlyList<LearnMore.Models.FavoriteSongViewModel>
+
 @{
+    ViewData["Title"] = "我的收藏";
+    ViewData["Description"] = "查看已加入個人歌曲群組的日文歌曲。";
+    int cardIndex = 0;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/home.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/favorites.css" asp-append-version="true" />
+}
+
+<main class="favorites-shell">
+    <header class="favorites-hero">
+        <div>
+            <p class="favorites-eyebrow">你的歌曲角落</p>
+            <h1>我的收藏</h1>
+            <p>加入任一自訂群組的歌曲都會收在這裡，目前共有 <strong>@Model.Count</strong> 首。</p>
+        </div>
+        <a class="favorites-browse-link" asp-controller="Home" asp-action="Index" asp-route-type="all">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            繼續找歌
+        </a>
+    </header>
+
+    <section id="favorites-empty" class="favorites-empty" hidden="@(Model.Count > 0)">
+        <span class="favorites-empty-icon"><i class="fa-regular fa-heart" aria-hidden="true"></i></span>
+        <h2>還沒有收藏歌曲</h2>
+        <p>在歌曲清單點一下愛心，把歌曲加入群組後就會出現在這裡。</p>
+        <a asp-controller="Home" asp-action="Index" asp-route-type="all">前往歌曲清單</a>
+    </section>
+
+    @if (Model.Count > 0)
+    {
+        <div class="container favorites-grid-wrap">
+            <div class="row row-cols-2 row-cols-sm-2 row-cols-md-4 row-cols-lg-6 g-3">
+                @foreach (var favorite in Model)
+                {
+                    cardIndex++;
+                    var song = favorite.Song;
+                    var videoId = GetYouTubeVideoId(song.YouTubeVideoUrl);
+                    var thumbnailUrl = !string.IsNullOrEmpty(videoId)
+                        ? $"https://img.youtube.com/vi/{videoId}/mqdefault.jpg"
+                        : null;
+                    var lyricsHref = Url.Action("Index", "Lyrics", new { songUid = song.SongUid });
+
+                    <div class="col" data-favorite-column>
+                        <article class="card h-100 position-relative card-hover favorite-card"
+                                 data-songuid="@song.SongUid"
+                                 data-channel-thumbnail="@song.ChannelThumbnailUrl"
+                                 data-video-id="@videoId"
+                                 data-title="@song.Title"
+                                 data-subtitle="@song.Artist"
+                                 data-performer="@song.Performer"
+                                 data-lyricshref="@lyricsHref"
+                                 data-in-current-group="false"
+                                 data-favorite-card="true">
+                            @if (!string.IsNullOrEmpty(thumbnailUrl))
+                            {
+                                <a href="@lyricsHref" class="thumb-link">
+                                    <img src="@thumbnailUrl"
+                                         class="card-img-top"
+                                         alt="@($"{song.Artist} - {song.Title}")"
+                                         loading="@(cardIndex <= 8 ? "eager" : "lazy")"
+                                         decoding="async"
+                                         width="320"
+                                         height="180" />
+                                </a>
+                            }
+                            else
+                            {
+                                <div class="bg-secondary d-flex align-items-center justify-content-center thumb-fallback">
+                                    <span class="text-white">無影片</span>
+                                </div>
+                            }
+
+                            <button type="button" class="mini-heart-btn" title="管理收藏群組" aria-label="管理 @song.Title 的收藏群組">
+                                <i class="fa-solid fa-heart" aria-hidden="true"></i>
+                            </button>
+
+                            <a href="@lyricsHref" class="text-decoration-none">
+                                <div class="card-body card-body-compact">
+                                    <h2 class="card-title clamp-1 fw-bold mb-2">@song.Title</h2>
+                                    <div class="song-meta-stack" aria-label="歌曲資訊">
+                                        @if (!string.IsNullOrWhiteSpace(song.Performer))
+                                        {
+                                            <p class="song-meta-line song-meta-line-primary card-performer home-song-performer clamp-1 mb-0">
+                                                <span class="song-meta-label">演唱者</span>
+                                                <span class="song-meta-value">@song.Performer</span>
+                                            </p>
+                                        }
+                                        <p class="song-meta-line card-subtitle clamp-1 mb-0">
+                                            <span class="song-meta-label">原唱</span>
+                                            <span class="song-meta-value">@song.Artist</span>
+                                        </p>
+                                    </div>
+                                </div>
+                            </a>
+
+                            <div class="favorite-group-list" aria-label="收藏群組">
+                                @foreach (var group in favorite.Groups)
+                                {
+                                    <a class="favorite-group-chip"
+                                       asp-controller="Home"
+                                       asp-action="Index"
+                                       asp-route-groupId="@group.GroupId">@group.GroupName</a>
+                                }
+                            </div>
+                        </article>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</main>
+
+<script>
+    const isLoggedIn = "true";
+    const hasGroupId = "false";
+    const currentGroupId = "";
+
+    window.learnMoreHomeConfig = {
+        urls: {
+            groupPlay: '@Url.Action("PlayByQuery", "GroupPlayer")',
+            deleteGroup: '@Url.Action("DeleteGroup", "SongGroup")',
+            homeAll: '@Url.Action("Index", "Home", new { type = "all" })',
+            home: '@Url.Action("Index", "Home")',
+            groupsContainingSong: '@Url.Action("GetGroupsContainingSong", "SongGroup")',
+            createGroup: '@Url.Action("CreateGroup", "SongGroup")',
+            getGroups: '@Url.Action("GetGroups", "SongGroup")',
+            getJoinedUids: '@Url.Action("GetJoinedUids", "SongGroup")',
+            addSongToGroup: '@Url.Action("AddSongToGroup", "SongGroup")',
+            removeSongFromGroup: '@Url.Action("RemoveSongFromGroup", "SongGroup")'
+        }
+    };
+</script>
+<script src="~/js/home.js" asp-append-version="true"></script>
+
+@functions {
+    private static string GetYouTubeVideoId(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return string.Empty;
+        try
+        {
+            var uri = new Uri(url);
+            if (uri.Host.Contains("youtu.be", StringComparison.OrdinalIgnoreCase))
+            {
+                return uri.AbsolutePath.TrimStart('/');
+            }
+
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            return query["v"] ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
 }
