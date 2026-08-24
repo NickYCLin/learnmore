@@ -1,0 +1,543 @@
+﻿@{
+    ViewData["Title"] = "歌曲召喚";
+}
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+<style>
+    #summon-music-app,
+    #lyrics-display {
+        width: min(100%, 72rem);
+        min-width: 0;
+    }
+
+    #lyrics-display {
+        color: var(--text-primary, #1e293b);
+        background: var(--bg-primary, #ffffff) !important;
+        border: 1px solid var(--border-color, #e2e8f0);
+    }
+
+    #lyrics-display iframe {
+        aspect-ratio: 16 / 9;
+        height: auto !important;
+        min-height: 220px;
+    }
+
+    #lyricsCards {
+        min-width: 0;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #lyricsCards p {
+        overflow-wrap: anywhere;
+    }
+
+    @@media (max-width: 768px) {
+        #lyrics-display {
+            padding: 1rem !important;
+            border-radius: 1rem !important;
+        }
+
+        #lyrics-display .flex.justify-center.space-x-4 {
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        #lyrics-display .flex.justify-center.space-x-4 > * {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+            width: 100%;
+            min-height: 44px;
+        }
+
+        #goBackButton,
+        #saveButton,
+        #offerButton {
+            width: 100%;
+            min-height: 44px;
+        }
+
+        #lyricsCards {
+            max-height: 52vh;
+            padding: 0.75rem !important;
+            margin-left: 0 !important;
+        }
+    }
+</style>
+
+<div id="summon-music-app" class="summon-panel lm-page-card">
+    <h1 class="lm-page-title mb-4">歌曲召喚</h1>
+    <form id="summonForm" class="space-y-4">
+        <div>
+            <label for="youtubeLink" class="lm-form-label"><span class="text-danger">*</span>YouTube 影片連結</label>
+            <input type="url" id="youtubeLink" class="lm-form-control" placeholder="請輸入 YouTube 連結" required>
+            <p id="duplicateWarning" class="text-red-600 font-semibold hidden mt-2">⚠️ 此影片已存在</p>
+        </div>
+
+        <div>
+            <label for="songTitle" class="lm-form-label"><span class="text-danger">*</span>歌曲名稱</label>
+            <input id="songTitle" class="lm-form-control" placeholder="請輸入歌曲名稱" required>
+        </div>
+
+        <div>
+            <label for="chineseTitleAlias" class="lm-form-label">中文歌名（選填）</label>
+            <input id="chineseTitleAlias" class="lm-form-control" placeholder="可填繁中譯名或常用搜尋別名">
+            <p class="text-sm text-gray-500 mt-1">只會寫入搜尋別名，不會覆蓋原始歌名；未填時不會呼叫 OpenAI API。</p>
+        </div>
+
+        <div>
+            <label for="songArtist" class="lm-form-label"><span class="text-danger">*</span>原唱歌手</label>
+            <input id="songArtist" class="lm-form-control" placeholder="請輸入原唱歌手" required>
+        </div>
+
+        <div>
+            <label for="songPerformer" class="lm-form-label">演唱者</label>
+            <input id="songPerformer" class="lm-form-control" placeholder="請輸入實際演唱這首歌的人">
+        </div>
+
+        <div>
+            <label for="songTranslator" class="lm-form-label">翻譯人</label>
+            <input id="songTranslator" class="lm-form-control" placeholder="請輸入翻譯人">
+        </div>
+
+        <div>
+            <label for="japaneseLyrics" class="lm-form-label"><span class="text-danger">*</span>日文歌詞</label>
+            <textarea id="japaneseLyrics" class="lm-form-control h-40" placeholder="請輸入日文歌詞，每行一句" required></textarea>
+        </div>
+
+        <div>
+            <label for="chineseLyrics" class="lm-form-label"><span class="text-danger">*</span>中文歌詞</label>
+            <textarea id="chineseLyrics" class="lm-form-control h-40" placeholder="請輸入中文歌詞，每行一句" required></textarea>
+        </div>
+
+        <button type="submit" id="offerButton" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed" disabled>
+            我已放好供品
+        </button>
+    </form>
+</div>
+
+<div id="lyrics-display" class="max-w-6xl mx-auto p-6 bg-white rounded-2xl shadow-lg hidden">
+    <div class="flex justify-center mb-4">
+        <button id="goBackButton" class="px-6 py-2 bg-red-500 text-white rounded-lg font-semibold hover:bg-red-600 transition">返回前一頁</button>
+    </div>
+    <div class="flex flex-col md:flex-row md:gap-x-6 md:items-stretch">
+        <div class="md:w-1/2">
+            <iframe id="videoPlayer" class="w-full h-64 md:h-80 rounded-lg" src="" frameborder="0" allowfullscreen></iframe>
+            <div class="text-center text-gray-700 font-semibold mt-4" id="progressIndicator">
+                標記進度：<span id="markedCount">0</span> / <span id="totalCount">0</span>
+            </div>
+            <div class="flex justify-center space-x-4 mt-2">
+                <button id="prevButton" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-lg font-semibold hover:bg-gray-400 transition">返回上一個</button>
+                <button id="markTimeButton" class="px-4 py-2 bg-yellow-400 text-white rounded-lg font-semibold hover:bg-yellow-500 transition">標記時間</button>
+            </div>
+            <div class="flex justify-center mt-2">
+                <button type="button" id="saveButton"
+                        class="w-full bg-gray-400 text-white py-3 rounded-lg font-semibold opacity-50 cursor-not-allowed"
+                        disabled>
+                    召喚
+                </button>
+            </div>
+        </div>
+        <div class="md:w-1/2 p-4 overflow-y-auto max-h-96 space-y-4 border border-gray-200 rounded-lg md:ml-6" id="lyricsCards">
+            <!-- 歌詞卡片將會在這裡動態插入 -->
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentIndex = 0;
+    let timestamps = [];
+    let player;
+    let totalLyrics = 0;
+
+    document.getElementById('saveButton').disabled = true; // 預設禁用
+
+    document.getElementById('summonForm').addEventListener('submit',async function(event) {
+        event.preventDefault();
+
+        let submitButton = document.getElementById('offerButton');
+        submitButton.disabled = true;  // 禁用按鈕，防止連續點擊
+        submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+
+        document.getElementById('summon-music-app').classList.add('hidden');
+        document.getElementById('lyrics-display').classList.remove('hidden');
+
+        let youtubeUrl = document.getElementById('youtubeLink').value;
+        let videoId = youtubeUrl.split('v=')[1]?.split('&')[0] || '';
+        let embedUrl = `https://www.youtube.com/embed/${videoId}?enablejsapi=1`;
+
+        // 確保播放器重置
+        document.getElementById('videoPlayer').src = embedUrl;
+
+        let jpLyrics = document.getElementById('japaneseLyrics').value.split('\n');
+        let cnLyrics = document.getElementById('chineseLyrics').value
+    .trim()  // 移除開頭結尾的空格和換行
+    .split(/\r?\n/)  // 兼容不同系統的換行符
+    .filter(line => line.trim() !== "");  // 確保不會有空行
+
+
+        let lyricsContainer = document.getElementById('lyricsCards');
+        lyricsContainer.innerHTML = '';
+
+        let formattedLyrics = jpLyrics.join('@@');
+
+        try {
+            let responseRoman = await fetch('@Url.Content("~/api/Kuroshiro/convertLines")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    texts: jpLyrics,
+                    mode: 'spaced',
+                    to: 'romaji'
+                })
+            });
+
+            let responseRomanText = await responseRoman.text();
+
+            if (!responseRoman.ok) {
+                throw new Error(`API 錯誤: ${responseRoman.status} - ${responseRoman.statusText}\n${responseRomanText}`);
+            }
+
+            let romajiLyrics;
+            try {
+                romajiLyrics = JSON.parse(responseRomanText);
+            } catch (jsonError) {
+                throw new Error(`無法解析 API 回應為 JSON: ${responseRomanText}`);
+            }
+
+            if (!romajiLyrics || !Array.isArray(romajiLyrics.results)) {
+                throw new Error('API 回應不包含羅馬拼音資料');
+            }
+
+            let splitRomaji = romajiLyrics.results;
+
+            let responseRuby = await fetch('@Url.Content("~/api/Kuroshiro/convertLines")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    texts: jpLyrics,
+                    mode: 'furigana',
+                    to: 'hiragana'
+                })
+            });
+
+            let responseRubyText = await responseRuby.text();
+
+            if (!responseRuby.ok) {
+                throw new Error(`API 錯誤: ${responseRuby.status} - ${responseRuby.statusText}\n${responseRubyText}`);
+            }
+
+            let rubyjiLyrics;
+            try {
+                rubyjiLyrics = JSON.parse(responseRubyText);
+            } catch (jsonError) {
+                throw new Error(`無法解析 API 回應為 JSON: ${responseRubyText}`);
+            }
+
+            if (!rubyjiLyrics || !Array.isArray(rubyjiLyrics.results)) {
+                throw new Error('API 回應不包含日文註音資料');
+            }
+
+            let splitRubyji = rubyjiLyrics.results;
+
+            timestamps = new Array(jpLyrics.length).fill(null);
+            currentIndex = 0;
+            document.getElementById('totalCount').innerText = jpLyrics.length;
+
+            for (let i = 0; i < jpLyrics.length; i++) {
+                let jpLine = jpLyrics[i] || '';
+                let cnLine = cnLyrics[i] || '';
+
+                let romajiLine = splitRomaji[i] || '[羅馬拼音取得失敗]';
+                let rubyjiLine = splitRubyji[i] || '[日文拼音取得失敗]';
+
+                let card = `<div class='p-4 bg-gray-100 rounded-lg shadow relative flex flex-col items-center' data-index='${i}' id='card-${i}'>
+                                <p class='text-green-600 font-bold absolute top-1 left-1/2 transform -translate-x-1/2 hidden' id='marked-${i}'>✅ 已標記</p>
+                                <p class='text-lg font-bold hidden'>${jpLine}</p>
+                                <p class='text-lg font-bold'>${rubyjiLine}</p>
+                                <p class='text-blue-500 text-sm italic'>${romajiLine}</p>
+                                <p class='text-gray-700'>${cnLine}</p>
+                                <p class='text-sm text-blue-500 absolute bottom-2 right-2' id='timestamp-${i}'></p>
+                            </div>`;
+                lyricsContainer.insertAdjacentHTML('beforeend', card);
+            }
+        } catch (error) {
+            console.error('獲取羅馬拼音時出錯:', error);
+            alert(`獲取羅馬拼音失敗: ${error.message}`);
+        }
+
+        setTimeout(() => {
+            if (!player) {
+                player = new YT.Player('videoPlayer', {
+                    events: {
+                        'onReady': function() {
+                            console.log("YouTube Player Ready");
+                        }
+                    }
+                });
+            }
+        }, 1000);
+
+        // 如果請求失敗，恢復按鈕狀態
+        setTimeout(() => {
+            submitButton.disabled = false;
+            submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        }, 5000);
+    });
+
+    document.getElementById('markTimeButton').addEventListener('click', function() {
+        if (player && player.getCurrentTime) {
+            let time = player.getCurrentTime().toFixed(1);
+            if (currentIndex < timestamps.length) {
+                timestamps[currentIndex] = time;
+                document.getElementById(`timestamp-${currentIndex}`).innerText = `⏱ ${time}s`;
+                document.getElementById(`card-${currentIndex}`).classList.add('bg-green-200');
+                document.getElementById(`marked-${currentIndex}`).classList.remove('hidden');
+                currentIndex++;
+                document.getElementById('markedCount').innerText = currentIndex;
+
+                checkProgress();
+
+                let nextCard = document.getElementById(`card-${currentIndex}`);
+                if (nextCard) {
+                    nextCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }
+    });
+
+    document.getElementById('prevButton').addEventListener('click', function() {
+        if (currentIndex > 0) {
+            currentIndex--;
+            timestamps[currentIndex] = null;
+            document.getElementById(`timestamp-${currentIndex}`).innerText = '';
+            document.getElementById(`card-${currentIndex}`).classList.remove('bg-green-200');
+            document.getElementById(`marked-${currentIndex}`).classList.add('hidden');
+            document.getElementById('markedCount').innerText = currentIndex;
+
+            checkProgress();
+
+            let prevCard = document.getElementById(`card-${currentIndex}`);
+            if (prevCard) {
+                prevCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    });
+
+    // 🔹 監控標記進度
+    function checkProgress() {
+        totalLyrics = parseInt(document.getElementById('totalCount').innerText, 10);
+        let markedCount = parseInt(document.getElementById('markedCount').innerText, 10);
+        let saveButton = document.getElementById('saveButton');
+
+        if (markedCount === totalLyrics) {
+            saveButton.disabled = false;
+            saveButton.classList.remove('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
+            saveButton.classList.add('bg-green-500', 'hover:bg-green-600');
+        } else {
+            saveButton.disabled = true;
+            saveButton.classList.remove('bg-green-500', 'hover:bg-green-600');
+            saveButton.classList.add('opacity-50', 'cursor-not-allowed', 'bg-gray-400');
+        }
+    }
+
+    document.getElementById('goBackButton').addEventListener('click', function() {
+        document.getElementById('lyrics-display').classList.add('hidden');
+        document.getElementById('summon-music-app').classList.remove('hidden');
+
+        // 停止 YouTube 影片播放
+        if (player && typeof player.stopVideo === 'function') {
+            player.stopVideo();
+        }
+
+        // 重置標記數據
+        timestamps = new Array(timestamps.length).fill(null);
+        currentIndex = 0;
+        document.getElementById('markedCount').innerText = '0';
+
+        // 清除所有標記的 UI
+        for (let i = 0; i < timestamps.length; i++) {
+            document.getElementById(`timestamp-${i}`).innerText = '';
+            document.getElementById(`card-${i}`).classList.remove('bg-green-200');
+            document.getElementById(`marked-${i}`).classList.add('hidden');
+        }
+    });
+
+    document.getElementById('saveButton').addEventListener('click', async function() {
+        let youtubeUrl = document.getElementById('youtubeLink').value;
+        let songTitle = document.getElementById('songTitle').value;
+        let chineseTitleAlias = document.getElementById('chineseTitleAlias').value;
+        let songArtist = document.getElementById('songArtist').value;
+        let songPerformer = document.getElementById('songPerformer').value;
+        let songTranslator = document.getElementById('songTranslator').value;
+
+        let lyricsElements = document.querySelectorAll('#lyricsCards .p-4');
+        let lyrics = [];
+
+        lyricsElements.forEach((element, index) => {
+            let jpText = element.querySelector('p:nth-child(2)').innerText;
+            let jpRubyText = element.querySelector('p:nth-child(3)').innerHTML.trim();
+            let romanText = element.querySelector('p:nth-child(4)').innerText;
+            let cnText = element.querySelector('p:nth-child(5)').innerText;
+            let time = parseFloat(element.querySelector('p:nth-child(6)').innerText.replace('⏱ ', '').replace('s', '')) || 0;
+
+            lyrics.push({
+                Time: time,
+                Japanese: jpText,
+                Chinese: cnText,
+                JapaneseRuby: jpRubyText,
+                Roman: romanText
+            });
+        });
+
+        let requestData = {
+            YouTubeLink: youtubeUrl,
+            SongTitle: songTitle,
+            ChineseTitleAlias: chineseTitleAlias,
+            SongArtist: songArtist,
+            SongPerformer: songPerformer,
+            SongTranslator: songTranslator,
+            Lyrics: lyrics
+        };
+
+        try {
+            let response = await fetch('@Url.Content("~/Media/Summon")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(requestData)
+            });
+
+            let result = await response.json();
+            if (response.ok) {
+                alert(`歌曲召喚成功！`);
+
+                setTimeout(() => {
+                    window.location.href = '@Url.Content("~/Media/Manage")';
+                }, 3000);
+            } else {
+                alert(`召喚失敗: ${result}`);
+            }
+        } catch (error) {
+            console.error('發生錯誤:', error);
+            alert('發生錯誤，請稍後再試。');
+        }
+    });
+
+    let typingTimer;
+    const debounceDelay = 500;
+
+    document.getElementById('youtubeLink').addEventListener('input', function () {
+        clearTimeout(typingTimer);
+        typingTimer = setTimeout(checkYouTubeDuplicate, debounceDelay);
+    });
+
+    async function checkYouTubeDuplicate() {
+        const urlInput = document.getElementById('youtubeLink').value.trim();
+        const warningEl = document.getElementById('duplicateWarning');
+        const submitButton = document.getElementById('offerButton');
+
+        if (!urlInput) {
+            warningEl.classList.add('hidden');
+            submitButton.disabled = true;
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+            return;
+        }
+
+        try {
+            const response = await fetch('@Url.Content("~/api/media/CheckYouTubeLink")', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(urlInput)
+            });
+
+            const data = await response.json();
+
+            if (data.exists) {
+                warningEl.classList.remove('hidden');
+                submitButton.disabled = true;
+                submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                warningEl.classList.add('hidden');
+                submitButton.disabled = false;
+                submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+
+            updateOfferButtonState();
+
+        } catch (error) {
+            console.error('檢查影片是否存在時發生錯誤:', error);
+            // 為保守起見，也先停用按鈕
+            warningEl.classList.add('hidden');
+            submitButton.disabled = true;
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    const requiredFields = [
+        'youtubeLink',
+        'songTitle',
+        'songArtist',
+        'japaneseLyrics',
+        'chineseLyrics'
+    ];
+
+    function updateOfferButtonState() {
+        const submitButton = document.getElementById('offerButton');
+        const warningEl = document.getElementById('duplicateWarning');
+
+        // 檢查所有必填欄位是否都有值
+        const allFilled = requiredFields.every(id => {
+            const el = document.getElementById(id);
+            return el && el.value.trim() !== '';
+        });
+
+        // 檢查是否為重複影片
+        const isDuplicate = !warningEl.classList.contains('hidden');
+
+        if (allFilled && !isDuplicate) {
+            submitButton.disabled = false;
+            submitButton.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            submitButton.disabled = true;
+            submitButton.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    requiredFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', updateOfferButtonState);
+        }
+    });
+</script>
+
+<script src="https://www.youtube.com/iframe_api"></script>
+<style>
+        .dark-theme #lyrics-display,
+        .dark-theme #lyricsCards,
+        .dark-theme #progressIndicator,
+        .dark-theme .lyrics-card,
+        .dark-theme .p-4.bg-gray-100 {
+            background: #2d3748 !important;
+            color: white !important;
+            border-color: #4a5568 !important;
+        }
+
+        .dark-theme #lyrics-display input,
+        .dark-theme #lyrics-display textarea {
+            background: #2d3748 !important;
+            color: white !important;
+            border: 1px solid #4a5568 !important;
+        }
+
+        .dark-theme #lyrics-display h3,
+        .dark-theme #lyrics-display label,
+        .dark-theme #lyrics-display .lyrics-card p,
+        .dark-theme #lyrics-display .p-4.bg-gray-100 p {
+            color: #e2e8f0 !important;
+        }
+
+    #lyricsCards {
+        scroll-padding-top: 30px;
+    }
+</style>

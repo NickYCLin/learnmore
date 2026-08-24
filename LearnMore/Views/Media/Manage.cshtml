@@ -1,0 +1,224 @@
+﻿@model ManageViewModel
+
+@{
+    ViewData["Title"] = "音樂管理";
+}
+
+<h1 class="lm-page-heading">音樂管理</h1>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a asp-controller="Media" asp-action="ReviewQueue" class="btn btn-outline-warning">待校正清單</a>
+</div>
+
+<div class="row lm-page-shell">
+    <!-- 主負責的歌曲 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h3 class="mb-0">主負責</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.ProducerSongs.Any())
+                {
+                    <div class="table-responsive lm-scroll-x">
+                        <table class="table table-striped text-center align-middle lm-manage-table">
+                            <thead>
+                                <tr>
+                                    <th>封面</th>
+                                    <th>歌名</th>
+                                    <th>原唱歌手</th>
+                                    <th>演唱者</th>
+                                    <th>狀態</th>
+                                    <th>音軌</th>
+                                    <th>編輯</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var song in Model.ProducerSongs)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(song.YouTubeVideoUrl))
+                                            {
+                                                var videoId = GetYouTubeVideoId(song.YouTubeVideoUrl);
+                                                var thumbnailUrl = $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg";
+                                                <a href="@song.YouTubeVideoUrl" target="_blank">
+                                                    <img src="@thumbnailUrl" class="img-thumbnail" width="100" alt="@($"{song.Artist} - {song.Title}")" />
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-secondary d-flex align-items-center justify-content-center lm-thumb-placeholder">
+                                                    <span class="text-white">無影片</span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>@song.Title</td>
+                                        <td>@song.Artist</td>
+                                        <td>@song.Performer</td>
+                                        <td>
+                                            <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+                                            {
+                                                Status = song.HighAccuracyStatus,
+                                                ReasonText = song.HighAccuracyStatusReason,
+                                                BadgeTitle = song.HighAccuracyStatusReason,
+                                                ContainerCssClass = "d-flex flex-column gap-1",
+                                                ReasonCssClass = "d-block mt-1 text-muted"
+                                            }' />
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetAudioStemStatusBadgeClass(song)" title="@GetAudioStemStatusTitle(song)">
+                                                @GetAudioStemStatusLabel(song)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <a asp-controller="Media" asp-action="Edit" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-danger">編輯歌曲</a>
+                                            <a asp-controller="Media" asp-action="EditLyrics" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-warning">編輯歌詞</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">沒有主負責的歌曲</p>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- 協同合作的歌曲 -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h3 class="mb-0">協同合作</h3>
+            </div>
+            <div class="card-body">
+                @if (Model.CollaborationSongs.Any())
+                {
+                    <div class="table-responsive lm-scroll-x">
+                        <table class="table table-striped text-center align-middle lm-manage-table">
+                            <thead>
+                                <tr>
+                                    <th>封面</th>
+                                    <th>歌名</th>
+                                    <th>原唱歌手</th>
+                                    <th>演唱者</th>
+                                    <th>狀態</th>
+                                    <th>音軌</th>
+                                    <th>編輯</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var song in Model.CollaborationSongs)
+                                {
+                                    <tr>
+                                        <td>
+                                            @if (!string.IsNullOrEmpty(song.YouTubeVideoUrl))
+                                            {
+                                                var videoId = GetYouTubeVideoId(song.YouTubeVideoUrl);
+                                                var thumbnailUrl = $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg";
+                                                <a href="@song.YouTubeVideoUrl" target="_blank">
+                                                    <img src="@thumbnailUrl" class="img-thumbnail" width="100" alt="@($"{song.Artist} - {song.Title}")" />
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <div class="bg-secondary d-flex align-items-center justify-content-center lm-thumb-placeholder">
+                                                    <span class="text-white">無影片</span>
+                                                </div>
+                                            }
+                                        </td>
+                                        <td>@song.Title</td>
+                                        <td>@song.Artist</td>
+                                        <td>@song.Performer</td>
+                                        <td>
+                                            <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+                                            {
+                                                Status = song.HighAccuracyStatus,
+                                                ReasonText = song.HighAccuracyStatusReason,
+                                                BadgeTitle = song.HighAccuracyStatusReason,
+                                                ContainerCssClass = "d-flex flex-column gap-1",
+                                                ReasonCssClass = "d-block mt-1 text-muted"
+                                            }' />
+                                        </td>
+                                        <td>
+                                            <span class="badge @GetAudioStemStatusBadgeClass(song)" title="@GetAudioStemStatusTitle(song)">
+                                                @GetAudioStemStatusLabel(song)
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <a asp-controller="Media" asp-action="EditLyrics" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-warning">編輯歌詞</a>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="text-muted">沒有協同合作的歌曲</p>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    // 提取 YouTube Video ID 的輔助方法
+    private string GetYouTubeVideoId(string url)
+    {
+        if (string.IsNullOrEmpty(url))
+            return "";
+
+        try
+        {
+            var uri = new Uri(url);
+            if (uri.Host.Contains("youtu.be"))
+            {
+                return uri.AbsolutePath.TrimStart('/');
+            }
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            return query["v"] ?? "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    private string GetAudioStemStatusLabel(Songs song)
+    {
+        return (song.HasInstrumentalAudioStem, song.HasVocalsAudioStem) switch
+        {
+            (true, true) => "伴奏/人聲完成",
+            (true, false) => "缺人聲",
+            (false, true) => "缺伴奏",
+            _ => "未處理"
+        };
+    }
+
+    private string GetAudioStemStatusBadgeClass(Songs song)
+    {
+        return (song.HasInstrumentalAudioStem, song.HasVocalsAudioStem) switch
+        {
+            (true, true) => "bg-success-subtle text-success-emphasis border border-success-subtle",
+            (true, false) or (false, true) => "bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+            _ => "bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
+        };
+    }
+
+    private string GetAudioStemStatusTitle(Songs song)
+    {
+        return (song.HasInstrumentalAudioStem, song.HasVocalsAudioStem) switch
+        {
+            (true, true) => "這首歌已有伴奏與人聲分離檔",
+            (true, false) => "這首歌已有伴奏，但還沒有抽出人聲",
+            (false, true) => "這首歌已有抽出人聲，但還沒有伴奏",
+            _ => "這首歌尚未完成 audio-stems 處理"
+        };
+    }
+}

@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://magicplus-design.serveirc.com/LearnMore/sitemap.xml
+
+# 禁止爬取的路徑
+Disallow: /api/
+Disallow: /User/Settings
+Disallow: /User/Profile
+Disallow: /LearnMore/api/
+Disallow: /LearnMore/User/Settings
+Disallow: /LearnMore/User/Profile

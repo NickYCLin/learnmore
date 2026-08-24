@@ -1,0 +1,45 @@
+﻿@{
+    ViewData["Title"] = "提供意見";
+}
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+
+@{
+    ViewData["Title"] = "提供意見";
+}
+
+<div class="feedback-panel lm-page-card">
+    <div class="lm-page-divider">
+        <p class="lm-page-eyebrow">Feedback</p>
+        <h1 class="lm-page-title mt-1">@ViewData["Title"]</h1>
+        <p class="lm-page-text mt-3">
+            如果你在使用網站時遇到問題，或有想新增的歌曲、功能建議，都可以在這裡告訴我們。
+        </p>
+    </div>
+
+    @if (ViewData["Message"] != null)
+    {
+        <div class="lm-success-message">
+            @ViewData["Message"]
+        </div>
+    }
+
+    <form method="post" asp-action="Feedback" class="mt-6 space-y-5">
+        <div>
+            <label for="Title" class="lm-form-label">標題</label>
+            <input type="text" id="Title" name="Title" required placeholder="例如：歌詞時間軸有問題、想新增某首歌"
+                   class="lm-form-control" />
+        </div>
+        <div>
+            <label for="Content" class="lm-form-label">內容</label>
+            <textarea id="Content" name="Content" rows="7" required placeholder="請盡量描述你看到的狀況、操作步驟，或希望我們怎麼改善。"
+                      class="lm-form-control"></textarea>
+        </div>
+        <div class="pt-2 flex justify-end">
+            <button type="submit" class="lm-primary-button">
+                送出意見
+            </button>
+        </div>
+    </form>
+</div>

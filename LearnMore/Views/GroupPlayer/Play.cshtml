@@ -1,0 +1,1242 @@
+@model LearnMore.Models.GroupPlayerViewModel
+@{
+    ViewData["Title"] = $"播放：{Model.GroupName}";
+    ViewData["LayoutContainerClass"] = "container-fluid group-player-layout-container";
+}
+
+<link rel="stylesheet" href="~/css/lyrics.css" />
+
+<style>
+    .playlist-container { background: var(--bg-primary); border-radius: 12px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); overflow: hidden; }
+    .playlist-header { background: linear-gradient(135deg, var(--primary-color), var(--primary-hover)); color: white; padding: 16px; font-weight: 700; font-size: 1.1rem; border-bottom: 1px solid var(--border-color); }
+    .playlist-scroll { max-height: calc(100vh - 280px); overflow-y: auto; padding: 8px; background: var(--bg-secondary); }
+    .playlist-item { background: var(--bg-primary); border: 2px solid var(--border-color); border-radius: 10px; margin-bottom: 8px; padding: 12px; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 12px; position: relative; }
+    .playlist-item:hover { background: var(--bg-tertiary); border-color: var(--primary-light); transform: translateX(4px); box-shadow: var(--shadow-sm); }
+    .playlist-item.active { background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1)); border-color: var(--primary-color); border-width: 2px; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2); }
+    .playlist-item img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; border: 2px solid var(--border-color); transition: all 0.2s ease; flex-shrink: 0; }
+    .playlist-item-content { flex: 1; min-width: 0; }
+    .playlist-item-title { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .playlist-item-artist { font-size: 0.85rem; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .playlist-empty { text-align: center; padding: 40px 20px; color: var(--text-tertiary); font-size: 0.95rem; }
+    .playlist-stats { padding: 12px 16px; background: var(--bg-tertiary); border-top: 1px solid var(--border-color); color: var(--text-secondary); font-size: 0.85rem; display: flex; align-items: center; gap: 8px; }
+    #prevBtn,
+    #nextBtn {
+        min-width: 78px;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        color: #fff !important;
+        background: rgba(15, 23, 42, 0.22) !important;
+        border-color: rgba(255, 255, 255, 0.86) !important;
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16), 0 3px 10px rgba(15, 23, 42, 0.18);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+    #prevBtn:hover,
+    #prevBtn:focus,
+    #nextBtn:hover,
+    #nextBtn:focus {
+        color: #fff !important;
+        background: rgba(15, 23, 42, 0.38) !important;
+        border-color: #fff !important;
+        box-shadow: 0 0 0 0.18rem rgba(255, 255, 255, 0.2), 0 4px 12px rgba(15, 23, 42, 0.24);
+    }
+    #playPauseBtn {
+        min-width: 78px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        color: #fff !important;
+        background: linear-gradient(135deg, #4338ca, #7c3aed) !important;
+        border-color: rgba(255, 255, 255, 0.92) !important;
+        box-shadow: 0 4px 12px rgba(67, 56, 202, 0.32), inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    }
+    #playPauseBtn:hover,
+    #playPauseBtn:focus {
+        color: #fff !important;
+        background: linear-gradient(135deg, #3730a3, #6d28d9) !important;
+        border-color: #fff !important;
+        box-shadow: 0 0 0 0.18rem rgba(124, 58, 237, 0.28), 0 6px 16px rgba(67, 56, 202, 0.38);
+    }
+
+    .group-player-layout-container > main.pb-3 {
+        width: auto !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: clamp(6px, 0.8vw, 12px) !important;
+        padding-right: clamp(6px, 0.8vw, 12px) !important;
+    }
+    .group-player-page-container {
+        padding-left: clamp(4px, 0.6vw, 10px);
+        padding-right: clamp(4px, 0.6vw, 10px);
+    }
+    .group-player-page-container > .card { width: 100%; }
+    .group-player-content-row { --bs-gutter-x: 0.75rem; }
+    .group-player-playlist-column,
+    .group-player-detail-column { min-width: 0; }
+    .group-player-main-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    .group-player-main-content .video-section { width: 100%; max-width: none; min-width: 0; }
+    .group-player-main-content .lyrics-card { width: 100%; min-width: 0; }
+    .group-player-main-content .lyric-card { max-width: none; }
+    .group-player-playlist-column { order: 2; }
+    .group-player-detail-column { order: 1; }
+    .playlist-container.group-player-playlist-right {
+        position: sticky;
+        top: 1rem;
+    }
+    .playlist-container.group-player-playlist-height-synced {
+        height: var(--group-player-detail-height);
+        display: flex;
+        flex-direction: column;
+    }
+    .playlist-container.group-player-playlist-height-synced .playlist-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        max-height: none;
+    }
+    .playlist-container.group-player-playlist-height-synced .playlist-header,
+    .playlist-container.group-player-playlist-height-synced .playlist-stats {
+        flex: 0 0 auto;
+    }
+
+    /* Responsive 16:9 video area */
+    .video-container { position: relative; width: 100%; max-width: 100%; }
+    .video-container::before { content: ""; display: block; padding-top: 56.25%; }
+    .video-container > div, .video-container iframe, .video-container video { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .autoplay-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 2000; display: flex; align-items: center; justify-content: center; flex-direction: column; color: #fff; padding: 2rem; text-align: center; }
+    .autoplay-overlay.hidden { display: none; }
+    .autoplay-overlay h2 { font-size: 2rem; margin-bottom: 1rem; }
+    .autoplay-overlay p { max-width: 520px; line-height: 1.5; margin-bottom: 1.5rem; }
+    .autoplay-btn { background: #4f46e5; border: none; color: #fff; padding: 0.75rem 1.5rem; font-size: 1.1rem; border-radius: 6px; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+    .autoplay-btn:hover { background:#4338ca; }
+
+    /* 留言板新增樣式與 Lyrics 同步 */
+    .comments-section { margin-top: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: 12px; box-shadow: var(--shadow-sm); border: 1px solid var(--border-color); }
+    .comments-section h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: .75rem; display:flex; align-items:center; gap:.4rem; }
+    .comment { display: flex; flex-direction: column; padding: .6rem .75rem; border-radius: 10px; background: var(--bg-tertiary); margin-bottom: .6rem; position: relative; }
+    .comment img.avatar { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; border:2px solid var(--border-color); margin-right:.5rem; position:absolute; top:.65rem; right:.65rem; }
+    .comment strong { font-size:.9rem; color: var(--text-primary); }
+    .comment p { margin: .25rem 0 .25rem; font-size:.85rem; color: var(--text-secondary); white-space: pre-wrap; }
+    .comment .timestamp { font-size:.7rem; color: var(--text-tertiary); align-self:flex-end; }
+    .no-comments { color: var(--text-tertiary); font-style: italic; }
+    .private-label { display:inline-block; background:#6d28d9; color:#fff; padding:2px 6px; border-radius:6px; font-size:.65rem; margin-left:.5rem; }
+    .comment-form { margin-top:1rem; display:flex; flex-direction:column; gap:.5rem; }
+    .comment-form textarea { width:100%; min-height:80px; resize:vertical; padding:.6rem .75rem; border:1px solid var(--border-color); border-radius:8px; background: var(--bg-secondary); color: var(--text-primary); }
+    .comment-options { display:flex; justify-content:space-between; align-items:center; }
+    .comment-options button { background: var(--primary-color); color:#fff; border:none; padding:.5rem .9rem; border-radius:8px; cursor:pointer; font-size:.85rem; box-shadow: var(--shadow-sm); }
+    .comment-options button:hover { background: var(--primary-hover); }
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #888; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #4f46e5; }
+    input:checked + .slider:before { transform: translateX(20px); }
+    .slider.round { border-radius: 34px; }
+    .slider.round:before { border-radius: 50%; }
+
+    @@media (max-width: 991.98px) {
+        .container-fluid.my-3 {
+            padding-left: 0.25rem;
+            padding-right: 0.25rem;
+        }
+
+        .card-header {
+            flex-direction: column;
+            align-items: stretch !important;
+            gap: 0.75rem;
+        }
+
+        .card-header > div {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.5rem;
+        }
+
+        .card-header .btn {
+            width: 100%;
+            min-height: 40px;
+            padding-left: 0.5rem;
+            padding-right: 0.5rem;
+        }
+
+        .group-player-main-content {
+            flex-direction: column;
+        }
+
+        .group-player-main-content .video-section {
+            flex: none;
+            width: 100%;
+            max-width: 100%;
+        }
+
+        .group-player-playlist-column,
+        .group-player-detail-column {
+            order: initial;
+        }
+
+        .playlist-container.group-player-playlist-right {
+            position: static;
+        }
+
+        .playlist-container.group-player-playlist-height-synced {
+            height: auto;
+        }
+
+        .playlist-container.group-player-playlist-height-synced .playlist-scroll {
+            max-height: 38vh;
+        }
+
+        .playlist-scroll {
+            max-height: 38vh;
+        }
+
+        .playlist-container {
+            margin-bottom: 1rem;
+        }
+    }
+
+    @@media (max-width: 576px) {
+        .card-body {
+            padding: 0.75rem;
+        }
+
+        .playlist-header,
+        .playlist-stats {
+            padding: 12px;
+        }
+
+        .playlist-item {
+            padding: 10px;
+            gap: 10px;
+        }
+
+        .playlist-item:hover {
+            transform: none;
+        }
+
+        .playlist-item img {
+            width: 48px;
+            height: 48px;
+        }
+
+        .autoplay-overlay {
+            padding: 1.25rem;
+        }
+
+        .autoplay-overlay h2 {
+            font-size: 1.5rem;
+        }
+
+        .comment-options {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 0.75rem;
+        }
+
+        .comment-options button {
+            min-height: 44px;
+        }
+    }
+</style>
+
+<div id="autoplayConsent" class="autoplay-overlay hidden">
+    <h2>點擊以開始播放</h2>
+    <p>為符合瀏覽器的自動播放政策，我們需要您的互動才能啟動未靜音的播放。按下方按鈕後將開始播放歌曲並啟用音訊。</p>
+    <button id="startPlaybackBtn" class="autoplay-btn"><i class="fas fa-play me-2"></i>開始播放</button>
+</div>
+
+<div class="container-fluid my-3 group-player-page-container">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">群組播放 － @Model.GroupName</h5>
+            <div>
+                <button id="prevBtn" class="btn btn-sm btn-outline-primary">上一首</button>
+                <button id="playPauseBtn" class="btn btn-sm btn-primary">播放</button>
+                <button id="nextBtn" class="btn btn-sm btn-outline-primary">下一首</button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row group-player-content-row">
+                <div class="col-md-8 col-lg-9 group-player-detail-column">
+                    <div id="detailArea"></div>
+                </div>
+
+                <div class="col-md-4 col-lg-3 group-player-playlist-column">
+                    <div class="playlist-container group-player-playlist-right">
+                        <div class="playlist-header"><i class="fas fa-list-music me-2"></i>播放清單</div>
+                        <div class="playlist-scroll">
+                            @if (Model.Songs.Any())
+                            {
+                                @for (int i = 0; i < Model.Songs.Count; i++)
+                                {
+                                    var s = Model.Songs[i];
+                                    var videoId = GetYouTubeVideoId(s.YouTubeVideoUrl);
+                                    var thumbnailUrl = !string.IsNullOrEmpty(videoId) ? $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg" : "/images/placeholder.png";
+                                    <div class="playlist-item" data-index="@i" data-songuid="@s.SongUid">
+                                        <img src="@thumbnailUrl" alt="@s.Title" />
+                                        <div class="playlist-item-content">
+                                            <div class="playlist-item-title">@s.Title</div>
+                                            <div class="playlist-item-artist">@s.Artist</div>
+                                            @if (!string.IsNullOrWhiteSpace(s.Performer))
+                                            {
+                                                <div class="playlist-item-performer">演唱者: @s.Performer</div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="playlist-empty"><i class="fas fa-music"></i><p>此群組尚無歌曲</p></div>
+                            }
+                        </div>
+                        <div class="playlist-stats" style="@(Model.Songs.Any() ? "" : "display:none;")"><i class="fas fa-compact-disc"></i> 共 @Model.Songs.Count 首歌曲</div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+@functions {
+    private string GetYouTubeVideoId(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "";
+        try { var uri = new Uri(url); if (uri.Host.Contains("youtu.be")) return uri.AbsolutePath.TrimStart('/'); var query = System.Web.HttpUtility.ParseQueryString(uri.Query); return query["v"] ?? ""; }
+        catch { return ""; }
+    }
+}
+
+@section Scripts {
+    <script>
+        function installYouTubeIframeAllowSanitizer() {
+            if (window.__learnMoreYouTubeAllowSanitizerInstalled) {
+                return;
+            }
+            window.__learnMoreYouTubeAllowSanitizerInstalled = true;
+
+            const sanitizeAllow = value => String(value || '')
+                .split(';')
+                .map(part => part.trim())
+                .filter(part => part && part !== 'web-share')
+                .join('; ');
+
+            const originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
+            HTMLIFrameElement.prototype.setAttribute = function(name, value) {
+                if (String(name).toLowerCase() === 'allow') {
+                    return originalSetAttribute.call(this, name, sanitizeAllow(value));
+                }
+
+                return originalSetAttribute.call(this, name, value);
+            };
+
+            const allowDescriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'allow');
+            if (allowDescriptor && allowDescriptor.set) {
+                Object.defineProperty(HTMLIFrameElement.prototype, 'allow', {
+                    configurable: true,
+                    enumerable: allowDescriptor.enumerable,
+                    get: allowDescriptor.get,
+                    set(value) {
+                        allowDescriptor.set.call(this, sanitizeAllow(value));
+                    }
+                });
+            }
+        }
+
+        installYouTubeIframeAllowSanitizer();
+
+        function getYouTubeId(url) {
+            if (!url) return null;
+            try {
+                const u = new URL(url);
+                if (u.hostname.includes('youtu.be')) return u.pathname.replace('/', '').slice(0, 11);
+                if (u.hostname.includes('youtube.com')) {
+                    if (u.pathname === '/watch') return u.searchParams.get('v');
+                    const m = u.pathname.match(/\/embed\/([0-9A-Za-z_-]{11})/);
+                    if (m) return m[1];
+                }
+            } catch {}
+            const m2 = url.match(/(?:v=|\/|embed\/)([0-9A-Za-z_-]{11})/);
+            return m2 ? m2[1] : null;
+        }
+
+        const playlistData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Songs));
+        const songDetailUrl = '@Url.Action("SongDetail", "GroupPlayer")';
+        const consentKey = 'gpConsent_' + '@Model.GroupName'.replace(/\s+/g,'_');
+        const currentUserLoggedIn = @((!string.IsNullOrWhiteSpace(Model.UserEmail)).ToString().ToLowerInvariant());
+
+        let currentIndex = 0;
+        window.rightYTPlayer = null;
+        let autoSyncLyricsRight = true;
+        let showRomanRight = false;
+        let rafIdRight = null;
+        let userHasInteracted = false;
+        let wasPlayingBeforeSeek = false;
+        let consentGranted = false;
+        let isManage = false; // 供未來回覆使用
+        let playlistHeightResizeObserver = null;
+        let groupKaraokeAudioActive = false;
+        let groupKaraokeAudioKind = 'normal';
+        let groupKaraokeSyncFrame = null;
+        let groupKaraokeOriginalMuteState = null;
+        let groupKaraokeOriginalMuteRequestedAt = 0;
+        let groupKaraokeOriginalControlUntil = 0;
+        let groupKaraokeLastOriginalTime = 0;
+        let groupKaraokeLastAudioTime = 0;
+        const groupKaraokeMobileVocalsLyricsDelayStorageKey = 'learnmore.mobileVocalsLyricsDelaySeconds';
+        const groupKaraokeMobileVocalsLyricsDelayRange = { min: -2, max: 2, step: 0.1 };
+        const groupKaraokeMobileSyncProfile = (() => {
+            const hasCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+            const hasMobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+            return hasCoarsePointer || hasMobileUserAgent;
+        })();
+        let groupKaraokeMobileVocalsLyricsDelaySeconds = loadGroupKaraokeMobileVocalsLyricsDelay();
+
+        // Overlay logic
+        function showConsentOverlay() {
+            const ov = document.getElementById('autoplayConsent');
+            if (ov) ov.classList.remove('hidden');
+        }
+        function hideConsentOverlay() {
+            const ov = document.getElementById('autoplayConsent');
+            if (ov) ov.classList.add('hidden');
+        }
+        function grantConsent() {
+            consentGranted = true;
+            userHasInteracted = true;
+            localStorage.setItem(consentKey, '1');
+            hideConsentOverlay();
+            const s = playlistData[currentIndex];
+            if (s) {
+                const songUid = s.songUid || s.SongUid || s.SongUID;
+                if (songUid) fetchSongDetail(songUid, true, true);
+            }
+        }
+
+        function setHeaderPlayButton(isPlaying) {
+            const btn = document.getElementById('playPauseBtn');
+            if (btn) btn.innerText = isPlaying ? '暫停' : '播放';
+        }
+        function updatePlaybackButtonsRight(isPlaying) {
+            document.querySelectorAll('#lyric-card-right .controls button').forEach(button => {
+                const icon = button.querySelector('i.fas.fa-pause, i.fas.fa-play');
+                if (!icon) return;
+                if (isPlaying) { icon.classList.remove('fa-play'); icon.classList.add('fa-pause'); button.setAttribute('title','暫停'); }
+                else { icon.classList.remove('fa-pause'); icon.classList.add('fa-play'); button.setAttribute('title','播放'); }
+            });
+        }
+
+        function updateNowInfo() {
+            document.querySelectorAll('.playlist-item').forEach(li => li.classList.remove('active'));
+            const activeLi = document.querySelector(`.playlist-item[data-index="${currentIndex}"]`);
+            if (activeLi) { activeLi.classList.add('active'); activeLi.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        }
+
+        function syncPlaylistHeightToDetail() {
+            const playlist = document.querySelector('.playlist-container.group-player-playlist-right');
+            const detail = document.querySelector('.group-player-detail-column');
+            if (!playlist) return;
+
+            if (!detail || window.matchMedia('(max-width: 991.98px)').matches) {
+                playlist.classList.remove('group-player-playlist-height-synced');
+                playlist.style.removeProperty('--group-player-detail-height');
+                return;
+            }
+
+            const height = Math.round(detail.getBoundingClientRect().height);
+            if (height <= 0) return;
+            playlist.classList.add('group-player-playlist-height-synced');
+            playlist.style.setProperty('--group-player-detail-height', `${height}px`);
+        }
+
+        function watchPlaylistHeightToDetail() {
+            if (playlistHeightResizeObserver) {
+                playlistHeightResizeObserver.disconnect();
+                playlistHeightResizeObserver = null;
+            }
+
+            const detail = document.querySelector('.group-player-detail-column');
+            if (detail && window.ResizeObserver) {
+                playlistHeightResizeObserver = new ResizeObserver(syncPlaylistHeightToDetail);
+                playlistHeightResizeObserver.observe(detail);
+            }
+
+            syncPlaylistHeightToDetail();
+            requestAnimationFrame(syncPlaylistHeightToDetail);
+        }
+
+        window.addEventListener('resize', syncPlaylistHeightToDetail);
+
+        function playIndex(idx, autoPlay = false) {
+            if (idx < 0 || idx >= playlistData.length) return;
+            currentIndex = idx;
+            updateNowInfo();
+            const s = playlistData[currentIndex];
+            const songUid = s.songUid || s.SongUid || s.SongUID;
+            if (songUid) fetchSongDetail(songUid, autoPlay && consentGranted, autoPlay && consentGranted);
+        }
+        function playNext() { playIndex((currentIndex + 1) % playlistData.length, true); }
+        function playPrev() { playIndex((currentIndex - 1 + playlistData.length) % playlistData.length, true); }
+
+        function bindPlaylistClicks() {
+            document.querySelectorAll('.playlist-item').forEach(li => {
+                li.addEventListener('click', function () {
+                    userHasInteracted = true;
+                    if (!consentGranted) grantConsent();
+                    const idx = parseInt(this.getAttribute('data-index'));
+                    playIndex(idx, true);
+                });
+            });
+        }
+
+        function fetchSongDetail(songUid, shouldAutoPlay = false, shouldUnmute = false) {
+            const url = `${songDetailUrl}?songUid=${encodeURIComponent(songUid)}`;
+            fetch(url, { headers: { 'Accept': 'application/json' } })
+                .then(async r => {
+                    const txt = await r.text();
+                    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                    return JSON.parse(txt);
+                })
+                .then(data => {
+                    if (data && data.success) {
+                        isManage = !!data.isManage;
+                        autoSyncLyricsRight = !!data.isEnableAuto;
+                        showRomanRight = !!data.isEnableRoman;
+                        renderRightArea({ song: data.song, lyrics: data.lyrics || [], comments: data.comments || [] }, shouldAutoPlay, shouldUnmute, data.isLoggedIn ?? currentUserLoggedIn);
+                    } else { alert('無法取得歌曲資料'); }
+                })
+                .catch(err => { console.error('Fetch SongDetail failed:', err); alert('取得歌曲細節失敗'); });
+        }
+
+        function getSongProperty(song, ...keys) {
+            for (const key of keys) {
+                if (song && song[key] !== undefined && song[key] !== null) {
+                    return song[key];
+                }
+            }
+
+            return '';
+        }
+
+        function getGroupKaraokeAudioPlayer(kind = groupKaraokeAudioKind) {
+            if (kind !== 'instrumental' && kind !== 'vocals') return null;
+            return document.getElementById('group-karaoke-audio-' + kind);
+        }
+
+        function getRightVideoPlayer() {
+            return document.getElementById('video-player-right');
+        }
+
+        function getOriginalRightCurrentTime() {
+            if (window.rightYTPlayer && typeof rightYTPlayer.getCurrentTime === 'function') {
+                return rightYTPlayer.getCurrentTime() || 0;
+            }
+
+            const v = getRightVideoPlayer();
+            return v ? (v.currentTime || 0) : 0;
+        }
+
+        function isOriginalRightPlaying() {
+            if (window.rightYTPlayer && typeof rightYTPlayer.getPlayerState === 'function' && window.YT && YT.PlayerState) {
+                const state = rightYTPlayer.getPlayerState();
+                return state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING;
+            }
+
+            const v = getRightVideoPlayer();
+            return v ? !v.paused : false;
+        }
+
+        function pauseOriginalRightPlayback() {
+            if (window.rightYTPlayer && typeof rightYTPlayer.pauseVideo === 'function') {
+                rightYTPlayer.pauseVideo();
+                return;
+            }
+
+            const v = getRightVideoPlayer();
+            if (v) v.pause();
+        }
+
+        function seekOriginalRightPlayback(time, shouldPlay) {
+            const targetTime = Number.isFinite(time) ? time : 0;
+            if (window.rightYTPlayer && typeof rightYTPlayer.seekTo === 'function') {
+                rightYTPlayer.seekTo(targetTime, true);
+                if (shouldPlay && typeof rightYTPlayer.playVideo === 'function') rightYTPlayer.playVideo();
+                return;
+            }
+
+            const v = getRightVideoPlayer();
+            if (!v) return;
+            v.currentTime = targetTime;
+            if (shouldPlay) {
+                if (consentGranted) v.muted = false;
+                v.play().catch(() => {});
+            }
+        }
+
+        function rememberGroupKaraokeOriginalMuteState() {
+            if (groupKaraokeOriginalMuteState !== null) return;
+
+            if (window.rightYTPlayer && typeof rightYTPlayer.isMuted === 'function') {
+                groupKaraokeOriginalMuteState = { type: 'youtube', muted: rightYTPlayer.isMuted() };
+                return;
+            }
+
+            const v = getRightVideoPlayer();
+            if (v) groupKaraokeOriginalMuteState = { type: 'video', muted: v.muted };
+        }
+
+        function muteOriginalRightForKaraoke() {
+            if (window.rightYTPlayer && typeof rightYTPlayer.mute === 'function') {
+                const now = (window.performance && typeof window.performance.now === 'function')
+                    ? window.performance.now()
+                    : Date.now();
+                if (typeof rightYTPlayer.isMuted === 'function' && rightYTPlayer.isMuted()) {
+                    groupKaraokeOriginalMuteRequestedAt = now;
+                    return;
+                }
+                if (now - groupKaraokeOriginalMuteRequestedAt < 500) return;
+                groupKaraokeOriginalMuteRequestedAt = now;
+                rightYTPlayer.mute();
+                return;
+            }
+
+            const v = getRightVideoPlayer();
+            if (v && !v.muted) v.muted = true;
+        }
+
+        function restoreGroupKaraokeOriginalMuteState() {
+            if (groupKaraokeOriginalMuteState === null) return;
+
+            if (groupKaraokeOriginalMuteState.type === 'youtube' && window.rightYTPlayer) {
+                const isCurrentlyMuted = typeof rightYTPlayer.isMuted === 'function'
+                    ? rightYTPlayer.isMuted()
+                    : null;
+                if (groupKaraokeOriginalMuteState.muted && isCurrentlyMuted !== true && typeof rightYTPlayer.mute === 'function') {
+                    rightYTPlayer.mute();
+                } else if (!groupKaraokeOriginalMuteState.muted && isCurrentlyMuted !== false && typeof rightYTPlayer.unMute === 'function') {
+                    rightYTPlayer.unMute();
+                    if (typeof rightYTPlayer.setVolume === 'function') rightYTPlayer.setVolume(100);
+                }
+            }
+
+            if (groupKaraokeOriginalMuteState.type === 'video') {
+                const v = getRightVideoPlayer();
+                if (v) v.muted = groupKaraokeOriginalMuteState.muted;
+            }
+
+            groupKaraokeOriginalMuteState = null;
+            groupKaraokeOriginalMuteRequestedAt = 0;
+        }
+
+        function getGroupPlaybackTime() {
+            const audio = getGroupKaraokeAudioPlayer();
+            if (groupKaraokeAudioActive && audio) return audio.currentTime || 0;
+            return getOriginalRightCurrentTime();
+        }
+
+        function clampGroupKaraokeMobileVocalsLyricsDelay(value) {
+            if (!Number.isFinite(value)) return 0;
+            const { min, max, step } = groupKaraokeMobileVocalsLyricsDelayRange;
+            const stepped = Math.round(value / step) * step;
+            return Math.min(max, Math.max(min, Number(stepped.toFixed(1))));
+        }
+
+        function loadGroupKaraokeMobileVocalsLyricsDelay() {
+            try {
+                return clampGroupKaraokeMobileVocalsLyricsDelay(Number(localStorage.getItem(groupKaraokeMobileVocalsLyricsDelayStorageKey)));
+            } catch {
+                return 0;
+            }
+        }
+
+        function saveGroupKaraokeMobileVocalsLyricsDelay(value) {
+            groupKaraokeMobileVocalsLyricsDelaySeconds = clampGroupKaraokeMobileVocalsLyricsDelay(value);
+            try {
+                localStorage.setItem(groupKaraokeMobileVocalsLyricsDelayStorageKey, groupKaraokeMobileVocalsLyricsDelaySeconds.toFixed(1));
+            } catch {
+                // localStorage can be unavailable in private browsing.
+            }
+            updateGroupKaraokeVocalsSyncControl();
+        }
+
+        function adjustGroupKaraokeMobileVocalsLyricsDelay(delta) {
+            saveGroupKaraokeMobileVocalsLyricsDelay(groupKaraokeMobileVocalsLyricsDelaySeconds + delta);
+        }
+
+        function resetGroupKaraokeMobileVocalsLyricsDelay() {
+            saveGroupKaraokeMobileVocalsLyricsDelay(0);
+        }
+
+        function updateGroupKaraokeVocalsSyncControl() {
+            const control = document.getElementById('group-karaoke-vocals-sync-control');
+            if (!control) return;
+            control.hidden = !(groupKaraokeMobileSyncProfile && groupKaraokeAudioActive && groupKaraokeAudioKind === 'vocals');
+            const value = document.getElementById('group-karaoke-vocals-sync-value');
+            if (value) value.textContent = `${groupKaraokeMobileVocalsLyricsDelaySeconds.toFixed(1)} 秒`;
+        }
+
+        function getGroupKaraokeLyricsDisplayTime(playbackTime) {
+            if (
+                groupKaraokeAudioActive
+                && groupKaraokeAudioKind === 'vocals'
+                && groupKaraokeMobileSyncProfile
+                && Number.isFinite(playbackTime)
+            ) {
+                return Math.max(0, playbackTime - groupKaraokeMobileVocalsLyricsDelaySeconds);
+            }
+
+            return playbackTime;
+        }
+
+        function syncOriginalRightToGroupKaraoke(shouldPlay, force = false) {
+            const audio = getGroupKaraokeAudioPlayer();
+            if (!groupKaraokeAudioActive || !audio) return;
+
+            rememberGroupKaraokeOriginalMuteState();
+            muteOriginalRightForKaraoke();
+
+            const targetTime = audio.currentTime || 0;
+            const currentTime = getOriginalRightCurrentTime();
+            if (force || !Number.isFinite(currentTime) || Math.abs(currentTime - targetTime) > 0.35) {
+                groupKaraokeOriginalControlUntil = Date.now() + 900;
+                seekOriginalRightPlayback(targetTime, shouldPlay);
+            } else if (shouldPlay && !isOriginalRightPlaying()) {
+                groupKaraokeOriginalControlUntil = Date.now() + 900;
+                seekOriginalRightPlayback(targetTime, true);
+            }
+
+            if (!shouldPlay) pauseOriginalRightPlayback();
+        }
+
+        function syncGroupKaraokeAudioFromOriginalSeek(force = false) {
+            const audio = getGroupKaraokeAudioPlayer();
+            if (!groupKaraokeAudioActive || !audio) return false;
+
+            const originalTime = getOriginalRightCurrentTime();
+            const audioTime = audio.currentTime || 0;
+            if (!Number.isFinite(originalTime)) return false;
+
+            const now = Date.now();
+            const isProgrammaticOriginalSeek = now < groupKaraokeOriginalControlUntil;
+            const originalJump = Math.abs(originalTime - groupKaraokeLastOriginalTime);
+            const audioJump = Math.abs(audioTime - groupKaraokeLastAudioTime);
+            const originalAudioGap = Math.abs(originalTime - audioTime);
+            const userLikelyDraggedOriginal = force || (
+                originalAudioGap > 0.9
+                && originalJump > 0.7
+                && audioJump < 0.7
+                && (!isProgrammaticOriginalSeek || originalAudioGap > 3)
+            );
+
+            groupKaraokeLastOriginalTime = originalTime;
+            groupKaraokeLastAudioTime = audioTime;
+
+            if (!userLikelyDraggedOriginal) return false;
+
+            try {
+                audio.currentTime = originalTime;
+            } catch {
+                audio.addEventListener('loadedmetadata', () => { audio.currentTime = originalTime; }, { once: true });
+            }
+            updateLyricsDisplayRight(getGroupKaraokeLyricsDisplayTime(originalTime));
+            groupKaraokeLastAudioTime = originalTime;
+            groupKaraokeOriginalControlUntil = now + 500;
+            return true;
+        }
+
+        function pauseInactiveGroupKaraokeAudio(activeAudio) {
+            document.querySelectorAll('.group-karaoke-audio-player').forEach(audio => {
+                if (audio !== activeAudio && !audio.paused) audio.pause();
+            });
+        }
+
+        function hasGroupKaraokeAudioSource(kind) {
+            if (kind === 'normal') return true;
+            return !!getGroupKaraokeAudioPlayer(kind);
+        }
+
+        function getGroupKaraokeAudioLabel(kind) {
+            if (kind === 'normal') return '原曲模式';
+            return kind === 'vocals' ? '人聲模式' : '伴奏模式';
+        }
+
+        function updateGroupKaraokeAudioPanel() {
+            const panel = document.getElementById('group-karaoke-audio-panel');
+            if (panel) panel.classList.toggle('is-active', groupKaraokeAudioActive);
+
+            document.getElementById('group-karaoke-source-normal')?.classList.toggle('active', groupKaraokeAudioKind === 'normal');
+            document.getElementById('group-karaoke-source-instrumental')?.classList.toggle('active', groupKaraokeAudioKind === 'instrumental');
+            document.getElementById('group-karaoke-source-vocals')?.classList.toggle('active', groupKaraokeAudioKind === 'vocals');
+
+            const label = document.getElementById('group-karaoke-audio-label-text');
+            if (label) label.textContent = getGroupKaraokeAudioLabel(groupKaraokeAudioKind);
+            updateGroupKaraokeVocalsSyncControl();
+        }
+
+        function startGroupKaraokeSyncLoop() {
+            stopGroupKaraokeSyncLoop();
+            const tick = () => {
+                if (!groupKaraokeAudioActive) {
+                    groupKaraokeSyncFrame = null;
+                    return;
+                }
+
+                const currentTime = getGroupPlaybackTime();
+                updateLyricsDisplayRight(getGroupKaraokeLyricsDisplayTime(currentTime));
+                const audio = getGroupKaraokeAudioPlayer();
+                if (audio && !audio.paused && !syncGroupKaraokeAudioFromOriginalSeek()) {
+                    syncOriginalRightToGroupKaraoke(true);
+                }
+                groupKaraokeSyncFrame = requestAnimationFrame(tick);
+            };
+
+            groupKaraokeSyncFrame = requestAnimationFrame(tick);
+        }
+
+        function stopGroupKaraokeSyncLoop() {
+            if (groupKaraokeSyncFrame !== null) {
+                cancelAnimationFrame(groupKaraokeSyncFrame);
+                groupKaraokeSyncFrame = null;
+            }
+        }
+
+        function switchGroupKaraokeAudioSource(kind) {
+            if (!hasGroupKaraokeAudioSource(kind)) return;
+
+            const previousAudio = groupKaraokeAudioActive ? getGroupKaraokeAudioPlayer() : null;
+            const currentTime = previousAudio ? previousAudio.currentTime || 0 : getOriginalRightCurrentTime();
+            const shouldContinuePlaying = previousAudio ? !previousAudio.paused : isOriginalRightPlaying();
+
+            if (kind === 'normal') {
+                if (previousAudio) previousAudio.pause();
+                pauseInactiveGroupKaraokeAudio(null);
+                groupKaraokeAudioActive = false;
+                groupKaraokeAudioKind = 'normal';
+                stopGroupKaraokeSyncLoop();
+                updateGroupKaraokeAudioPanel();
+                restoreGroupKaraokeOriginalMuteState();
+                if (shouldContinuePlaying || currentTime > 0.2) {
+                    seekOriginalRightPlayback(currentTime, shouldContinuePlaying);
+                }
+                updateLyricsDisplayRight(getGroupKaraokeLyricsDisplayTime(currentTime));
+                return;
+            }
+
+            const nextAudio = getGroupKaraokeAudioPlayer(kind);
+            if (!nextAudio) return;
+
+            groupKaraokeAudioKind = kind;
+            groupKaraokeAudioActive = true;
+            try {
+                nextAudio.currentTime = currentTime || 0;
+            } catch {
+                nextAudio.addEventListener('loadedmetadata', () => { nextAudio.currentTime = currentTime || 0; }, { once: true });
+            }
+
+            updateGroupKaraokeAudioPanel();
+            updateLyricsDisplayRight(getGroupKaraokeLyricsDisplayTime(currentTime || 0));
+            groupKaraokeLastOriginalTime = getOriginalRightCurrentTime();
+            groupKaraokeLastAudioTime = nextAudio.currentTime || currentTime || 0;
+            startGroupKaraokeSyncLoop();
+
+            if (shouldContinuePlaying) {
+                syncOriginalRightToGroupKaraoke(true, true);
+                nextAudio.play().then(() => {
+                    pauseInactiveGroupKaraokeAudio(nextAudio);
+                    updatePlaybackButtonsRight(true);
+                    setHeaderPlayButton(true);
+                }).catch(error => console.error('無法播放合輯音軌:', error));
+            } else {
+                pauseInactiveGroupKaraokeAudio(nextAudio);
+                updatePlaybackButtonsRight(false);
+                setHeaderPlayButton(false);
+            }
+        }
+
+        function stopGroupKaraokeAudio() {
+            stopGroupKaraokeSyncLoop();
+            document.querySelectorAll('.group-karaoke-audio-player').forEach(audio => {
+                audio.pause();
+                audio.removeAttribute('src');
+                audio.load();
+            });
+            groupKaraokeAudioActive = false;
+            groupKaraokeAudioKind = 'normal';
+            groupKaraokeOriginalControlUntil = 0;
+            groupKaraokeLastOriginalTime = 0;
+            groupKaraokeLastAudioTime = 0;
+            restoreGroupKaraokeOriginalMuteState();
+        }
+
+        function bindGroupKaraokeAudioEvents() {
+            document.querySelectorAll('.group-karaoke-audio-player').forEach(audio => {
+                audio.load();
+                audio.addEventListener('play', () => {
+                    if (audio === getGroupKaraokeAudioPlayer()) {
+                        startGroupKaraokeSyncLoop();
+                        updatePlaybackButtonsRight(true);
+                        setHeaderPlayButton(true);
+                    }
+                });
+                audio.addEventListener('pause', () => {
+                    if (audio === getGroupKaraokeAudioPlayer() && !audio.ended) {
+                        updatePlaybackButtonsRight(false);
+                        setHeaderPlayButton(false);
+                    }
+                });
+                audio.addEventListener('seeked', () => {
+                    if (audio === getGroupKaraokeAudioPlayer()) {
+                        updateLyricsDisplayRight(getGroupKaraokeLyricsDisplayTime(audio.currentTime || 0));
+                        syncOriginalRightToGroupKaraoke(!audio.paused, true);
+                    }
+                });
+                audio.addEventListener('ended', () => {
+                    if (audio === getGroupKaraokeAudioPlayer()) {
+                        updatePlaybackButtonsRight(false);
+                        setHeaderPlayButton(false);
+                        setTimeout(() => playNext(), 500);
+                    }
+                });
+            });
+        }
+
+        function renderRightArea(payload, shouldAutoPlay = false, shouldUnmute = false, isUserLoggedIn=false) {
+            cancelRightRaf();
+            stopGroupKaraokeAudio();
+            const song = payload.song || {};
+            const youtubeVideoUrl = getSongProperty(song, 'YouTubeVideoUrl', 'youTubeVideoUrl', 'youtubeVideoUrl');
+            const instrumentalAudioUrl = getSongProperty(song, 'InstrumentalAudioUrl', 'instrumentalAudioUrl');
+            const vocalsAudioUrl = getSongProperty(song, 'VocalsAudioUrl', 'vocalsAudioUrl');
+            const hasGroupKaraokeAudio = !!(instrumentalAudioUrl || vocalsAudioUrl);
+            const youtubeVideoId = getYouTubeId(youtubeVideoUrl || '');
+            const isYouTubeVideo = !!youtubeVideoId;
+            const shouldShowTranslator = song.Translator
+                && !/codex|learnmoreapi/i.test(song.Translator);
+            const container = document.getElementById('detailArea');
+            if (!container) return;
+
+            container.innerHTML = `
+                <div class="title-container">
+                    <h1>${htmlEncode(song.Title || '')}</h1>
+                    <p class="subtitle song-detail-meta">
+                        ${song.Performer ? `<span class=\"song-detail-meta-item song-detail-meta-primary\"><i class=\"fas fa-user-voice\"></i> <strong>演唱者</strong><span>${htmlEncode(song.Performer)}</span></span>` : ''}
+                        <span class="song-detail-meta-item"><i class="fas fa-microphone"></i> <strong>原唱</strong><span>${htmlEncode(song.Artist || '')}</span></span>
+                        ${shouldShowTranslator ? `<span class=\"song-detail-meta-item\"><i class=\"fas fa-globe\"></i> <strong>翻譯</strong>${song.TranslationSource ? `<a href=\"${song.TranslationSource}\" target=\"_blank\">${htmlEncode(song.Translator)}</a>` : `<span>${htmlEncode(song.Translator)}</span>`}</span>` : ''}
+                    </p>
+                </div>
+                <div class="main-content group-player-main-content">
+                    <div class="video-section">
+                        ${isYouTubeVideo ? '<div class="video-container"><div id="youtube-player-right"></div></div>' : `<div class=\"video-container\"><video id=\"video-player-right\" controls playsinline webkit-playsinline><source src=\"${htmlEncode(youtubeVideoUrl || getSongProperty(song, 'VideoPath', 'videoPath'))}\" type=\"video/mp4\"></video></div>`}
+                        ${hasGroupKaraokeAudio ? `
+                            <div id="group-karaoke-audio-panel" class="karaoke-audio-panel karaoke-audio-ready">
+                                <div class="karaoke-audio-label">
+                                    <span class="karaoke-audio-dot"></span>
+                                    <span id="group-karaoke-audio-label-text">原曲模式</span>
+                                </div>
+                                <div class="karaoke-source-toggle" role="group" aria-label="合輯音軌">
+                                    <button type="button" id="group-karaoke-source-normal" class="karaoke-source-button active" onclick="switchGroupKaraokeAudioSource('normal')">原曲</button>
+                                    <button type="button" id="group-karaoke-source-instrumental" class="karaoke-source-button" onclick="switchGroupKaraokeAudioSource('instrumental')" ${instrumentalAudioUrl ? '' : 'disabled'}>伴奏</button>
+                                    <button type="button" id="group-karaoke-source-vocals" class="karaoke-source-button" onclick="switchGroupKaraokeAudioSource('vocals')" ${vocalsAudioUrl ? '' : 'disabled'}>人聲</button>
+                                </div>
+                                <div id="group-karaoke-vocals-sync-control" class="karaoke-vocals-sync-control" hidden>
+                                    <span class="karaoke-vocals-sync-label">人聲同步</span>
+                                    <button type="button" class="karaoke-vocals-sync-button" onclick="adjustGroupKaraokeMobileVocalsLyricsDelay(-0.1)" aria-label="歌詞提前 0.1 秒"><i class="fas fa-minus"></i></button>
+                                    <span id="group-karaoke-vocals-sync-value" class="karaoke-vocals-sync-value">0.0 秒</span>
+                                    <button type="button" class="karaoke-vocals-sync-button" onclick="adjustGroupKaraokeMobileVocalsLyricsDelay(0.1)" aria-label="歌詞延後 0.1 秒"><i class="fas fa-plus"></i></button>
+                                    <button type="button" class="karaoke-vocals-sync-reset" onclick="resetGroupKaraokeMobileVocalsLyricsDelay()">重設</button>
+                                </div>
+                                ${instrumentalAudioUrl ? `<audio id="group-karaoke-audio-instrumental" class="group-karaoke-audio-player" data-kind="instrumental" preload="auto" src="${htmlEncode(instrumentalAudioUrl)}"></audio>` : ''}
+                                ${vocalsAudioUrl ? `<audio id="group-karaoke-audio-vocals" class="group-karaoke-audio-player" data-kind="vocals" preload="auto" src="${htmlEncode(vocalsAudioUrl)}"></audio>` : ''}
+                            </div>` : ''}
+                    </div>
+                    <div class="lyrics-card">
+                        <div class="toggle-wrapper">
+                            <label class="toggle-container" for="sync-lyrics-toggle-right">
+                                <input type="checkbox" id="sync-lyrics-toggle-right" ${autoSyncLyricsRight ? 'checked' : ''}>
+                                <span class="toggle-switch"></span>
+                                <span class="label">自動同步歌詞</span>
+                            </label>
+                            <label class="toggle-container" for="show-romanization-toggle-right">
+                                <input type="checkbox" id="show-romanization-toggle-right" ${showRomanRight ? 'checked' : ''}>
+                                <span class="toggle-switch"></span>
+                                <span class="label">顯示羅馬拼音</span>
+                            </label>
+                        </div>
+                        <div id="mode-1-right" class="lyrics-container" style="display: flex;">
+                            <div class="lyric-card" id="lyric-card-right"></div>
+                        </div>
+                    </div>
+                    <div class="comments-section"><h3><i class=\"fas fa-comments\"></i> 留言板</h3><div id="comments-container-right"></div>
+                        <div class="comment-form">
+                            <textarea id="gp-comment-input" placeholder="輸入您的留言..."></textarea>
+                            <div class="comment-options">
+                                <div>
+                                    <label class="switch">
+                                        <input type="checkbox" id="gp-private-comment" ${isUserLoggedIn? '' : 'disabled'}>
+                                        <span class="slider round"></span>
+                                    </label>
+                                    <span class="private-label">私密留言</span>
+                                </div>
+                                <button id="gp-submit-comment"><i class=\"fas fa-paper-plane\"></i> 送出留言</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            // comments
+            const commentsContainer = document.getElementById('comments-container-right');
+            if (commentsContainer) {
+                if (payload.comments && payload.comments.length) {
+                    payload.comments.forEach(c => {
+                        const el = document.createElement('div');
+                        el.className = 'comment';
+                        // 私密留言僅本人顯示內容
+                        let messageHtml = '';
+                        if (c.IsPrivate) {
+                            messageHtml += '<span class="private-label">🔒 私密留言</span>';
+                            if (c.CanViewPrivate) {
+                                messageHtml += `<p>${htmlEncode(c.Message||'')}</p>`;
+                            }
+                        } else {
+                            messageHtml += `<p>${htmlEncode(c.Message||'')}</p>`;
+                        }
+                        el.innerHTML = `<img src="${c.Avatar || ''}" class="avatar"> <strong>${htmlEncode(c.UserName||'訪客')}：</strong> ${messageHtml} <span class="timestamp">${c.TimeStamp ? new Date(c.TimeStamp).toLocaleString() : ''}</span>`;
+                        commentsContainer.appendChild(el);
+                    });
+                } else { commentsContainer.innerHTML = '<p class="no-comments">目前沒有留言，快來留言吧！</p>'; }
+            }
+            // lyrics
+            const lyricCard = document.getElementById('lyric-card-right');
+            if (lyricCard) {
+                if (payload.lyrics && payload.lyrics.length) {
+                    payload.lyrics.forEach(line => {
+                        const div = document.createElement('div');
+                        div.className = 'lyrics-line';
+                        div.setAttribute('data-timestamp', line.TimeStamp);
+                        div.innerHTML = `<div class=\"jp-line\">${line.Japanese || ''}</div><div class=\"roman-line\" style=\"display:${showRomanRight ? 'block' : 'none'};\">${line.Roman || ''}</div><div class=\"cn-line\">${line.Chinese || ''}</div><div class=\"controls\"><button class=\"toggle-play\" title=\"播放\"><i class=\"fas fa-play\"></i></button><button onclick=\"jumpToLyricRight(${line.TimeStamp})\" title=\"從此句開始播放\"><i class=\"fa fa-step-forward\"></i></button><button onclick=\"replayLineRight(${line.TimeStamp})\" title=\"重播這句\"><i class=\"fas fa-undo\"></i></button></div>`;
+                        lyricCard.appendChild(div);
+                    });
+                    lyricCard.querySelectorAll('button.toggle-play').forEach(btn => { btn.addEventListener('click', () => { userHasInteracted = true; if (!consentGranted) grantConsent(); pausePlaybackRight(); }); });
+                } else { lyricCard.innerHTML = '<p class="no-comments">暫無歌詞</p>'; }
+            }
+
+            // 留言提交事件
+            const submitBtn = document.getElementById('gp-submit-comment');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function() {
+                    const msgElem = document.getElementById('gp-comment-input');
+                    const privateElem = document.getElementById('gp-private-comment');
+                    const message = (msgElem?.value || '').trim();
+                    const isPrivate = privateElem && privateElem.checked;
+                    if (!message) { alert('留言內容不能為空！'); return; }
+                    const commentData = { songUid: song.SongUid || song.SongUID || song.songUid, message: message, isPrivate: isPrivate };
+                    fetch('@Url.Content("~/Lyrics/AddComment")', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(commentData) })
+                        .then(r => r.json())
+                        .then(d => {
+                            if (d.success) {
+                                const noMsg = commentsContainer.querySelector('.no-comments'); if (noMsg) noMsg.remove();
+                                const newEl = document.createElement('div'); newEl.className='comment';
+                                let inner = `<img src="${d.avatar}" class="avatar"> <strong>${htmlEncode(d.userName||'訪客')}：</strong>`;
+                                if (d.isPrivate) { inner += '<span class="private-label">🔒 私密留言</span>'; inner += `<p>${htmlEncode(d.message)}</p>`; }
+                                else { inner += `<p>${htmlEncode(d.message)}</p>`; }
+                                inner += `<span class="timestamp">${htmlEncode(d.timeStamp)}</span>`;
+                                newEl.innerHTML = inner;
+                                commentsContainer.insertBefore(newEl, commentsContainer.firstChild);
+                                msgElem.value=''; if (privateElem) privateElem.checked=false;
+                            } else { alert('留言提交失敗：' + (d.message || '未知錯誤')); }
+                        })
+                        .catch(err => { console.error('留言錯誤', err); alert('留言提交失敗，請稍後再試。'); });
+                });
+            }
+            // 未登入時提示私密留言不可用
+            const privateBox = document.getElementById('gp-private-comment');
+            if (privateBox && privateBox.disabled) {
+                privateBox.parentElement.addEventListener('click', () => alert('登入後才能使用私密留言唷！')); }
+
+            // toggles
+            const syncToggle = document.getElementById('sync-lyrics-toggle-right');
+            const romanToggle = document.getElementById('show-romanization-toggle-right');
+            if (syncToggle) syncToggle.addEventListener('change', function(){ autoSyncLyricsRight = this.checked; });
+            if (romanToggle) romanToggle.addEventListener('change', function(){ showRomanRight = this.checked; document.querySelectorAll('#lyric-card-right .roman-line').forEach(el => el.style.display = showRomanRight ? 'block' : 'none'); syncPlaylistHeightToDetail(); });
+
+            bindGroupKaraokeAudioEvents();
+            updateGroupKaraokeAudioPanel();
+            updatePlaybackButtonsRight(false);
+            setHeaderPlayButton(false);
+            watchPlaylistHeightToDetail();
+
+            // init player
+            if (isYouTubeVideo) {
+                const createRightPlayer = function () {
+                    window.rightYTPlayer = new YT.Player('youtube-player-right', {
+                        height: '100%', width: '100%', videoId: youtubeVideoId,
+                        playerVars: { autoplay: shouldAutoPlay ? 1 : 0, playsinline: 1, rel: 0, modestbranding: 1 },
+                        events: {
+                            onReady: function (event) {
+                                if (shouldAutoPlay) { try { if (!consentGranted) { event.target.mute(); } event.target.playVideo(); } catch {} }
+                                if (shouldUnmute && consentGranted) { try { event.target.unMute(); event.target.setVolume(100); } catch {} }
+                            },
+                            onStateChange: function (event) {
+                                if (event.data === YT.PlayerState.PLAYING) {
+                                    if (groupKaraokeAudioActive) {
+                                        muteOriginalRightForKaraoke();
+                                        const audio = getGroupKaraokeAudioPlayer();
+                                        if (audio && audio.paused) {
+                                            audio.currentTime = getOriginalRightCurrentTime();
+                                            audio.play().catch(error => console.error('無法播放合輯音軌:', error));
+                                        }
+                                        startGroupKaraokeSyncLoop();
+                                    } else {
+                                        startRightRaf();
+                                        if (consentGranted && event.target.isMuted()) { try { event.target.unMute(); event.target.setVolume(100); } catch {} }
+                                    }
+                                    updatePlaybackButtonsRight(true);
+                                    setHeaderPlayButton(true);
+                                }
+                                if (event.data === YT.PlayerState.PAUSED) {
+                                    if (groupKaraokeAudioActive) {
+                                        const audio = getGroupKaraokeAudioPlayer();
+                                        if (audio && !audio.paused) audio.pause();
+                                    }
+                                    updatePlaybackButtonsRight(false);
+                                    setHeaderPlayButton(false);
+                                }
+                                if (event.data === YT.PlayerState.ENDED) { cancelRightRaf(); updatePlaybackButtonsRight(false); setHeaderPlayButton(false); setTimeout(() => playNext(), 500); }
+                            }
+                        }
+                    });
+                };
+                if (window.YT && YT.Player) createRightPlayer(); else window.onYouTubeIframeAPIReady = createRightPlayer;
+            } else {
+                window.rightYTPlayer = null;
+                const v = document.getElementById('video-player-right');
+                if (v) {
+                    v.addEventListener('timeupdate', function(){ if (!groupKaraokeAudioActive) updateLyricsDisplayRight(v.currentTime || 0); });
+                    v.addEventListener('seeking', function(){ wasPlayingBeforeSeek = !v.paused; userHasInteracted = true; });
+                    v.addEventListener('seeked', function(){
+                        if (groupKaraokeAudioActive) {
+                            syncGroupKaraokeAudioFromOriginalSeek(true);
+                        } else if (wasPlayingBeforeSeek && consentGranted) {
+                            v.muted = false;
+                        }
+                    });
+                    v.addEventListener('playing', function(){
+                        if (groupKaraokeAudioActive) {
+                            muteOriginalRightForKaraoke();
+                            const audio = getGroupKaraokeAudioPlayer();
+                            if (audio && audio.paused) {
+                                audio.currentTime = v.currentTime || 0;
+                                audio.play().catch(error => console.error('無法播放合輯音軌:', error));
+                            }
+                            startGroupKaraokeSyncLoop();
+                        } else if (consentGranted) {
+                            v.muted = false;
+                        }
+                        updatePlaybackButtonsRight(true);
+                        setHeaderPlayButton(true);
+                    });
+                    v.addEventListener('pause', function(){
+                        if (groupKaraokeAudioActive) {
+                            const audio = getGroupKaraokeAudioPlayer();
+                            if (audio && !audio.paused) audio.pause();
+                        }
+                        updatePlaybackButtonsRight(false);
+                        setHeaderPlayButton(false);
+                    });
+                    v.addEventListener('ended', function(){ updatePlaybackButtonsRight(false); setHeaderPlayButton(false); setTimeout(() => playNext(), 500); });
+                    v.addEventListener('loadeddata', function(){ if (shouldAutoPlay) { try { if (!consentGranted) v.muted = true; v.play().catch(()=>{}); } catch {} } if (shouldUnmute && consentGranted) { v.muted = false; } });
+                }
+            }
+        }
+
+        function updateLyricsDisplayRight(currentTime) {
+            const lyrics = document.querySelectorAll('#lyric-card-right .lyrics-line');
+            let idx = -1;
+            for (let i = 0; i < lyrics.length; i++) {
+                const ts = parseFloat(lyrics[i].getAttribute('data-timestamp')) || 0;
+                const nextTs = i < lyrics.length - 1 ? parseFloat(lyrics[i+1].getAttribute('data-timestamp')) : Number.MAX_SAFE_INTEGER;
+                if (currentTime >= ts && currentTime < nextTs) { idx = i; break; }
+            }
+            if (idx !== -1) {
+                lyrics.forEach((el, i) => el.classList.toggle('highlight', i === idx));
+                if (autoSyncLyricsRight) {
+                    const highlighted = lyrics[idx];
+                    const card = document.getElementById('lyric-card-right');
+                    if (highlighted && card) card.scrollTo({ top: highlighted.offsetTop - card.offsetTop - card.clientHeight/2, behavior: 'smooth' });
+                }
+            }
+        }
+        function startRightRaf() { cancelRightRaf(); const tick = () => { if (groupKaraokeAudioActive) { rafIdRight = null; return; } if (window.rightYTPlayer && typeof rightYTPlayer.getCurrentTime === 'function') { const t = rightYTPlayer.getCurrentTime(); updateLyricsDisplayRight(t); rafIdRight = requestAnimationFrame(tick); } }; rafIdRight = requestAnimationFrame(tick); }
+        function cancelRightRaf() { if (rafIdRight) { cancelAnimationFrame(rafIdRight); rafIdRight = null; } }
+
+        function htmlEncode(str) { if (!str) return ''; return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+        function pausePlaybackRight() {
+            const karaokeAudio = getGroupKaraokeAudioPlayer();
+            if (groupKaraokeAudioActive && karaokeAudio) {
+                if (karaokeAudio.paused) {
+                    karaokeAudio.play().then(() => {
+                        syncOriginalRightToGroupKaraoke(true, true);
+                        updatePlaybackButtonsRight(true);
+                        setHeaderPlayButton(true);
+                    }).catch(error => console.error('無法播放合輯音軌:', error));
+                } else {
+                    karaokeAudio.pause();
+                    syncOriginalRightToGroupKaraoke(false, true);
+                    updatePlaybackButtonsRight(false);
+                    setHeaderPlayButton(false);
+                }
+                return;
+            }
+
+            const v = document.getElementById('video-player-right');
+            if (window.rightYTPlayer && typeof rightYTPlayer.getPlayerState === 'function') {
+                const state = rightYTPlayer.getPlayerState();
+                if (state === YT.PlayerState.PLAYING) { rightYTPlayer.pauseVideo(); }
+                else { if (consentGranted && rightYTPlayer.isMuted && rightYTPlayer.isMuted()) { try { rightYTPlayer.unMute(); rightYTPlayer.setVolume(100); } catch {} } rightYTPlayer.playVideo(); }
+            } else if (v) {
+                if (v.paused) { if (consentGranted) v.muted = false; v.play().catch(()=>{}); } else { v.pause(); }
+            }
+        }
+        function jumpToLyricRight(time) {
+            userHasInteracted = true; if (!consentGranted) grantConsent();
+            const karaokeAudio = getGroupKaraokeAudioPlayer();
+            if (groupKaraokeAudioActive && karaokeAudio) {
+                karaokeAudio.currentTime = time || 0;
+                karaokeAudio.play().then(() => {
+                    syncOriginalRightToGroupKaraoke(true, true);
+                    updatePlaybackButtonsRight(true);
+                    setHeaderPlayButton(true);
+                }).catch(error => console.error('無法播放合輯音軌:', error));
+                updateLyricsDisplayRight(getGroupKaraokeLyricsDisplayTime(time || 0));
+                return;
+            }
+
+            if (window.rightYTPlayer && typeof rightYTPlayer.seekTo === 'function') { if (consentGranted && rightYTPlayer.isMuted && rightYTPlayer.isMuted()) { try { rightYTPlayer.unMute(); } catch {} } rightYTPlayer.seekTo(time); rightYTPlayer.playVideo(); }
+            else { const v = document.getElementById('video-player-right'); if (v) { if (consentGranted) v.muted = false; v.currentTime = time; v.play().catch(()=>{}); } }
+        }
+        function replayLineRight(time) { jumpToLyricRight(time); }
+        function togglePlayPauseButton() { userHasInteracted = true; if (!consentGranted) grantConsent(); pausePlaybackRight(); }
+
+        function initPage() {
+            consentGranted = !!localStorage.getItem(consentKey);
+            if (!consentGranted) { showConsentOverlay(); }
+            bindPlaylistClicks();
+            updateNowInfo();
+            playIndex(0, consentGranted);
+            document.getElementById('nextBtn')?.addEventListener('click', () => { userHasInteracted = true; if (!consentGranted) grantConsent(); playNext(); });
+            document.getElementById('prevBtn')?.addEventListener('click', () => { userHasInteracted = true; if (!consentGranted) grantConsent(); playPrev(); });
+            document.getElementById('playPauseBtn')?.addEventListener('click', togglePlayPauseButton);
+            document.getElementById('startPlaybackBtn')?.addEventListener('click', grantConsent);
+        }
+
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initPage); else initPage();
+    </script>
+    <script src="https://www.youtube.com/iframe_api"></script>
+}

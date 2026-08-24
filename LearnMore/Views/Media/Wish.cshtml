@@ -1,0 +1,329 @@
+﻿@{
+    ViewData["Title"] = "許願留言板";
+}
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+@{
+    string? userEmail = Context.Session.GetString("Email");
+    bool isLoggedIn = !string.IsNullOrEmpty(userEmail);
+}
+
+<div class="wish-board lm-page-card lm-page-card-wide transition duration-300">
+    <h1 class="text-center text-2xl sm:text-4xl font-bold mb-4 sm:mb-6">✨ 許願留言板 ✨</h1>
+
+    @if (isLoggedIn)
+    {
+        <div class="wish-surface p-3 sm:p-4 mb-4 sm:mb-6 transition duration-300">
+            <textarea id="wishMessage"
+                      class="lm-form-control h-28 sm:h-40 text-sm sm:text-base"
+                      placeholder="請輸入您的願望..." rows="4"></textarea>
+            <button onclick="submitWish()"
+                    class="lm-primary-button w-full mt-2 sm:mt-3 text-sm sm:text-base">
+                💫 我要許願
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="wish-surface p-3 sm:p-4 mb-4 sm:mb-6 text-center">
+            <p class="lm-page-text mb-3">想許願嗎？</p>
+            <a href="@Url.Action("Index", "Login")" class="lm-primary-button text-sm sm:text-base">
+                🔐 登入後許願
+            </a>
+        </div>
+    }
+
+    <h2 class="text-xl sm:text-2xl font-semibold mt-6 sm:mt-8 mb-3 sm:mb-4 border-b-2 border-gray-500 pb-2">🌟 願望清單 🌟</h2>
+    <div id="wishList" class="flex flex-col gap-4 sm:gap-6"></div>
+</div>
+
+@section Scripts {
+<script>
+    const isLoggedIn = @isLoggedIn.ToString().ToLower();
+    const defaultAvatarUrl = "@Url.Content("~/images/default-avatar.png")";
+
+    $(document).ready(function () {
+        fetchWishes();
+    });
+
+        function fetchWishes() {
+        let url = "@Url.Content("~/api/wish")";
+        $.get(url, function (data) {
+            $("#wishList").empty();
+
+            data.forEach((wish, index) => {
+                let avatarUrl = wish.Avatar || defaultAvatarUrl;
+                let formattedMessage = formatWishMessage(wish.Message);
+
+                let wishHtml = `
+                    <div class="wish-surface flex flex-col p-3 sm:p-6 hover:shadow-xl transition duration-300 break-words w-full" data-wish-id="${wish.Id}">
+                        <div class="flex items-start mb-3 sm:mb-4">
+                            <img src="${avatarUrl}" alt="User Avatar" class="w-10 h-10 sm:w-12 sm:h-12 rounded-full border border-gray-500 mr-3 sm:mr-4 flex-shrink-0" onerror="this.onerror=null;this.src='${defaultAvatarUrl}';">
+                            <div class="flex-1 min-w-0">
+                                <!-- 顯示狀態 -->
+                                <div class="wish-display">
+                                    <p class="text-base sm:text-lg font-semibold whitespace-pre-wrap break-words">${formattedMessage}</p>
+                                    <p class="text-xs sm:text-sm text-gray-400 mt-2 sm:mt-3">— <span class="font-bold text-blue-400">${wish.NickName}</span> 於 ${wish.CreatedAt}</p>
+                                </div>
+
+                                <!-- 編輯狀態 -->
+                                <div class="wish-edit hidden">
+                                    <textarea class="wish-edit-message lm-form-control h-20 sm:h-24 text-sm sm:text-base">${wish.Message}</textarea>
+                                    <div class="mt-2 flex gap-2">
+                                        <button class="save-wish-btn bg-green-500 text-white px-2 sm:px-3 py-1 rounded hover:bg-green-600 text-xs sm:text-sm">儲存</button>
+                                        <button class="cancel-wish-btn bg-gray-500 text-white px-2 sm:px-3 py-1 rounded hover:bg-gray-600 text-xs sm:text-sm">取消</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            ${isLoggedIn && wish.CanEdit ? `
+                                <div class="flex flex-row sm:flex-col gap-2 sm:gap-1 ml-2 sm:ml-4 flex-shrink-0">
+                                    <button class="edit-wish-btn text-xs sm:text-sm text-blue-300 hover:underline">✏️</button>
+                                    <button class="delete-wish-btn text-xs sm:text-sm text-red-400 hover:underline">🗑️</button>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <!-- 回覆輸入區 -->
+                        <div class="reply-block">
+                            ${isLoggedIn ? `
+                                <textarea class="reply-input lm-form-control h-16 sm:h-24 text-sm sm:text-base" placeholder="回覆這則留言..." rows="2"></textarea>
+                                <button class="reply-btn bg-blue-500 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-md hover:bg-blue-600 text-sm sm:text-base mt-2" data-wish-id="${wish.Id}">
+                                    回覆
+                                </button>
+                            ` : `<p class="text-xs sm:text-sm text-gray-400 italic">請登入後才能回覆 🔒</p>`}
+                        </div>
+
+                        <!-- 回覆清單 -->
+                        <div class="reply-list mt-3 sm:mt-4 pl-3 sm:pl-4 border-l border-gray-500 space-y-2 sm:space-y-3" data-reply-for="${index}"></div>
+                    </div>
+                `;
+
+                $("#wishList").append(wishHtml);
+
+                // 載入回覆
+                loadReplies(wish.Id, $(`[data-reply-for="${index}"]`));
+            });
+        });
+    }
+
+    // 動態綁定：點編輯
+    $(document).on("click", ".edit-wish-btn", function () {
+        const container = $(this).closest("[data-wish-id]");
+        container.find(".wish-display").hide();
+        container.find(".wish-edit").removeClass("hidden");
+    });
+
+    // 儲存
+    $(document).on("click", ".save-wish-btn", function () {
+        const container = $(this).closest("[data-wish-id]");
+        const wishId = container.data("wish-id");
+        const newMessage = container.find(".wish-edit-message").val().trim();
+
+        if (newMessage === "") {
+            alert("內容不能為空！");
+            return;
+        }
+
+        $.ajax({
+            url: `@Url.Content("~/api/wish/")${wishId}`,
+            type: "PUT",
+            contentType: "application/json",
+            data: JSON.stringify({ message: newMessage }),
+            success: function (res) {
+                alert(res.message);
+                fetchWishes(); // 重新載入留言
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON?.message || "編輯失敗");
+            }
+        });
+    });
+
+    // 取消
+    $(document).on("click", ".cancel-wish-btn", function () {
+        const container = $(this).closest("[data-wish-id]");
+        container.find(".wish-edit").addClass("hidden");
+        container.find(".wish-display").show();
+    });
+
+    // 點擊刪除
+    $(document).on("click", ".delete-wish-btn", function () {
+        const container = $(this).closest("[data-wish-id]");
+        const wishId = container.data("wish-id");
+
+        if (!confirm("確定要刪除這則留言嗎？刪除後將無法復原。")) return;
+
+        $.ajax({
+            url: `@Url.Content("~/api/wish/")${wishId}`,
+            type: "DELETE",
+            success: function (res) {
+                alert(res.message);
+                fetchWishes(); // 刪除後重新載入
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON?.message || "刪除失敗");
+            }
+        });
+    });
+
+    function loadReplies(wishId, container) {
+        let baseUrl = "@Url.Content("~/api/wish/")";
+        $.get(`${baseUrl}${wishId}/replies`, function (data) {
+            container.empty();
+            if (data.length === 0) return;
+
+            data.forEach(reply => {
+                const isOwner = isLoggedIn && reply.CanEdit;
+                const replyAvatarUrl = reply.Avatar || defaultAvatarUrl;
+                const replyHtml = `
+                    <div class="flex items-start" data-reply-id="${reply.Id}">
+                        <img src="${replyAvatarUrl}" class="w-6 h-6 sm:w-8 sm:h-8 rounded-full mr-2 sm:mr-3 flex-shrink-0" onerror="this.onerror=null;this.src='${defaultAvatarUrl}';">
+                        <div class="flex-1 min-w-0">
+                            <div class="reply-display">
+                                <p class="text-sm sm:text-lg font-semibold whitespace-pre-wrap break-words">${reply.Message}</p>
+                                <span class="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-3 block">— <span class="font-bold text-blue-400">${reply.NickName}</span> 於 ${reply.CreatedAt}</span>
+                            </div>
+                            <div class="reply-edit hidden">
+                                <textarea class="reply-edit-message w-full p-2 border border-gray-300 rounded text-sm sm:text-base">${reply.Message}</textarea>
+                                <div class="mt-1 flex gap-2">
+                                    <button class="save-reply-btn bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 text-xs sm:text-sm">儲存</button>
+                                    <button class="cancel-reply-btn bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 text-xs sm:text-sm">取消</button>
+                                </div>
+                            </div>
+                        </div>
+                        ${isOwner ? `
+                            <div class="flex flex-row sm:flex-col gap-2 sm:gap-1 ml-2 sm:ml-3 flex-shrink-0">
+                                <button class="edit-reply-btn text-xs sm:text-sm text-blue-400 hover:underline">✏️</button>
+                                <button class="delete-reply-btn text-xs sm:text-sm text-red-400 hover:underline">🗑️</button>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                container.append(replyHtml);
+            });
+        });
+    }
+
+    // 回覆留言
+    $(document).on("click", ".reply-btn", function () {
+        const wishId = $(this).data("wish-id");
+        const container = $(`[data-wish-id='${wishId}']`);
+        const replyText = container.find(".reply-input").val()?.trim();
+
+        if (!replyText) {
+            alert("請輸入回覆內容！");
+            return;
+        }
+
+        $.ajax({
+            url: `@Url.Content("~/api/wish/")${wishId}/replies`,
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify({ message: replyText }),
+            success: function (res) {
+                alert(res.message);
+                fetchWishes();
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON?.message || "回覆失敗");
+            }
+        });
+    });
+
+    // 編輯回覆
+    $(document).on("click", ".edit-reply-btn", function () {
+        const container = $(this).closest("[data-reply-id]");
+        container.find(".reply-display").hide();
+        container.find(".reply-edit").removeClass("hidden");
+    });
+
+    // 取消編輯
+    $(document).on("click", ".cancel-reply-btn", function () {
+        const container = $(this).closest("[data-reply-id]");
+        container.find(".reply-edit").addClass("hidden");
+        container.find(".reply-display").show();
+    });
+
+    // 儲存回覆編輯
+    $(document).on("click", ".save-reply-btn", function () {
+        const container = $(this).closest("[data-reply-id]");
+        const replyId = container.data("reply-id");
+        const newMsg = container.find(".reply-edit-message").val().trim();
+        if (!newMsg) {
+            alert("內容不能為空！");
+            return;
+        }
+
+        $.ajax({
+            url: `@Url.Content("~/api/wish/replies/")${replyId}`,
+            type: "PUT",
+            contentType: "application/json",
+            data: JSON.stringify({ message: newMsg }),
+            success: function (res) {
+                alert(res.message);
+                fetchWishes(); // 重新載入留言
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON?.message || "儲存失敗");
+            }
+        });
+    });
+
+    // 刪除回覆
+    $(document).on("click", ".delete-reply-btn", function () {
+        const container = $(this).closest("[data-reply-id]");
+        const replyId = container.data("reply-id");
+
+        if (!confirm("確定要刪除這則回覆嗎？")) return;
+
+        $.ajax({
+            url: `@Url.Content("~/api/wish/replies/")${replyId}`,
+            type: "DELETE",
+            success: function (res) {
+                alert(res.message);
+                fetchWishes();
+            },
+            error: function (xhr) {
+                alert(xhr.responseJSON?.message || "刪除失敗");
+            }
+        });
+    });
+
+    function formatWishMessage(message) {
+        return message.replace(/(https?:\/\/[^\s]+)/g, function (url) {
+            return `<a href="${url}" target="_blank" class="text-blue-400 break-words">${truncateUrl(url, 40)}</a>`;
+        });
+    }
+
+    function truncateUrl(url, maxLength) {
+        return url.length > maxLength ? url.substring(0, maxLength) + "..." : url;
+    }
+
+    function submitWish() {
+        let message = $("#wishMessage").val().trim();
+        if (message === "") {
+            alert("請輸入願望！");
+            return;
+        }
+
+        let wishData = { Message: message };
+        let url = "@Url.Content("~/api/wish")";
+        $.ajax({
+            url: url,
+            type: "POST",
+            contentType: "application/json",
+            data: JSON.stringify(wishData),
+            success: function (response) {
+                alert(response.message);
+                $("#wishMessage").val("");
+                fetchWishes();
+            },
+            error: function (xhr) {
+                console.error("錯誤回應:", xhr.responseText);
+                alert(xhr.responseJSON ? xhr.responseJSON.message : "發生錯誤");
+            }
+        });
+    }
+</script>
+}

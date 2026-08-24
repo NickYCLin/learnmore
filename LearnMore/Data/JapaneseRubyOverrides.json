@@ -1,0 +1,30 @@
+[
+  {
+    "Text": "夕焼け",
+    "Ruby": "<ruby>夕焼け<rt>ゆうやけ</rt></ruby>"
+  },
+  {
+    "Text": "既読",
+    "Ruby": "<ruby>既読<rt>きどく</rt></ruby>"
+  },
+  {
+    "Text": "1人",
+    "Reading": "ひとり",
+    "Ruby": "<ruby>1人<rt>ひとり</rt></ruby>"
+  },
+  {
+    "Text": "１人",
+    "Reading": "ひとり",
+    "Ruby": "<ruby>１人<rt>ひとり</rt></ruby>"
+  },
+  {
+    "Text": "2人",
+    "Reading": "ふたり",
+    "Ruby": "<ruby>2人<rt>ふたり</rt></ruby>"
+  },
+  {
+    "Text": "２人",
+    "Reading": "ふたり",
+    "Ruby": "<ruby>２人<rt>ふたり</rt></ruby>"
+  }
+]

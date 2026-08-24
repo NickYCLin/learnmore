@@ -1,0 +1,211 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="@Url.Content("~/proxy/catframe/1")" />
+    <title>@ViewData["Title"] - ビビ學日語</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary-color: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg-primary: #ffffff;
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --shadow-md: 0 24px 70px rgba(15, 23, 42, 0.28);
+        }
+
+        body {
+            position: relative;
+            overflow-x: hidden;
+            overflow-y: auto;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', 'Noto Sans JP', 'Microsoft JhengHei', Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #171c3e url('@Url.Content("~/images/login-bg-learnmore.webp")') center / cover no-repeat;
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.18), transparent 32%),
+                linear-gradient(180deg, rgba(9, 13, 34, 0.08), rgba(9, 13, 34, 0.26));
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            width: min(100%, 440px);
+            background: rgba(255, 255, 255, 0.88);
+            color: var(--text-primary);
+            border-radius: 28px;
+            padding: 36px 32px;
+            box-shadow: var(--shadow-md);
+            margin: auto;
+            border: 1px solid rgba(255, 255, 255, 0.68);
+            backdrop-filter: blur(18px) saturate(135%);
+            -webkit-backdrop-filter: blur(18px) saturate(135%);
+        }
+
+        main.pb-3 {
+            text-align: center;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        form {
+            width: 100%;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            text-align: center;
+        }
+
+            button:hover {
+                background-color: var(--primary-hover);
+            }
+
+        footer {
+            position: relative;
+            z-index: 1;
+            width: min(100%, 760px);
+            text-align: center;
+            padding: 12px 18px;
+            margin-bottom: 16px;
+            background-color: rgba(255, 255, 255, 0.16);
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            border-radius: 999px;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.82);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        footer a {
+            color: rgba(255, 255, 255, 0.92);
+        }
+
+        @@media (max-width: 640px) {
+            body {
+                padding: 18px;
+                overflow: auto;
+            }
+
+            .container {
+                padding: 28px 22px;
+                border-radius: 24px;
+            }
+
+            button,
+            .google-login-button {
+                width: 100%;
+                min-height: 44px;
+            }
+
+            img {
+                max-width: 100%;
+                height: auto;
+            }
+
+            footer {
+                width: 100%;
+                margin-bottom: 0;
+                border-radius: 18px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        &copy; 2025 - ビビ學日語 - <a asp-area="" asp-controller="User" asp-action="About">本站說明</a>
+    </footer>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+<script>
+        const baseUrl = '@($"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}")';
+        let gifInterval = null;
+
+        function createGif() {
+            return {
+                gifList: Array.from({ length: 11 }, (_, i) => `${baseUrl}/proxy/catframe/${i + 1}`),
+                index: -1,
+                next() {
+                    this.index++;
+                    if (this.index >= this.gifList.length) this.index = 0;
+                    return this.gifList[this.index];
+                }
+            };
+        }
+
+        function startLoop() {
+            const gif = createGif();
+
+            gifInterval = setInterval(() => {
+                let link = document.querySelector("link[rel*='icon']");
+                if (!link) {
+                    link = document.createElement("link");
+                    link.rel = "icon";
+                    document.head.appendChild(link);
+                }
+
+                const nextGif = gif.next();
+                link.href = nextGif;
+            }, 300);
+        }
+
+        function stopLoop() {
+            if (gifInterval) {
+                clearInterval(gifInterval);
+                gifInterval = null;
+            }
+        }
+
+        function resetLoop() {
+            stopLoop();
+            startLoop();
+        }
+
+        // 啟動第一次
+        startLoop();
+
+        // 每 5 分鐘重啟一次，釋放資源
+        setInterval(() => {
+            resetLoop();
+        }, 5 * 60 * 1000);
+    </script>

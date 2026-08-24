@@ -1,0 +1,32 @@
+﻿@{
+    ViewData["Title"] = "設定";
+    int enableRoman = ViewBag.EnableRoman;
+}
+
+
+<div class="lm-page-card" style="max-width: 560px;">
+                <h1 class="lm-page-title text-center mb-4">設定</h1>
+                <div class="card-body text-center">
+                    <div class="form-check form-switch d-flex justify-content-center align-items-center">
+                        <input class="form-check-input me-2" type="checkbox" id="enableRomanCheckbox" @(enableRoman == 1 ? "checked" : "")>
+                        <label class="form-check-label" for="enableRomanCheckbox">羅馬拼音</label>
+                    </div>
+                    <button id="saveSettings" class="lm-primary-button w-100 mt-4">儲存設定</button>
+                </div>
+</div>
+
+<script>
+    $(document).ready(function () {
+        $("#saveSettings").click(function () {
+            var enableRoman = $("#enableRomanCheckbox").is(":checked") ? 1 : 0;
+
+            $.post("@Url.Action("UpdateEnableRoman", "User")", { enableRoman: enableRoman }, function (data) {
+                if (data.success) {
+                    window.location.href = "@Url.Action("Index", "Home")";
+                } else {
+                    alert("儲存失敗：" + data.message);
+                }
+            });
+        });
+    });
+</script>

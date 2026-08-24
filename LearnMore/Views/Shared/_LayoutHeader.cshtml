@@ -1,0 +1,1826 @@
+﻿@using LearnMore.Services
+@using Microsoft.AspNetCore.Http
+@{
+    var siteRoot = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}".TrimEnd('/');
+    var shareMetadata = ShareMetadataBuilder.Build(
+        siteRoot: siteRoot,
+        currentPathAndQuery: $"{Context.Request.Path}{Context.Request.QueryString}",
+        pageTitle: ViewData["Title"]?.ToString(),
+        description: ViewData["Description"]?.ToString(),
+        shareImageUrl: ViewData["ShareImage"]?.ToString() ?? Url.Content("~/proxy/catframe/1"),
+        searchTitle: ViewData["SearchTitle"]?.ToString(),
+        openGraphTitle: ViewData["OpenGraphTitle"]?.ToString());
+    var websiteStructuredData = new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "WebSite",
+        ["name"] = "ビビ學日語",
+        ["alternateName"] = new[] { "Bibi Learn Japanese", "日文歌詞學習平台", "日語歌詞學習", "唱歌學日文", "用日文歌學日文" },
+        ["url"] = siteRoot + "/",
+        ["description"] = shareMetadata.Description,
+        ["inLanguage"] = new[] { "zh-TW", "ja" },
+        ["potentialAction"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "SearchAction",
+            ["target"] = siteRoot + "/Home/Search?query={search_term_string}",
+            ["query-input"] = "required name=search_term_string"
+        }
+    };
+    var learningResourceStructuredData = new Dictionary<string, object?>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "LearningResource",
+        ["name"] = "ビビ學日語",
+        ["url"] = siteRoot + "/",
+        ["description"] = "透過日文歌曲、同步歌詞、假名標註、羅馬拼音與繁體中文翻譯唱歌學日文。",
+        ["inLanguage"] = new[] { "zh-TW", "ja" },
+        ["learningResourceType"] = "language learning website",
+        ["teaches"] = new[] { "日語", "日文歌詞", "日文聽力", "唱歌學日文" },
+        ["audience"] = new Dictionary<string, object?>
+        {
+            ["@type"] = "EducationalAudience",
+            ["educationalRole"] = "student"
+        }
+    };
+}
+<!DOCTYPE html>
+<html lang="@shareMetadata.HtmlLanguage">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@shareMetadata.PageTitle</title>
+    <meta name="description" content="@shareMetadata.Description" />
+    <meta name="keywords" content="唱歌學日文,唱歌學日語,日文歌詞,日語學習,日文歌學日文,羅馬拼音,假名標註,中文翻譯,JPOP,日本歌曲,振り仮名,歌詞同步,日文學習網站" />
+    <link rel="canonical" href="@shareMetadata.CanonicalUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@shareMetadata.OpenGraphTitle" />
+    <meta property="og:description" content="@shareMetadata.Description" />
+    <meta property="og:url" content="@shareMetadata.CanonicalUrl" />
+    <meta property="og:site_name" content="ビビ學日語" />
+    <meta property="og:locale" content="zh_TW" />
+    <meta property="og:image" content="@shareMetadata.OpenGraphImageUrl" />
+    <meta name="twitter:card" content="@shareMetadata.TwitterCard" />
+    <meta name="twitter:title" content="@shareMetadata.OpenGraphTitle" />
+    <meta name="twitter:description" content="@shareMetadata.Description" />
+    <meta name="twitter:image" content="@shareMetadata.OpenGraphImageUrl" />
+    <meta name="theme-color" content="@shareMetadata.ThemeColor" />
+    <meta name="apple-mobile-web-app-capable" content="@shareMetadata.AppleMobileWebAppCapable" />
+    <meta name="apple-mobile-web-app-title" content="@shareMetadata.AppleMobileWebAppTitle" />
+    <link rel="apple-touch-icon" href="@shareMetadata.AppleTouchIconUrl" />
+    <script type="application/ld+json">
+        @Html.Raw(System.Text.Json.JsonSerializer.Serialize(websiteStructuredData))
+    </script>
+    <script type="application/ld+json">
+        @Html.Raw(System.Text.Json.JsonSerializer.Serialize(learningResourceStructuredData))
+    </script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-0YH8QSM7XX"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);} 
+        gtag('js', new Date());
+        gtag('config', 'G-0YH8QSM7XX');
+    </script>
+    <link rel="icon" type="image/png" sizes="48x48" href="@Url.Content("~/favicon-48.png")?v=20260527-tight" />
+    <link rel="icon" type="image/png" sizes="192x192" href="@Url.Content("~/favicon-192.png")?v=20260527-tight" />
+    <link rel="shortcut icon" href="@Url.Content("~/favicon.ico")?v=20260527-tight" />
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/LearnMore.styles.css" asp-append-version="true" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        /*-------------------------------------------
+                           全站基本樣式 - 統一配色方案
+                        -------------------------------------------*/
+
+        /* CSS 變數定義 - 亮色主題 */
+        :root {
+            /* 主色系 - 優雅的靛藍色 */
+            --primary-color: #6366f1;
+            --primary-hover: #4f46e5;
+            --primary-light: #818cf8;
+            --primary-dark: #3730a3;
+            /* 次要色系 - 活潑的粉色 */
+            --secondary-color: #ec4899;
+            --secondary-hover: #db2777;
+            --secondary-light: #f472b6;
+            /* 強調色 - 火焰橘 */
+            --accent-orange: #f97316;
+            --accent-orange-hover: #ea580c;
+            /* 中性色 - 淺色系 */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --bg-hover: #e2e8f0;
+            /* 文字顏色 */
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --text-tertiary: #94a3b8;
+            --text-muted: #cbd5e1;
+            /* 邊框 */
+            --border-color: #e2e8f0;
+            --border-hover: #cbd5e1;
+            /* 陰影 */
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
+            --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.15);
+            /* 特殊色 */
+            --success-color: #10b981;
+            --warning-color: #f59e0b;
+            --danger-color: #ef4444;
+            --info-color: #3b82f6;
+            /* 用於媒體區與按鈕上的「字在強色上」顏色 */
+            --on-primary: #ffffff;
+            /* 影片容器背景（預設黑色） */
+            --video-bg: #000000;
+            /* 過渡時間 */
+            --transition-fast: 0.15s;
+            --transition-normal: 0.3s;
+            --transition-slow: 0.5s;
+        }
+
+        /* 暗色主題變數 */
+        .dark-theme {
+            /* 主色系 - 柔和靛藍 */
+            --primary-color: #818cf8;
+            --primary-hover: #a5b4fc;
+            --primary-light: #c7d2fe;
+            --primary-dark: #6366f1;
+            /* 次要色系 - 柔和粉色 */
+            --secondary-color: #f472b6;
+            --secondary-hover: #f9a8d4;
+            --secondary-light: #fbcfe8;
+            /* 強調色 - 柔和橘 */
+            --accent-orange: #fb923c;
+            --accent-orange-hover: #fdba74;
+            /* 背景色 - 深色系 */
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --bg-hover: #475569;
+            /* 文字顏色 */
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --text-tertiary: #94a3b8;
+            --text-muted: #94a3b8;
+            /* 邊框 */
+            --border-color: #334155;
+            --border-hover: #475569;
+            /* 陰影 */
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.5);
+            --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.6);
+            /* 特殊色 */
+            --success-color: #34d399;
+            --warning-color: #fbbf24;
+            --danger-color: #f87171;
+            --info-color: #60a5fa;
+        }
+
+        * {
+            transition: background-color var(--transition-normal), color var(--transition-normal), border-color var(--transition-normal);
+        }
+
+        body {
+            padding-top: 56px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        /*-------------------------------------------
+                           卡片樣式
+                        -------------------------------------------*/
+        .card {
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            transition: all var(--transition-normal);
+            background-color: var(--bg-primary);
+            border: 1px solid var(--border-color);
+        }
+
+            .card:hover {
+                box-shadow: var(--shadow-lg);
+                border-color: var(--primary-light);
+            }
+
+        .card-img-top {
+            transition: transform var(--transition-normal);
+        }
+
+        .card:hover .card-img-top {
+            transform: scale(1.05);
+        }
+
+        .card-body {
+            background-color: var(--bg-primary);
+        }
+
+        .card-title {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .card-text {
+            color: var(--text-secondary);
+        }
+
+        /*-------------------------------------------
+                           排名徽章
+                        -------------------------------------------*/
+        .ranking-badge {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+            color: white;
+            font-weight: bold;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            border-radius: 8px;
+            box-shadow: var(--shadow-md);
+            z-index: 10;
+        }
+
+        /*-------------------------------------------
+                           導覽列樣式
+                        -------------------------------------------*/
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            z-index: 1050;
+            background-color: var(--bg-primary) !important;
+            box-shadow: var(--shadow-md);
+            border-bottom: 1px solid var(--border-color);
+            padding: 8px 0;
+        }
+
+        .navbar-brand {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--text-primary) !important;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+            .navbar-brand:hover {
+                color: var(--primary-color) !important;
+            }
+
+        /* 漢堡選單按鈕 */
+        .navbar-toggler {
+            border: 2px solid var(--border-color) !important;
+            padding: 6px 10px !important;
+            border-radius: 8px !important;
+            transition: all 0.15s ease !important;
+        }
+
+        .navbar-toggler:focus {
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25) !important;
+        }
+
+        .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(100, 116, 139, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+        }
+
+        /* 暗色主題下的漢堡選單 */
+        .dark-theme .navbar-toggler {
+            border-color: var(--border-color) !important;
+        }
+
+        .dark-theme .navbar-toggler-icon {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(226, 232, 240, 1)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") !important;
+        }
+
+        .navbar .nav-link {
+            background-color: transparent;
+            color: var(--text-primary);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: all var(--transition-fast);
+        }
+
+            .navbar .nav-link:hover {
+                background-color: var(--bg-hover);
+                color: var(--primary-color);
+            }
+
+        /*-------------------------------------------
+                           搜尋列樣式
+                        -------------------------------------------*/
+        .search-container {
+            display: flex;
+            align-items: center;
+            max-width: 500px;
+            width: 100%;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .search-form {
+            display: flex;
+            width: 100%;
+            min-width: 0;
+        }
+
+        .search-surface {
+            position: relative;
+            z-index: 1201;
+        }
+
+        .search-mobile-backdrop {
+            display: none;
+        }
+
+        .search-input {
+            flex: 1;
+            height: 42px;
+            border: 2px solid var(--border-color);
+            border-radius: 21px 0 0 21px;
+            padding: 0 20px;
+            font-size: 15px;
+            outline: none;
+            background-color: var(--bg-secondary);
+            color: var(--text-primary);
+            transition: all var(--transition-fast);
+        }
+
+            .search-input:focus {
+                border-color: var(--primary-color);
+                background-color: var(--bg-primary);
+                box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            }
+
+            .search-input::placeholder {
+                color: var(--text-tertiary);
+            }
+
+        .search-btn {
+            height: 42px;
+            width: 50px;
+            border: none;
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+            color: white;
+            border-radius: 0 21px 21px 0;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+            .search-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-md);
+                background: linear-gradient(135deg, var(--primary-hover), var(--primary-dark));
+            }
+
+            .search-btn i {
+                font-size: 16px;
+            }
+
+        .search-suggestions {
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            right: 0;
+            display: none;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: var(--shadow-xl);
+            overflow: hidden;
+            z-index: 1200;
+            max-height: min(70vh, 420px);
+            overflow-y: auto;
+        }
+
+        .search-suggestions.show {
+            display: block;
+        }
+
+        .search-suggestion-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 10px 12px;
+            border: 0;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .search-suggestion-item:last-child {
+            border-bottom: 0;
+        }
+
+        .search-suggestion-item:hover,
+        .search-suggestion-item.active {
+            background: var(--bg-tertiary);
+        }
+
+        .search-suggestion-cover {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            object-fit: cover;
+            flex: 0 0 auto;
+            background: var(--bg-tertiary);
+        }
+
+        .search-suggestion-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-tertiary);
+        }
+
+        .search-suggestion-main {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .search-suggestion-title,
+        .search-suggestion-meta,
+        .search-suggestion-match {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .search-suggestion-title {
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .search-suggestion-meta {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .search-suggestion-match {
+            font-size: 0.78rem;
+            color: var(--primary-color);
+        }
+
+        .search-suggestion-empty {
+            padding: 12px 14px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        @@media (max-width: 991.98px) {
+            .navbar .search-container {
+                width: 100%;
+                max-width: none;
+                margin: 12px 0;
+                padding: 0 2px;
+            }
+
+            .search-form {
+                width: 100%;
+            }
+
+            .search-input {
+                min-width: 0;
+                height: 44px;
+                font-size: 16px;
+            }
+
+            .search-btn {
+                width: 48px;
+                min-width: 48px;
+            }
+
+            .search-mobile-backdrop {
+                position: fixed;
+                inset: 0;
+                display: none;
+                background: rgba(15, 23, 42, 0.18);
+                z-index: 1190;
+            }
+
+            .search-container.search-mobile-active .search-mobile-backdrop {
+                display: block;
+            }
+
+            .search-suggestions.search-suggestions-mobile-fixed {
+                position: fixed;
+                top: auto;
+                left: max(12px, env(safe-area-inset-left));
+                right: max(12px, env(safe-area-inset-right));
+                width: calc(100dvw - 24px);
+                max-height: min(62dvh, 440px);
+                margin-top: 8px;
+                overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
+                z-index: 1202;
+            }
+        }
+
+        /* 大螢幕時，讓搜尋框固定在整個導覽列正中央 */
+        @@media (min-width: 992px) {
+            .navbar .container-fluid {
+                position: relative;
+            }
+
+            .navbar .search-container {
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                margin: 0; /* 覆蓋原本的 margin: 0 auto; */
+            }
+        }
+
+        /*-------------------------------------------
+                           下拉選單樣式
+                        -------------------------------------------*/
+        .dropdown-menu {
+            background: var(--bg-primary) !important;
+            min-width: 260px !important;
+            max-width: 350px !important;
+            padding: 8px !important;
+            border-radius: 12px !important;
+            box-shadow: var(--shadow-xl) !important;
+            border: 1px solid var(--border-color) !important;
+            margin-top: 8px !important;
+        }
+
+        .dropdown-menu .dropdown-item {
+            color: var(--text-primary) !important;
+            background: transparent !important;
+            padding: 10px 16px !important;
+            border-radius: 8px !important;
+            margin: 2px 0 !important;
+            transition: all var(--transition-fast) !important;
+            display: flex !important;
+            align-items: center !important;
+            font-weight: 500 !important;
+            gap: 0 !important;
+        }
+
+            .dropdown-menu .dropdown-item:hover {
+                background: var(--bg-tertiary) !important;
+                color: var(--primary-color) !important;
+            }
+
+            .dropdown-menu .dropdown-item i,
+            .dropdown-menu .dropdown-item .fas,
+            .dropdown-menu .dropdown-item .far,
+            .dropdown-menu .dropdown-item .fa {
+                margin-right: 12px !important;
+                width: 20px !important;
+                min-width: 20px !important;
+                text-align: center !important;
+                font-size: 14px !important;
+                flex-shrink: 0 !important;
+            }
+
+        .dropdown-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 8px 0;
+            opacity: 0.5;
+        }
+
+        /* 特殊項目顏色 */
+        .dropdown-item.text-danger {
+            color: var(--danger-color) !important;
+        }
+
+            .dropdown-item.text-danger:hover {
+                background-color: rgba(239, 68, 68, 0.1);
+            }
+
+        /*-------------------------------------------
+                           主題切換開關
+                        -------------------------------------------*/
+        .theme-toggle {
+            display: flex;
+            position: relative;
+            width: 56px;
+            height: 28px;
+            background: var(--bg-tertiary);
+            border-radius: 14px;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 4px;
+            cursor: pointer;
+            transition: all var(--transition-normal);
+            border: 2px solid var(--border-color);
+            margin-left: auto;
+        }
+
+            .theme-toggle:hover {
+                border-color: var(--primary-color);
+                transform: scale(1.05);
+            }
+
+            .theme-toggle .toggle-indicator {
+                position: absolute;
+                width: 20px;
+                height: 20px;
+                background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+                border-radius: 50%;
+                top: 2px;
+                left: 3px;
+                transition: all var(--transition-normal);
+                box-shadow: var(--shadow-sm);
+            }
+
+        .dark-theme .theme-toggle .toggle-indicator {
+            left: 31px;
+            background: linear-gradient(135deg, var(--warning-color), var(--accent-orange));
+        }
+
+        .theme-toggle .toggle-icon {
+            font-size: 12px;
+            z-index: 2;
+            transition: all var(--transition-normal);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .theme-toggle .sun {
+            color: var(--warning-color);
+        }
+
+        .theme-toggle .moon {
+            color: var(--text-tertiary);
+        }
+
+        .dark-theme .theme-toggle .sun {
+            color: var(--text-tertiary);
+        }
+
+        .dark-theme .theme-toggle .moon {
+            color: var(--warning-color);
+        }
+
+        /*-------------------------------------------
+                           按鈕樣式 - 首頁篩選按鈕
+                        -------------------------------------------*/
+        .btn {
+            border-radius: 24px;
+            padding: 10px 24px;
+            font-weight: 600;
+            transition: all var(--transition-normal);
+            border: 2px solid transparent;
+        }
+
+        /* 全部按鈕 - 藍色 */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+            border-color: var(--primary-color);
+            color: white;
+        }
+
+            .btn-primary:hover {
+                transform: translateY(-2px);
+                box-shadow: var(--shadow-md);
+                background: linear-gradient(135deg, var(--primary-hover), var(--primary-dark));
+            }
+
+        /* 周排行按鈕 - 橘色 */
+        .btn-outline-warning {
+            color: var(--accent-orange);
+            border-color: var(--accent-orange);
+            background: transparent;
+        }
+
+            .btn-outline-warning:hover {
+                background: var(--accent-orange);
+                border-color: var(--accent-orange);
+                color: white;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+            }
+
+        /* 月排行按鈕 - 黃色 */
+        .btn-outline-soft-yellow {
+            color: #d97706;
+            border-color: var(--warning-color);
+            background: transparent;
+        }
+
+            .btn-outline-soft-yellow:hover {
+                background: var(--warning-color);
+                border-color: var(--warning-color);
+                color: #78350f;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(251, 191, 36, 0.4);
+            }
+
+        /* 本站新上架按鈕 - 綠色 */
+        .btn-outline-success {
+            color: var(--success-color);
+            border-color: var(--success-color);
+            background: transparent;
+        }
+
+            .btn-outline-success:hover {
+                background: var(--success-color);
+                border-color: var(--success-color);
+                color: white;
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+            }
+
+        /* 啟用狀態 */
+        .active-yellow {
+            background-color: var(--warning-color);
+            border-color: var(--warning-color);
+            color: #78350f;
+            box-shadow: 0 4px 12px rgba(251, 191, 36, 0.5);
+        }
+
+        .btn-outline-light {
+            color: var(--text-secondary);
+            border-color: var(--border-color);
+        }
+
+            .btn-outline-light:hover {
+                background-color: var(--bg-tertiary);
+                color: var(--text-primary);
+                border-color: var(--border-hover);
+            }
+
+        /*-------------------------------------------
+                           標題樣式
+                        -------------------------------------------*/
+        h1, h2, h3, h4, h5, h6 {
+            color: var(--text-primary);
+            font-weight: 700;
+        }
+
+        .title-container {
+            background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            margin-bottom: 24px;
+        }
+
+            .title-container h1 {
+                color: var(--text-primary);
+                margin-bottom: 12px;
+            }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1rem;
+        }
+
+            .subtitle a {
+                color: var(--primary-color);
+                text-decoration: none;
+                transition: color var(--transition-fast);
+            }
+
+                .subtitle a:hover {
+                    color: var(--primary-hover);
+                    text-decoration: underline;
+                }
+
+        /*-------------------------------------------
+                           影片與內容區塊
+                        -------------------------------------------*/
+        .main-content {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .video-section {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .video-container {
+            background-color: var(--bg-primary);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--border-color);
+        }
+
+        /*-------------------------------------------
+                           留言區樣式
+                        -------------------------------------------*/
+        .comments-section {
+            background-color: var(--bg-primary);
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: var(--shadow-md);
+            border: 1px solid var(--border-color);
+            margin-top: 24px;
+        }
+
+            .comments-section h3 {
+                color: var(--text-primary);
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+        .comment {
+            background-color: var(--bg-secondary);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border-color);
+        }
+
+            .comment strong {
+                color: var(--primary-color);
+            }
+
+            .comment p {
+                color: var(--text-secondary);
+                margin: 8px 0;
+            }
+
+            .comment .timestamp {
+                color: var(--text-tertiary);
+                font-size: 0.85rem;
+            }
+
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 2px solid var(--border-color);
+        }
+
+        .user-avatar-img {
+            width: 36px;
+            height: 36px;
+            object-fit: cover;
+            border: 2px solid var(--border-color);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .private-label {
+            background: linear-gradient(135deg, var(--secondary-color), var(--primary-color));
+            color: white;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            margin-left: 8px;
+        }
+
+        .admin-reply-form {
+            margin-top: 12px;
+            display: flex;
+            gap: 8px;
+        }
+
+            .admin-reply-form input {
+                flex: 1;
+                padding: 8px 12px;
+                border: 2px solid var(--border-color);
+                border-radius: 8px;
+                background-color: var(--bg-secondary);
+                color: var(--text-primary);
+            }
+
+                .admin-reply-form input:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                }
+
+            .admin-reply-form button {
+                padding: 8px 16px;
+                background: linear-gradient(135deg, var(--primary-color), var(--primary-hover));
+                color: white;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all var(--transition-fast);
+            }
+
+                .admin-reply-form button:hover {
+                    transform: translateY(-2px);
+                    box-shadow: var(--shadow-md);
+                }
+
+        .admin-replies {
+            margin-top: 12px;
+            padding-left: 20px;
+            border-left: 3px solid var(--primary-light);
+        }
+
+        .admin-reply {
+            background-color: var(--bg-tertiary);
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 8px;
+        }
+
+            .admin-reply strong {
+                color: var(--accent-orange);
+            }
+
+        /*-------------------------------------------
+                           切換開關樣式（歌詞頁面）
+                        -------------------------------------------*/
+        .form-check-input {
+            width: 48px;
+            height: 24px;
+            background-color: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            cursor: pointer;
+        }
+
+            .form-check-input:checked {
+                background-color: var(--accent-orange);
+                border-color: var(--accent-orange);
+            }
+
+        .form-check-label {
+            color: var(--text-secondary);
+            margin-left: 8px;
+        }
+
+        /*-------------------------------------------
+                           訊息盒子
+                        -------------------------------------------*/
+        .custom-message-box {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%,-50%);
+            min-width: 200px;
+            max-width: 300px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 20px 28px;
+            border-radius: 12px;
+            box-shadow: var(--shadow-xl);
+            text-align: center;
+            z-index: 10000;
+            opacity: 0;
+            transition: opacity var(--transition-slow);
+            border: 2px solid var(--primary-color);
+        }
+
+        /*-------------------------------------------
+                           頁尾樣式
+                        -------------------------------------------*/
+        .footer {
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            font-size: 16px;
+            line-height: 1.8;
+            padding: 48px 0;
+            border-top: 1px solid var(--border-color);
+            margin-top: 60px;
+        }
+
+        .footer-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 16px;
+        }
+
+        .footer-text {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+            .footer-text i {
+                color: var(--primary-color);
+            }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .footer a.footer-link {
+            color: var(--text-secondary);
+            font-weight: 500;
+            text-decoration: none;
+            position: relative;
+            transition: color var(--transition-fast);
+        }
+
+            .footer a.footer-link::after {
+                content: '';
+                position: absolute;
+                width: 0;
+                height: 2px;
+                bottom: -4px;
+                left: 50%;
+                background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+                transition: all var(--transition-normal);
+                transform: translateX(-50%);
+            }
+
+            .footer a.footer-link:hover {
+                color: var(--primary-color);
+            }
+
+                .footer a.footer-link:hover::after {
+                    width: 100%;
+                }
+
+        .footer-divider {
+            color: var(--text-muted);
+        }
+
+        .footer-bottom {
+            padding-top: 24px;
+            border-top: 1px solid var(--border-color);
+            font-size: 14px;
+            color: var(--text-tertiary);
+            margin-top: 24px;
+        }
+
+        /*-------------------------------------------
+                           載入動畫
+                        -------------------------------------------*/
+        #loading-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            backdrop-filter: blur(4px);
+        }
+
+        .loading-spinner {
+            border: 4px solid var(--bg-tertiary);
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @@keyframes spin {
+            0%
+
+        {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+
+        }
+
+        /*-------------------------------------------
+                           其他元素
+                        -------------------------------------------*/
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 999;
+            backdrop-filter: blur(2px);
+        }
+
+        hr {
+            border: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--border-color), transparent);
+            margin: 16px 0;
+        }
+
+        /* 使用者圖示 */
+        .navbar .fas.fa-user-circle {
+            color: var(--text-secondary);
+            transition: color var(--transition-normal);
+        }
+
+            .navbar .fas.fa-user-circle:hover {
+                color: var(--primary-color);
+            }
+
+        /* Ruby 注音文字 */
+        rt {
+            color: var(--primary-color) !important;
+            font-weight: 600;
+            font-size: 0.6em;
+        }
+
+        ruby {
+            line-height: 2.2;
+        }
+
+        /*-------------------------------------------
+                           RWD 基礎防護
+                        -------------------------------------------*/
+        html,
+        body {
+            overflow-x: clip;
+        }
+
+        img,
+        iframe,
+        video,
+        svg {
+            max-width: 100%;
+        }
+
+        .navbar .container-fluid {
+            gap: 0.75rem;
+        }
+
+        .navbar-collapse {
+            min-width: 0;
+        }
+
+        .navbar-brand {
+            min-width: 0;
+            max-width: min(52vw, 320px);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #navbar-cat {
+            flex: 0 0 auto;
+        }
+
+        .search-container form {
+            min-width: 0;
+        }
+
+        .table-responsive,
+        .lm-scroll-x {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /*-------------------------------------------
+                           響應式設計
+                        -------------------------------------------*/
+        @@media (max-width: 991.98px) {
+            body {
+                padding-top: 116px;
+            }
+
+            .navbar {
+                padding: 6px 0;
+            }
+
+            .navbar .container-fluid {
+                align-items: center;
+                flex-wrap: wrap;
+            }
+
+            .navbar-brand {
+                order: 0;
+                font-size: 1.12rem;
+                max-width: calc(100vw - 92px);
+            }
+
+            .navbar-toggler {
+                order: 1;
+                margin-left: auto;
+            }
+
+            #navbar-cat {
+                width: 40px !important;
+                height: 40px !important;
+            }
+
+            .navbar-collapse {
+                order: 3;
+                width: 100%;
+                max-height: calc(100dvh - 124px);
+                overflow-y: auto;
+                padding: 0.75rem 0 0.5rem;
+                border-top: 1px solid var(--border-color);
+                background: var(--bg-primary);
+            }
+
+            .navbar .search-container.search-container-stays-visible {
+                order: 2;
+                position: static !important;
+                transform: none !important;
+                flex: 0 0 100%;
+                max-width: none;
+                width: 100% !important;
+                margin: 0.5rem 0 0;
+                padding: 0;
+            }
+
+            .search-input {
+                min-width: 0;
+                height: 44px;
+                padding: 0 14px;
+                font-size: 16px;
+            }
+
+            .search-btn {
+                width: 48px;
+                height: 44px;
+                flex: 0 0 48px;
+            }
+        }
+
+        @@media (max-width: 768px) {
+            .navbar .dropdown-menu {
+                width: 90% !important;
+                max-width: 320px !important;
+                left: 50% !important;
+                right: auto !important;
+                transform: translateX(-50%) !important;
+            }
+
+            .dropdown-menu .dropdown-item {
+                padding: 12px 16px !important;
+                font-size: 14px !important;
+            }
+
+            .dropdown-menu .dropdown-item i,
+            .dropdown-menu .dropdown-item .fas,
+            .dropdown-menu .dropdown-item .far,
+            .dropdown-menu .dropdown-item .fa {
+                margin-right: 12px !important;
+                width: 20px !important;
+                min-width: 20px !important;
+                font-size: 14px !important;
+            }
+
+            .search-container {
+                width: 100% !important;
+                padding: 0 16px;
+            }
+
+            .btn {
+                padding: 8px 16px;
+                font-size: 0.9rem;
+            }
+
+            .title-container {
+                padding: 16px;
+            }
+
+            .main-content {
+                flex-direction: column;
+            }
+
+            /* 手機版選單樣式 */
+            .mobile-menu {
+                width: 100%;
+                padding: 8px 0;
+                margin-top: 8px;
+                border-top: 1px solid var(--border-color);
+            }
+
+            .mobile-menu .nav-item {
+                width: 100%;
+            }
+
+            .mobile-menu .nav-link {
+                display: flex !important;
+                align-items: center !important;
+                padding: 12px 16px !important;
+                color: var(--text-primary) !important;
+                font-weight: 500 !important;
+                border-radius: 8px !important;
+                margin: 2px 8px !important;
+                transition: background 0.15s ease !important;
+            }
+
+            .mobile-menu .nav-link:hover {
+                background: var(--bg-tertiary) !important;
+                color: var(--primary-color) !important;
+            }
+
+            .mobile-menu .nav-link i {
+                width: 24px !important;
+                margin-right: 12px !important;
+                text-align: center !important;
+                font-size: 16px !important;
+            }
+
+            .mobile-menu .nav-link.text-danger {
+                color: var(--danger-color) !important;
+            }
+
+            .mobile-menu .nav-divider {
+                height: 1px;
+                background: var(--border-color);
+                margin: 8px 16px;
+                opacity: 0.5;
+            }
+
+            .mobile-menu .mobile-theme-toggle {
+                display: flex !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                padding: 12px 16px !important;
+                margin: 2px 8px !important;
+                color: var(--text-primary) !important;
+                font-weight: 500 !important;
+                background: var(--bg-secondary) !important;
+                border-radius: 8px !important;
+            }
+
+            .mobile-menu .mobile-theme-toggle span {
+                display: flex;
+                align-items: center;
+            }
+
+            .mobile-menu .mobile-theme-toggle span i {
+                width: 24px;
+                margin-right: 12px;
+                text-align: center;
+                font-size: 16px;
+            }
+
+            /* 手機版主題切換按鈕加強 */
+            .mobile-menu .theme-toggle {
+                width: 64px !important;
+                height: 32px !important;
+                border: 2px solid var(--primary-color) !important;
+                background: var(--bg-tertiary) !important;
+            }
+
+            .mobile-menu .theme-toggle .toggle-indicator {
+                width: 24px !important;
+                height: 24px !important;
+                top: 2px !important;
+            }
+
+            .mobile-menu .theme-toggle .toggle-icon {
+                font-size: 14px !important;
+            }
+
+            .dark-theme .mobile-menu .theme-toggle .toggle-indicator {
+                left: 34px !important;
+            }
+        }
+
+        /*-------------------------------------------
+                           關閉 AOS 動畫
+                        -------------------------------------------*/
+        [data-aos] {
+            transform: none !important;
+            opacity: 1 !important;
+            transition: none !important;
+        }
+
+        /*-------------------------------------------
+                           群組播放按鈕樣式
+                        -------------------------------------------*/
+        .group-play-inline-btn {
+            position: absolute;
+            right: 32px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0;
+            transition: opacity 0.18s ease, color 0.15s ease;
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+        }
+
+            .btn-purple:hover .group-play-inline-btn {
+                opacity: 1;
+            }
+
+            .group-play-inline-btn:hover {
+                color: #10b981;
+            }
+        /* dark-theme additions: ensure variables exist for dark mode */
+        .dark-theme { --video-bg: #000000; --on-primary: #0f172a; }
+    </style>
+    <link rel="stylesheet" href="~/css/front-pages.css" asp-append-version="true" />
+    @await RenderSectionAsync("Styles", required: false)
+
+    <nav class="navbar navbar-expand-lg navbar-light">
+        <div class="container-fluid">
+            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">
+                <div id="navbar-cat" style="width:48px;height:48px;"></div>
+                ビビ學日語
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="search-container search-container-stays-visible" data-search-rwd="true">
+                <form asp-controller="Home" asp-action="Search" method="get" class="search-form search-surface" data-search-url="@Url.Content("~/api/search/suggestions")">
+                    <input type="text" name="query" class="search-input" placeholder="請輸入歌手/ 演唱者/ 歌名/ 中文歌名" aria-label="搜尋" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="search-suggestions">
+                    <button type="submit" class="search-btn"><i class="fas fa-search"></i></button>
+                </form>
+                <div id="search-suggestions" class="search-suggestions" role="listbox" aria-label="搜尋建議"></div>
+                <div class="search-mobile-backdrop" aria-hidden="true"></div>
+            </div>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                @inject IHttpContextAccessor HttpContextAccessor
+                @{ var userName = HttpContextAccessor.HttpContext?.Session.GetString("UserName"); var userPicture = HttpContextAccessor.HttpContext?.Session.GetString("Picture") ?? "None"; }
+                <!-- 桌面版：頭像下拉選單 -->
+                <ul class="navbar-nav ms-auto d-none d-lg-flex align-items-center">
+                    @if (!string.IsNullOrEmpty(userName))
+                    {
+                        <li class="nav-item dropdown d-flex align-items-center">
+                            <a class="nav-link d-flex align-items-center" href="#" id="userMenu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                @if (!string.IsNullOrWhiteSpace(userPicture) && userPicture != "None")
+                                {
+                                    <img src="@userPicture" alt="User Picture" class="rounded-circle user-avatar-img" />
+                                }
+                                else
+                                { <i class="fas fa-user-circle" style="font-size:1.8rem;"></i> }
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userMenu">
+                                <li><a class="dropdown-item" href="@Url.Action("Profile","User")"><i class="fas fa-user"></i> 個人資料</a></li>
+                                <li class="dropdown-item d-flex align-items-center" style="cursor:default;">
+                                    <i class="fas fa-adjust"></i><span style="flex:1;">主題切換</span>
+                                    <div class="theme-toggle" id="themeToggle"><i class="fas fa-sun toggle-icon sun"></i><i class="fas fa-moon toggle-icon moon"></i><div class="toggle-indicator"></div></div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Upload","Media")"><i class="fas fa-upload"></i> 歌曲召喚(懶得填歌詞版)</a></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Summon","Media")"><i class="fas fa-hat-wizard"></i> 歌曲召喚</a></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Manage","Media")"><i class="fas fa-music"></i> 歌曲管理</a></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Wish","Media")"><i class="fas fa-star"></i> 許願留言板</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="@Url.Action("About","User")"><i class="fas fa-info-circle"></i> 說明</a></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Feedback","User")"><i class="fas fa-comment-dots"></i> 提供意見</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Donate","Payment")"><i class="fas fa-hand-holding-usd"></i> 贊助本站</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item text-danger" href="@Url.Action("Logout","Login")"><i class="fas fa-sign-out-alt"></i> 登出</a></li>
+                            </ul>
+                        </li>
+                    }
+                    else
+                    {
+                        <li class="nav-item dropdown d-flex align-items-center">
+                            <a class="nav-link d-flex align-items-center" href="#" id="menu" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-user-circle" style="font-size:1.8rem;"></i></a>
+                            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="menu">
+                                <li><a class="dropdown-item" href="@Url.Action("Index","Login")"><i class="fas fa-user"></i> 登入</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li class="dropdown-item d-flex align-items-center" style="cursor:default;">
+                                    <i class="fas fa-adjust"></i><span style="flex:1;">主題切換</span>
+                                    <div class="theme-toggle" id="themeToggle"><i class="fas fa-sun toggle-icon sun"></i><i class="fas fa-moon toggle-icon moon"></i><div class="toggle-indicator"></div></div>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Wish","Media")"><i class="fas fa-star"></i> 許願留言板</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="@Url.Action("About","User")"><i class="fas fa-info-circle"></i> 本站說明</a></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Feedback","User")"><i class="fas fa-comment-dots"></i> 意見反饋</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="@Url.Action("Donate","Payment")"><i class="fas fa-hand-holding-usd"></i> 贊助本站</a></li>
+                            </ul>
+                        </li>
+                    }
+                </ul>
+
+                <!-- 手機版：直接展開的選單 -->
+                <ul class="navbar-nav d-lg-none mobile-menu">
+                    @if (!string.IsNullOrEmpty(userName))
+                    {
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Profile","User")"><i class="fas fa-user"></i> 個人資料</a></li>
+                        <li class="nav-item mobile-theme-toggle">
+                            <span><i class="fas fa-adjust"></i> 主題切換</span>
+                            <div class="theme-toggle" id="themeToggleMobile"><i class="fas fa-sun toggle-icon sun"></i><i class="fas fa-moon toggle-icon moon"></i><div class="toggle-indicator"></div></div>
+                        </li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Upload","Media")"><i class="fas fa-upload"></i> 歌曲召喚(懶得填歌詞版)</a></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Summon","Media")"><i class="fas fa-hat-wizard"></i> 歌曲召喚</a></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Manage","Media")"><i class="fas fa-music"></i> 歌曲管理</a></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Wish","Media")"><i class="fas fa-star"></i> 許願留言板</a></li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("About","User")"><i class="fas fa-info-circle"></i> 說明</a></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Feedback","User")"><i class="fas fa-comment-dots"></i> 提供意見</a></li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Donate","Payment")"><i class="fas fa-hand-holding-usd"></i> 贊助本站</a></li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link text-danger" href="@Url.Action("Logout","Login")"><i class="fas fa-sign-out-alt"></i> 登出</a></li>
+                    }
+                    else
+                    {
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Index","Login")"><i class="fas fa-user"></i> 登入</a></li>
+                        <li class="nav-item mobile-theme-toggle">
+                            <span><i class="fas fa-adjust"></i> 主題切換</span>
+                            <div class="theme-toggle" id="themeToggleMobile"><i class="fas fa-sun toggle-icon sun"></i><i class="fas fa-moon toggle-icon moon"></i><div class="toggle-indicator"></div></div>
+                        </li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Wish","Media")"><i class="fas fa-star"></i> 許願留言板</a></li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("About","User")"><i class="fas fa-info-circle"></i> 本站說明</a></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Feedback","User")"><i class="fas fa-comment-dots"></i> 意見反饋</a></li>
+                        <li class="nav-divider"></li>
+                        <li class="nav-item"><a class="nav-link" href="@Url.Action("Donate","Payment")"><i class="fas fa-hand-holding-usd"></i> 贊助本站</a></li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+</head>
+<body>
+    @{
+        var layoutContainerClass = ViewData["LayoutContainerClass"] as string ?? "container";
+    }
+    <div class="@($"{layoutContainerClass} mt-4")">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6 text-center text-md-start">
+                    <h5 class="footer-title">聯絡我們</h5>
+                    <p class="footer-text"><i class="far fa-clock me-2"></i>服務時間: 週一至週日 24 小時</p>
+                    <p class="footer-text">
+                        <i class="far fa-envelope me-2"></i>服務信箱:
+                        <a href="mailto:learnmore0814@gmail.com" class="footer-link">learnmore0814@gmail.com</a>
+                    </p>
+                </div>
+                <div class="col-md-6 text-center text-md-start">
+                    <h5 class="footer-title">快速連結</h5>
+                    <div class="footer-links">
+                        <a href="@Url.Action("About", "User")" class="footer-link">本站說明</a>
+                        <span class="footer-divider">|</span>
+                        <a href="@Url.Action("Feedback", "User")" class="footer-link">意見反饋</a>
+                        <span class="footer-divider">|</span>
+                        <a href="@Url.Action("Donate", "Payment")" class="footer-link">💖 贊助本站</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom text-center">
+                <p class="mb-0">&copy; 2025 ビビ學日語. All Rights Reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>
+
+<script>
+    document.addEventListener('DOMContentLoaded',function(){
+        const body=document.body;const saved=localStorage.getItem('theme');if(saved==='dark-theme') body.classList.add('dark-theme');
+        
+        // 桌面版和手機版主題切換
+        document.querySelectorAll('#themeToggle, #themeToggleMobile, .theme-toggle').forEach(t=>t.addEventListener('click',e=>{
+            e.preventDefault();
+            e.stopPropagation();
+            const dark=body.classList.toggle('dark-theme');
+            localStorage.setItem('theme',dark?'dark-theme':'');
+        }));
+
+        // 群組播放 inline (首頁上處理，這裡只保留樣式與通用功能)
+
+        const searchForm = document.querySelector('.search-form[data-search-url]');
+        const searchContainer = searchForm?.closest('.search-container');
+        const searchInput = searchForm?.querySelector('.search-input');
+        const searchSuggestions = document.getElementById('search-suggestions');
+        const searchBackdrop = searchContainer?.querySelector('.search-mobile-backdrop');
+        let searchTimer = null;
+        let searchAbortController = null;
+        let searchRequestSequence = 0;
+        let activeSuggestionIndex = -1;
+        let currentSuggestions = [];
+        const searchSuggestionCache = new Map();
+
+        const matchLabels = {
+            title: '歌名',
+            artist: '歌手',
+            translator: '譯者',
+            chinese_title: '中文歌名',
+            alternate_title: '別名',
+            romaji: '羅馬拼音',
+            user_alias: '別名',
+            song: '歌曲'
+        };
+
+        function isSearchMobileLayout() {
+            return window.matchMedia('(max-width: 991.98px)').matches;
+        }
+
+        function applySearchRwdLayout() {
+            if (!searchContainer || !searchInput || !searchSuggestions) return;
+
+            if (!searchSuggestions.classList.contains('show') || !isSearchMobileLayout()) {
+                searchContainer.classList.remove('search-mobile-active');
+                searchSuggestions.classList.remove('search-suggestions-mobile-fixed');
+                searchSuggestions.style.top = '';
+                return;
+            }
+
+            const rect = searchInput.getBoundingClientRect();
+            searchSuggestions.style.top = `${Math.round(rect.bottom + 8)}px`;
+            searchSuggestions.classList.add('search-suggestions-mobile-fixed');
+            searchContainer.classList.add('search-mobile-active');
+        }
+
+        function hideSearchSuggestions() {
+            if (!searchSuggestions || !searchInput) return;
+            searchSuggestions.classList.remove('show');
+            searchSuggestions.classList.remove('search-suggestions-mobile-fixed');
+            searchSuggestions.style.top = '';
+            searchContainer?.classList.remove('search-mobile-active');
+            searchSuggestions.innerHTML = '';
+            searchInput.setAttribute('aria-expanded', 'false');
+            activeSuggestionIndex = -1;
+            currentSuggestions = [];
+        }
+
+        function setActiveSuggestion(index) {
+            if (!searchSuggestions) return;
+            const items = Array.from(searchSuggestions.querySelectorAll('.search-suggestion-item'));
+            items.forEach(item => item.classList.remove('active'));
+            activeSuggestionIndex = index;
+            if (items[index]) {
+                items[index].classList.add('active');
+                items[index].scrollIntoView({ block: 'nearest' });
+            }
+        }
+
+        function renderSearchSuggestions(items) {
+            if (!searchSuggestions || !searchInput) return;
+            currentSuggestions = items || [];
+            activeSuggestionIndex = -1;
+
+            if (!currentSuggestions.length) {
+                searchSuggestions.innerHTML = '<div class="search-suggestion-empty">找不到符合的歌曲，試試中文歌名、歌手或部分關鍵字</div>';
+                searchSuggestions.classList.add('show');
+                searchInput.setAttribute('aria-expanded', 'true');
+                applySearchRwdLayout();
+                return;
+            }
+
+            searchSuggestions.innerHTML = currentSuggestions.map((item, index) => {
+                const imageUrl = item.thumbnailUrl || item.cover;
+                const cover = imageUrl
+                    ? `<img class="search-suggestion-cover" src="${escapeHtml(imageUrl)}" alt="" data-search-suggestion-cover="true">`
+                    : fallbackSearchSuggestionIcon();
+                const label = matchLabels[item.matchedBy] || item.matchedBy || '命中';
+                return `<button type="button" class="search-suggestion-item" role="option" data-index="${index}" data-url="${escapeHtml(item.url || '')}">
+                    ${cover}
+                    <span class="search-suggestion-main">
+                        <span class="search-suggestion-title">${escapeHtml(item.title || '')}</span>
+                        <span class="search-suggestion-meta">${escapeHtml(item.artist || '')}</span>
+                        <span class="search-suggestion-match">${escapeHtml(label)}：${escapeHtml(item.matchedText || '')}</span>
+                    </span>
+                </button>`;
+            }).join('');
+            searchSuggestions.querySelectorAll('[data-search-suggestion-cover="true"]').forEach(img => {
+                img.addEventListener('error', () => {
+                    img.outerHTML = fallbackSearchSuggestionIcon();
+                }, { once: true });
+            });
+            searchSuggestions.classList.add('show');
+            searchInput.setAttribute('aria-expanded', 'true');
+            applySearchRwdLayout();
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function fallbackSearchSuggestionIcon() {
+            return '<div class="search-suggestion-cover search-suggestion-placeholder"><i class="fas fa-music"></i></div>';
+        }
+
+        function openSearchSuggestion(item) {
+            if (item?.url) {
+                window.location.href = item.url;
+            }
+        }
+
+        async function loadSearchSuggestions() {
+            if (!searchForm || !searchInput) return;
+            const query = searchInput.value.trim();
+            if (query.length < 1) {
+                searchAbortController?.abort();
+                hideSearchSuggestions();
+                return;
+            }
+
+            if (searchSuggestionCache.has(query)) {
+                renderSearchSuggestions(searchSuggestionCache.get(query));
+                return;
+            }
+
+            searchAbortController?.abort();
+            searchAbortController = new AbortController();
+            const requestSequence = ++searchRequestSequence;
+
+            try {
+                const endpoint = searchForm.dataset.searchUrl || '/api/search/suggestions';
+                const response = await fetch(`${endpoint}?q=${encodeURIComponent(query)}`, {
+                    headers: { 'Accept': 'application/json' },
+                    signal: searchAbortController.signal
+                });
+                if (!response.ok) {
+                    hideSearchSuggestions();
+                    return;
+                }
+                const items = await response.json();
+                if (requestSequence !== searchRequestSequence || searchInput.value.trim() !== query) return;
+                searchSuggestionCache.set(query, items);
+                if (searchSuggestionCache.size > 40) {
+                    searchSuggestionCache.delete(searchSuggestionCache.keys().next().value);
+                }
+                renderSearchSuggestions(items);
+            } catch (error) {
+                if (error?.name === 'AbortError') return;
+                hideSearchSuggestions();
+            }
+        }
+
+        if (searchForm && searchInput && searchSuggestions) {
+            searchInput.addEventListener('input', () => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(loadSearchSuggestions, 180);
+            });
+
+            searchInput.addEventListener('keydown', event => {
+                if (!searchSuggestions.classList.contains('show')) return;
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setActiveSuggestion(Math.min(activeSuggestionIndex + 1, currentSuggestions.length - 1));
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setActiveSuggestion(Math.max(activeSuggestionIndex - 1, 0));
+                } else if (event.key === 'Enter' && activeSuggestionIndex >= 0) {
+                    event.preventDefault();
+                    openSearchSuggestion(currentSuggestions[activeSuggestionIndex]);
+                } else if (event.key === 'Escape') {
+                    hideSearchSuggestions();
+                }
+            });
+
+            searchSuggestions.addEventListener('mousedown', event => {
+                const button = event.target.closest('.search-suggestion-item');
+                if (!button) return;
+                event.preventDefault();
+                const index = Number(button.dataset.index);
+                openSearchSuggestion(currentSuggestions[index]);
+            });
+
+            searchBackdrop?.addEventListener('mousedown', event => {
+                event.preventDefault();
+                hideSearchSuggestions();
+            });
+
+            window.addEventListener('resize', applySearchRwdLayout);
+            window.addEventListener('orientationchange', applySearchRwdLayout);
+
+            document.addEventListener('click', event => {
+                if (!event.target.closest('.search-container')) {
+                    hideSearchSuggestions();
+                }
+            });
+        }
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.10.2/lottie.min.js"></script>
+<script>
+    lottie.loadAnimation({
+        container: document.getElementById('navbar-cat'),
+        renderer: 'svg',
+        loop: true,
+        autoplay: true,
+        path: '@Url.Content("~/media/Animation-1744204021728.json")'
+    });
+</script>

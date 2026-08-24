@@ -1,0 +1,66 @@
+@model ManageViewModel
+
+@{
+    ViewData["Title"] = "待校正清單";
+    var songs = Model.ProducerSongs.Concat(Model.CollaborationSongs)
+        .GroupBy(song => song.SongUid)
+        .Select(group => group.First())
+        .OrderByDescending(song => song.SongID)
+        .ToList();
+}
+
+<h1 class="lm-page-heading">待校正清單</h1>
+
+<div class="mb-3 d-flex gap-2 flex-wrap">
+    <a asp-controller="Media" asp-action="Manage" class="btn btn-outline-secondary">返回音樂管理</a>
+</div>
+
+<div class="card lm-page-shell">
+    <div class="card-header bg-warning text-dark">
+        <h3 class="mb-0">需要確認秒數的歌曲</h3>
+    </div>
+    <div class="card-body">
+        @if (songs.Any())
+        {
+            <div class="table-responsive lm-scroll-x">
+                <table class="table table-striped text-center align-middle lm-manage-table">
+                    <thead>
+                        <tr>
+                            <th>歌名</th>
+                            <th>主唱人</th>
+                            <th>狀態</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var song in songs)
+                        {
+                            <tr>
+                                <td>@song.Title</td>
+                                <td>@song.Artist</td>
+                                <td>
+                                    <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+                                    {
+                                        Status = song.HighAccuracyStatus,
+                                        ReasonText = song.HighAccuracyStatusReason,
+                                        BadgeTitle = song.HighAccuracyStatusReason,
+                                        ContainerCssClass = "d-flex flex-column gap-1 align-items-center",
+                                        ReasonCssClass = "d-block mt-1 text-muted"
+                                    }' />
+                                </td>
+                                <td>
+                                    <a asp-controller="Media" asp-action="EditLyrics" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-warning">校正歌詞秒數</a>
+                                    <a asp-controller="Lyrics" asp-action="Index" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-outline-primary">查看播放頁</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <p class="text-muted mb-0">目前沒有待校正歌曲。</p>
+        }
+    </div>
+</div>

@@ -1,0 +1,104 @@
+﻿@model LearnMore.Models.UserViewModel
+
+@{
+    ViewData["Title"] = "個人資料";
+}
+
+<div class="lm-page-card" style="max-width: 420px;">
+        <h1 class="lm-page-title text-center mb-3">個人資料</h1>
+
+        <form id="profileForm" enctype="multipart/form-data">
+            <input type="hidden" asp-for="Email" />
+
+            <div class="mb-2">
+                <label class="form-label fw-bold">暱稱 <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" asp-for="NickName" required />
+                <span class="text-danger" asp-validation-for="NickName"></span>
+            </div>
+
+            <div class="mb-3 text-center">
+                <label class="form-label fw-bold">目前頭像</label><br />
+                <img id="avatarPreview" src="@Model.Avatar" class="img-thumbnail rounded-circle shadow-sm" style="max-width: 80px; width: 80px; height: 80px; object-fit: cover;" alt="Avatar" />
+            </div>
+
+            <div class="mb-2">
+                <label class="form-label fw-bold">上傳新頭像</label>
+                <input type="file" class="form-control" name="avatarFile" id="avatarFile" accept="image/*" />
+            </div>
+
+            <div class="d-grid">
+                <button type="button" class="btn btn-primary" id="updateProfileBtn">更新</button>
+            </div>
+        </form>
+</div>
+<script>
+    document.getElementById('avatarFile').addEventListener('change', function(event) {
+        const file = event.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+    });
+</script>
+<script>
+    $(document).ready(function () {
+        $("#avatarFile").change(function (event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    $("#avatarPreview").attr("src", e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // showMessage：顯示提示訊息
+        function showMessage(msg) {
+            const toast = document.createElement('div');
+            toast.style.cssText = 'position:fixed;top:80px;left:50%;transform:translateX(-50%);padding:12px 24px;background:#6366f1;color:#fff;border-radius:10px;box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:9999;font-weight:600;opacity:0;transition:all .3s ease;';
+            toast.textContent = msg;
+            document.body.appendChild(toast);
+            requestAnimationFrame(() => { toast.style.opacity = '1'; });
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 2500);
+        }
+
+        $("#updateProfileBtn").click(function () {
+            let nickname = $("#NickName").val().trim();
+
+            if (nickname === "") {
+                showMessage("請填寫暱稱！");
+                return;
+            }
+
+            let formData = new FormData($("#profileForm")[0]);
+            let url = "@Url.Content("~/User/UpdateProfile")";
+
+            $.ajax({
+                url: url,
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function (response) {
+                    if (response.success) {
+                        showMessage(response.message);
+
+                        // 更新 UI
+                        if (response.newAvatar) {
+                            $("#avatarPreview").attr("src", response.newAvatar);
+                        }
+                    } else {
+                        showMessage(response.message);
+                    }
+                },
+                error: function () {
+                    showMessage("更新失敗，請稍後再試！");
+                }
+            });
+        });
+    });
+</script>

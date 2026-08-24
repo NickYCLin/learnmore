@@ -1,0 +1,269 @@
+.mika-avatar-panel {
+    display: grid;
+    grid-template-columns: 116px minmax(0, 1fr);
+    gap: 14px;
+    width: 100%;
+    margin: 0 0 18px;
+    padding: 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.mika-avatar-stage {
+    position: relative;
+    min-height: 180px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: linear-gradient(180deg, #fff7ed 0%, #e8f7ff 100%);
+    border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+    touch-action: pan-y;
+}
+
+.lyrics-avatar-rail > .mika-avatar-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.lyrics-avatar-rail .mika-avatar-stage {
+    min-height: 420px;
+    height: min(58vh, 560px);
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    background: transparent;
+}
+
+.lyrics-avatar-rail .mika-avatar-live2d {
+    background: transparent;
+}
+
+.lyrics-avatar-rail .mika-avatar-image {
+    min-height: 420px;
+    object-fit: contain;
+    object-position: 50% 50%;
+}
+
+.lyrics-avatar-rail .mika-avatar-fallback {
+    background: transparent;
+}
+
+.lyrics-avatar-rail .mika-avatar-console {
+    padding: 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-md);
+}
+
+.mika-avatar-live2d {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    background: transparent;
+    pointer-events: none;
+}
+
+.mika-avatar-switcher {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 2;
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid color-mix(in srgb, var(--border-color) 64%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-primary) 84%, transparent);
+    box-shadow: var(--shadow-sm);
+}
+
+.mika-avatar-switcher button {
+    width: 34px;
+    height: 28px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.mika-avatar-switcher button[data-active="true"] {
+    background: var(--accent-orange);
+    color: var(--text-primary);
+}
+
+.mika-avatar-panel[data-live2d-state="error"] .mika-avatar-live2d {
+    display: none;
+}
+
+.mika-avatar-panel[data-live2d-state="ready"] .mika-avatar-fallback {
+    display: none;
+}
+
+.mika-avatar-image {
+    width: 100%;
+    height: 100%;
+    min-height: 180px;
+    object-fit: cover;
+    object-position: 50% 18%;
+    display: block;
+}
+
+.mika-avatar-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    background: linear-gradient(180deg, #fff7ed 0%, #e8f7ff 100%);
+}
+
+.mika-avatar-status {
+    display: none;
+}
+
+.mika-avatar-status[data-state="connected"] {
+    background: #22c55e;
+}
+
+.mika-avatar-status[data-state="connecting"] {
+    background: #f59e0b;
+}
+
+.mika-avatar-status[data-state="error"] {
+    background: #ef4444;
+}
+
+.mika-avatar-console {
+    display: none;
+}
+
+.mika-avatar-header,
+.mika-avatar-form {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.mika-avatar-header {
+    justify-content: space-between;
+}
+
+.mika-avatar-header strong {
+    color: var(--text-primary);
+    font-size: 17px;
+}
+
+.mika-avatar-message {
+    min-height: 48px;
+    max-height: 92px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.mika-avatar-form input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 38px;
+    padding: 0 11px;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.mika-avatar-form input:focus {
+    outline: 2px solid color-mix(in srgb, var(--primary-color) 30%, transparent);
+    border-color: var(--primary-color);
+}
+
+.mika-avatar-connect,
+.mika-avatar-form button {
+    flex: 0 0 auto;
+    min-height: 38px;
+    padding: 0 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 9px;
+    background: var(--accent-orange);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.mika-avatar-connect:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+    .mika-avatar-panel {
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 10px;
+        padding: 12px;
+    }
+
+    .mika-avatar-stage,
+    .mika-avatar-image {
+        min-height: 220px;
+    }
+
+    .mika-avatar-form {
+        flex-wrap: wrap;
+    }
+
+    .mika-avatar-form button {
+        width: 100%;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .lyrics-avatar-rail > .mika-avatar-panel {
+        margin: 0 0 18px;
+        padding: 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--bg-primary);
+        box-shadow: var(--shadow-md);
+    }
+
+    .lyrics-avatar-rail .mika-avatar-stage,
+    .lyrics-avatar-rail .mika-avatar-image {
+        min-height: clamp(260px, 52vh, 380px);
+        height: clamp(260px, 52vh, 380px);
+    }
+
+    .lyrics-avatar-rail .mika-avatar-stage {
+        border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+        border-radius: 10px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #fff7ed 0%, #e8f7ff 100%);
+    }
+
+    .lyrics-avatar-rail .mika-avatar-console {
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+}

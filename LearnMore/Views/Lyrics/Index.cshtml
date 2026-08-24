@@ -1,0 +1,2023 @@
+﻿@model SongViewModel
+@{
+    ViewData["Title"] = Model.Title;
+    // 支援 youtube.com/watch 和 youtu.be 短網址
+    var isYouTubeVideo = Model.VideoPath != null && 
+        (Model.VideoPath.Contains("youtube.com/watch") || Model.VideoPath.Contains("youtu.be/"));
+    var youtubeVideoId = isYouTubeVideo
+    ? System.Text.RegularExpressions.Regex.Match(Model.VideoPath ?? string.Empty, @"(?:v=|youtu\.be\/)([0-9A-Za-z_-]{11})").Groups[1].Value
+    : null;
+    var isLoggedIn = !string.IsNullOrEmpty(Model.UserEmail);
+    var shouldShowTranslator = !string.IsNullOrWhiteSpace(Model.Translator)
+        && !Model.Translator.Contains("Codex", StringComparison.OrdinalIgnoreCase)
+        && !Model.Translator.Contains("LearnMoreAPI", StringComparison.OrdinalIgnoreCase);
+    var songCredit = !string.IsNullOrWhiteSpace(Model.Performer)
+        ? Model.Performer
+        : Model.Artist;
+    var hasInstrumentalAudio = !string.IsNullOrWhiteSpace(Model.InstrumentalAudioUrl);
+    var hasVocalsAudio = !string.IsNullOrWhiteSpace(Model.VocalsAudioUrl);
+    var hasKaraokeAudio = hasInstrumentalAudio || hasVocalsAudio;
+    var defaultKaraokeAudioUrl = hasInstrumentalAudio ? Model.InstrumentalAudioUrl : Model.VocalsAudioUrl;
+    ViewData["SearchTitle"] = $"{Model.Title} 日文歌詞・中文翻譯・羅馬拼音｜ビビ學日語";
+    ViewData["Description"] = $"《{Model.Title}》{songCredit} 的日文歌詞同步播放、假名標註、羅馬拼音與繁體中文翻譯，邊聽邊學日語。";
+    if (!string.IsNullOrWhiteSpace(youtubeVideoId))
+    {
+        ViewData["ShareImage"] = $"https://img.youtube.com/vi/{youtubeVideoId}/hqdefault.jpg";
+    }
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/lyrics.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/mika-avatar.css" asp-append-version="true" />
+}
+
+<div class="title-container">
+    <h1>@Model.Title</h1>
+    <p class="subtitle song-detail-meta">
+        @if (!string.IsNullOrEmpty(Model.Performer))
+        {
+            <span class="song-detail-meta-item song-detail-meta-primary"><span class="emoji">🗣️</span> <strong>演唱者</strong><span>@Model.Performer</span></span>
+        }
+        <span class="song-detail-meta-item"><span class="emoji">🎤</span> <strong>原唱</strong><span>@Model.Artist</span></span>
+        @if (shouldShowTranslator)
+        {
+            @if (!string.IsNullOrEmpty(Model.TranslationSource))
+            {
+                <span class="song-detail-meta-item"><span class="emoji">🌍</span> <strong>翻譯</strong><a href="@Model.TranslationSource" target="_blank">@Model.Translator</a></span>
+            }
+            else
+            {
+                <span class="song-detail-meta-item"><span class="emoji">🌍</span> <strong>翻譯</strong><span>@Model.Translator</span></span>
+            }
+        }
+    </p>
+</div>
+
+@if (Model.HasPendingLyricsProcessing)
+{
+    <div class="alert alert-warning lyrics-processing-alert" role="status">
+        <div class="d-flex flex-column gap-2">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+                <strong>@Model.LyricsProcessingTitle</strong>
+                <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+                {
+                    Status = Model.HighAccuracyStatus,
+                    ReasonText = null,
+                    BadgeTitle = Model.HighAccuracyStatusReason,
+                    ContainerCssClass = "d-flex",
+                    ReasonCssClass = "d-none"
+                }' />
+            </div>
+            <span>@Model.LyricsProcessingMessage</span>
+        </div>
+    </div>
+}
+
+<div class="main-content">
+    <!-- 左側：影片區 -->
+    <div class="video-section">
+        <div class="video-container">
+            @if (isYouTubeVideo)
+            {
+                <div id="youtube-player"></div>
+            }
+            else
+            {
+                <video id="video-player" width="640" height="360" controls playsinline webkit-playsinline onended="onVideoEnded()">
+                    <source src="@Model.VideoPath" type="video/mp4">
+                    您的瀏覽器不支援 HTML5 視訊播放功能。
+                </video>
+            }
+        </div>
+        @if (hasKaraokeAudio)
+        {
+            <div id="karaoke-audio-panel" class="karaoke-audio-panel karaoke-audio-ready">
+                <div class="karaoke-audio-label">
+                    <span class="karaoke-audio-dot"></span>
+                    <span id="karaoke-audio-label-text">原曲模式</span>
+                </div>
+                <div class="karaoke-source-toggle" role="group" aria-label="卡拉 OK 音軌">
+                    <button type="button" id="karaoke-source-normal" class="karaoke-source-button active" onclick="switchKaraokeAudioSource('normal')">原曲</button>
+                    <button type="button" id="karaoke-source-instrumental" class="karaoke-source-button" onclick="switchKaraokeAudioSource('instrumental')" @(hasInstrumentalAudio ? "" : "disabled")>伴奏</button>
+                    <button type="button" id="karaoke-source-vocals" class="karaoke-source-button" onclick="switchKaraokeAudioSource('vocals')" @(hasVocalsAudio ? "" : "disabled")>人聲</button>
+                </div>
+                @if (hasInstrumentalAudio)
+                {
+                    <audio id="karaoke-audio-player-instrumental" class="karaoke-audio-player" data-kind="instrumental" preload="none" src="@Model.InstrumentalAudioUrl" onended="onKaraokeAudioEnded()"></audio>
+                }
+                @if (hasVocalsAudio)
+                {
+                    <audio id="karaoke-audio-player-vocals" class="karaoke-audio-player" data-kind="vocals" preload="none" src="@Model.VocalsAudioUrl" onended="onKaraokeAudioEnded()"></audio>
+                }
+            </div>
+        }
+        <div class="feature-section">
+            <div class="tabs feature-tabs">
+                <button class="tab-button active" id="tab-button-1" onclick="switchMode(1)">📜 完整歌詞</button>
+                <button class="tab-button" id="tab-button-2" onclick="switchMode(2)">🎯 聚焦模式</button>
+
+                <button class="tab-button" id="tab-button-4" onclick="switchMode(4)">🈵 遮翻譯</button>
+                <button class="tab-button" id="tab-button-5" onclick="switchMode(5)">👂 聽寫練習</button>
+            </div>
+            <div class="toggle-wrapper feature-toggles">
+                <label class="toggle-container" for="sync-lyrics-toggle">
+                    <input type="checkbox" id="sync-lyrics-toggle" @(Model.IsEnableAuto ? "checked" : "")>
+                    <span class="toggle-switch"></span>
+                    <span class="label">自動同步歌詞</span>
+                </label>
+
+                <label class="toggle-container" for="show-romanization-toggle">
+                    <input type="checkbox" id="show-romanization-toggle" @(Model.IsEnableRoman ? "checked" : "")>
+                    <span class="toggle-switch"></span>
+                    <span class="label">顯示羅馬拼音</span>
+                </label>
+
+                @if (Model.CanEditTimestamp)
+                {
+                    <label class="toggle-container" for="edit-timestamp-toggle">
+                        <input type="checkbox" id="edit-timestamp-toggle">
+                        <span class="toggle-switch"></span>
+                        <span class="label">⏱️ 編輯時間戳</span>
+                    </label>
+                }
+            </div>
+        </div>
+    </div>
+    <div class="lyrics-section">
+        <div class="lyrics-card">
+        <div id="mode-1" class="lyrics-container" style="display: flex;">
+            <div class="lyric-card">
+                @foreach (var line in Model.Lyrics)
+                {
+                    <div class="lyrics-line" id="lyric-@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-timestamp="@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-lyric-id="@line.LyricID">
+                        @if (Model.CanEditTimestamp)
+                        {
+                            <div class="timestamp-editor" style="display: none;">
+                                <input type="number" step="0.01" class="timestamp-input" value="@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-original="@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                                <span class="timestamp-unit">秒</span>
+                                <button class="timestamp-save" onclick="saveTimestamp(this, @line.LyricID)" title="儲存"><i class="fas fa-check"></i></button>
+                                <button class="timestamp-capture" onclick="captureCurrentTime(this)" title="使用當前播放時間"><i class="fas fa-crosshairs"></i></button>
+                            </div>
+                        }
+                        <div class="jp-line">
+                            @Html.Raw(line.Japanese)
+                        </div>
+                        <div class="roman-line" style="@(Model.IsEnableRoman ? "" : "display: none;")">@line.Roman</div>
+                        <div class="cn-line">@line.Chinese</div>
+                        <div class="controls">
+                            <button onclick="pausePlaybackFromInput(this)" data-bs-toggle="tooltip" data-bs-placement="top"><i class="fas fa-pause"></i></button>
+                            <button onclick="jumpToLyricFromInput(this)" data-bs-toggle="tooltip" data-bs-placement="top" title="從此句開始播放"><i class="fa fa-step-forward"></i></button>
+                            <button onclick="replayLineFromInput(this)" data-bs-toggle="tooltip" data-bs-placement="top" title="重播這句">
+                                <i class="fas fa-undo"></i>
+                            </button>
+                            <button onclick="speakLyricWithMikaFromInput(this)" class="mika-read-lyric" data-bs-toggle="tooltip" data-bs-placement="top" title="Mika 朗讀這句">
+                                <i class="fas fa-volume-up"></i>
+                            </button>
+                            <button onclick="reportBug(@line.LyricID)" class="report-bug" data-bs-toggle="tooltip" data-bs-placement="top" title="歌詞或秒數錯誤回報">
+                                <i class="fas fa-bug"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div id="mode-2" class="lyrics-container" style="display: none;">
+            <div class="lyric-card">
+                <div id="previous-lyric-combined" class="lyrics-line">
+                    <div class="jp-line"></div>
+                    <div class="roman-line"></div>
+                    <div class="cn-line"></div>
+                </div>
+                <div id="current-lyric-combined" class="lyrics-line highlight">
+                    <div class="jp-line"></div>
+                    <div class="roman-line"></div>
+                    <div class="cn-line"></div>
+                </div>
+                <div id="next-lyric-combined" class="lyrics-line">
+                    <div class="jp-line"></div>
+                    <div class="roman-line"></div>
+                    <div class="cn-line"></div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!-- 模式 4：遮翻譯練習 -->
+        <div id="mode-4" class="lyrics-container" style="display: none;">
+            <div class="lyric-card">
+                @foreach (var line in Model.Lyrics)
+                {
+                    <div class="lyrics-line mode4-line" id="mode4-lyric-@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-timestamp="@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                        <div class="jp-line">@Html.Raw(line.Japanese)</div>
+                        <div class="cn-line mode4-cn-hidden" id="mode4-cn-@line.TimeStamp">@line.Chinese</div>
+                        <button class="reveal-btn" onclick="revealTranslation('@line.TimeStamp')">顯示翻譯</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- 模式 5：遮日文練習（反向） -->
+        <div id="mode-5" class="lyrics-container" style="display: none;">
+            <div class="lyric-card">
+                @foreach (var line in Model.Lyrics)
+                {
+                    <div class="lyrics-line mode5-line" id="mode5-lyric-@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-timestamp="@line.TimeStamp.ToString(System.Globalization.CultureInfo.InvariantCulture)">
+                        <div class="jp-line mode5-jp-hidden" id="mode5-jp-@line.TimeStamp">@Html.Raw(line.Japanese)</div>
+                        <div class="cn-line">@line.Chinese</div>
+                        <button class="reveal-btn" onclick="revealJapanese('@line.TimeStamp')">顯示日文</button>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <!-- 模式 6：卡拉 OK 模式 -->
+        <div id="mode-6" class="lyrics-container" style="display: none;">
+            <div class="lyric-card mode6-card">
+                <div id="mode6-display" class="mode6-display">
+                    <div id="mode6-jp" class="mode6-jp"></div>
+                    <div id="mode6-roman" class="mode6-roman"></div>
+                    <div id="mode6-progress-bar" class="mode6-progress-bar">
+                        <div id="mode6-progress-fill" class="mode6-progress-fill"></div>
+                    </div>
+                    <div id="mode6-next" class="mode6-next" hidden>
+                        <div class="mode6-next-label">下一句</div>
+                        <div id="mode6-next-jp" class="mode6-next-jp"></div>
+                        <div id="mode6-next-roman" class="mode6-next-roman"></div>
+                        <div id="mode6-next-cn" class="mode6-next-cn"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+    <div class="lyrics-avatar-rail">
+        <partial name="_MikaAvatarPanel" />
+    </div>
+</div>
+
+<div class="comments-section comments-section-wide">
+    <h3>💬 留言板</h3>
+    <div id="comments-container">
+        @if (Model.Comments != null && Model.Comments.Any())
+        {
+            @foreach (var comment in Model.Comments)
+            {
+                <div class="comment">
+                    <img src="@comment.Avatar" alt="使用者頭像" class="avatar">
+                    <strong>@(string.IsNullOrEmpty(comment.UserName) ? "訪客" : comment.UserName)：</strong>
+                    @if (comment.IsPrivate)
+                    {
+                        <span class="private-label">🔒 悄悄話</span>
+
+                        @if (comment.UserEmail == Model.UserEmail)
+                        {
+                            <p>@comment.Message</p>
+                        }
+                    }
+                    else
+                    {
+                        <p>@comment.Message</p>
+                    }
+                    <span class="timestamp">@comment.TimeStamp.ToString("yyyy/MM/dd HH:mm")</span>
+
+                    @if (Model.IsManage)
+                    {
+                        <div class="admin-reply-form">
+                            <input type="text" id="reply-input-@comment.CommentId" placeholder="輸入管理員回覆...">
+                            <button onclick="submitReply('@comment.CommentId')">💬 回覆</button>
+                        </div>
+                    }
+
+                    @if (comment.Replies != null && comment.Replies.Any())
+                    {
+                        <div class="admin-replies">
+                            @foreach (var reply in comment.Replies)
+                            {
+                                <div class="admin-reply">
+                                    <strong>管理員：</strong>
+                                    <p>@reply.ReplyMessage</p>
+                                    <span class="timestamp">@reply.ReplyTime.ToString("yyyy/MM/dd HH:mm")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <p class="no-comments">目前沒有留言，快來留言吧！</p>
+        }
+    </div>
+
+    <div class="comment-form">
+        <textarea id="comment-input" placeholder="輸入您的留言..."></textarea>
+
+        <div class="comment-options">
+            <div>
+                <label class="switch">
+                    <input type="checkbox"
+                           class="toggle-switch"
+                           id="private-comment"
+                           @(isLoggedIn ? "" : "data-login-required=\"true\" aria-disabled=\"true\"")>
+                    <span class="slider round"></span>
+                </label>
+                <span class="private-label">私密留言</span>
+            </div>
+            <button id="submit-comment">🚀 送出留言</button>
+        </div>
+    </div>
+</div>
+
+<div id="navigation-bar" style="display: none;">
+    <button id="current-lyric-button" onclick="scrollToCurrentLyric()">跳到目前歌詞</button>
+    <button id="top-button" onclick="scrollToTop()">回到頂部</button>
+</div>
+
+<script>
+    const lyrics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Lyrics));
+    const hasInstrumentalAudio = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(hasInstrumentalAudio));
+    const hasVocalsAudio = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(hasVocalsAudio));
+    const karaokeAudioUrls = {
+        instrumental: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.InstrumentalAudioUrl ?? string.Empty)),
+        vocals: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.VocalsAudioUrl ?? string.Empty))
+    };
+    const mikaAvatarSongContext = {
+        songUid: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.SongUid)),
+        title: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Title)),
+        artist: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Artist)),
+        performer: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Performer ?? string.Empty))
+    };
+    let youtubePlayer;
+    let isReplaying = false;
+    let replayInterval = null;
+    let karaokeAudioActive = false;
+    let karaokeSyncFrame = null;
+    let karaokeAudioKind = 'normal';
+    let karaokeOriginalMuteState = null;
+    let karaokeOriginalMuteRequestedAt = 0;
+    let karaokeCompanionLastCheckAt = 0;
+    let karaokeCompanionLastSeekAt = 0;
+    let karaokeOriginalControlUntil = 0;
+    let karaokeOriginalSeekControlUntil = 0;
+    let karaokeAudioSwitchToken = 0;
+    let karaokeInactiveWarmupLastAt = 0;
+    let karaokeLastOriginalTime = 0;
+    let karaokeLastAudioTime = 0;
+    const lyricDisplayLeadSeconds = 0.15;
+    const karaokeStemPlaybackGain = {
+        instrumental: 0.85,
+        vocals: 0.85
+    };
+    const karaokeMobileSyncProfile = (() => {
+        const hasCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        const hasMobileUserAgent = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+        return hasCoarsePointer || hasMobileUserAgent;
+    })();
+
+    const karaokeSyncSettings = karaokeMobileSyncProfile
+        ? { checkMs: 220, seekMs: 280, seekThreshold: 0.18, controlMs: 620 }
+        : { checkMs: 500, seekMs: 600, seekThreshold: 0.35, controlMs: 900 };
+
+    function isKaraokeStemKind(kind) {
+        return kind === 'instrumental' || kind === 'vocals';
+    }
+
+    function getKaraokeAudioPlayer(kind = karaokeAudioKind) {
+        if (!isKaraokeStemKind(kind)) {
+            return null;
+        }
+
+        return document.getElementById('karaoke-audio-player-' + kind);
+    }
+
+    function getOriginalVideoPlayer() {
+        return document.getElementById('video-player');
+    }
+
+    function clampMediaVolume(value) {
+        if (!Number.isFinite(value)) {
+            return 1;
+        }
+
+        return Math.min(1, Math.max(0, value));
+    }
+
+    function getOriginalPlaybackVolume() {
+        if (youtubePlayer && typeof youtubePlayer.getVolume === 'function') {
+            return clampMediaVolume(youtubePlayer.getVolume() / 100);
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        return videoPlayer ? clampMediaVolume(videoPlayer.volume) : 1;
+    }
+
+    function syncKaraokeAudioVolume(audio, kind = karaokeAudioKind) {
+        if (!audio || !isKaraokeStemKind(kind)) {
+            return;
+        }
+
+        const gain = karaokeStemPlaybackGain[kind] ?? 1;
+        audio.volume = clampMediaVolume(getOriginalPlaybackVolume() * gain);
+    }
+
+    function getOriginalCurrentTime() {
+        if (youtubePlayer && typeof youtubePlayer.getCurrentTime === 'function') {
+            return youtubePlayer.getCurrentTime();
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        return videoPlayer ? videoPlayer.currentTime : 0;
+    }
+
+    function isOriginalPlaying() {
+        if (youtubePlayer && typeof youtubePlayer.getPlayerState === 'function' && window.YT && YT.PlayerState) {
+            const state = youtubePlayer.getPlayerState();
+            return state === YT.PlayerState.PLAYING || state === YT.PlayerState.BUFFERING;
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        return videoPlayer ? !videoPlayer.paused : false;
+    }
+
+    function pauseOriginalPlayback() {
+        if (youtubePlayer && typeof youtubePlayer.pauseVideo === 'function') {
+            youtubePlayer.pauseVideo();
+            return;
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        if (videoPlayer) {
+            videoPlayer.pause();
+        }
+    }
+
+    function rememberOriginalMuteState() {
+        if (karaokeOriginalMuteState !== null) {
+            return;
+        }
+
+        if (youtubePlayer && typeof youtubePlayer.isMuted === 'function') {
+            karaokeOriginalMuteState = {
+                type: 'youtube',
+                muted: youtubePlayer.isMuted()
+            };
+            return;
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        if (videoPlayer) {
+            karaokeOriginalMuteState = {
+                type: 'video',
+                muted: videoPlayer.muted
+            };
+        }
+    }
+
+    function setOriginalMutedForKaraoke() {
+        if (youtubePlayer && typeof youtubePlayer.mute === 'function') {
+            const now = (window.performance && typeof window.performance.now === 'function')
+                ? window.performance.now()
+                : Date.now();
+            if (typeof youtubePlayer.isMuted === 'function' && youtubePlayer.isMuted()) {
+                karaokeOriginalMuteRequestedAt = now;
+                return;
+            }
+            if (now - karaokeOriginalMuteRequestedAt < 500) {
+                return;
+            }
+            karaokeOriginalMuteRequestedAt = now;
+            youtubePlayer.mute();
+            return;
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        if (videoPlayer && !videoPlayer.muted) {
+            videoPlayer.muted = true;
+        }
+    }
+
+    function restoreOriginalMuteState() {
+        if (karaokeOriginalMuteState === null) {
+            return;
+        }
+
+        if (karaokeOriginalMuteState.type === 'youtube' && youtubePlayer) {
+            const isCurrentlyMuted = typeof youtubePlayer.isMuted === 'function'
+                ? youtubePlayer.isMuted()
+                : null;
+            if (karaokeOriginalMuteState.muted && isCurrentlyMuted !== true && typeof youtubePlayer.mute === 'function') {
+                youtubePlayer.mute();
+            } else if (!karaokeOriginalMuteState.muted && isCurrentlyMuted !== false && typeof youtubePlayer.unMute === 'function') {
+                youtubePlayer.unMute();
+            }
+        }
+
+        if (karaokeOriginalMuteState.type === 'video') {
+            const videoPlayer = getOriginalVideoPlayer();
+            if (videoPlayer) {
+                videoPlayer.muted = karaokeOriginalMuteState.muted;
+            }
+        }
+
+        karaokeOriginalMuteState = null;
+        karaokeOriginalMuteRequestedAt = 0;
+    }
+
+    function getKaraokeLyricsDisplayTime(playbackTime) {
+        return playbackTime;
+    }
+
+    function getLyricsDisplayTime(playbackTime) {
+        if (!Number.isFinite(playbackTime)) {
+            return 0;
+        }
+
+        return Math.max(0, playbackTime + lyricDisplayLeadSeconds);
+    }
+
+    function syncOriginalPlaybackToKaraoke(shouldPlay, force = false, targetTimeOverride = null) {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio) {
+            return;
+        }
+
+        const now = (window.performance && typeof window.performance.now === 'function')
+            ? window.performance.now()
+            : Date.now();
+
+        if (!force && now - karaokeCompanionLastCheckAt < karaokeSyncSettings.checkMs) {
+            return;
+        }
+
+        karaokeCompanionLastCheckAt = now;
+        karaokeOriginalControlUntil = now + karaokeSyncSettings.controlMs;
+        syncKaraokeAudioVolume(karaokeAudio);
+        rememberOriginalMuteState();
+        setOriginalMutedForKaraoke();
+
+        const targetTime = Number.isFinite(targetTimeOverride) ? targetTimeOverride : (karaokeAudio.currentTime || 0);
+        const originalTime = getOriginalCurrentTime();
+        const shouldSeek = force || !Number.isFinite(originalTime) || Math.abs(originalTime - targetTime) > karaokeSyncSettings.seekThreshold;
+
+        if (shouldSeek && (force || now - karaokeCompanionLastSeekAt > karaokeSyncSettings.seekMs)) {
+            karaokeCompanionLastSeekAt = now;
+            karaokeOriginalSeekControlUntil = now + (Number.isFinite(targetTimeOverride)
+                ? Math.max(karaokeSyncSettings.controlMs, 1600)
+                : karaokeSyncSettings.controlMs);
+            if (youtubePlayer && typeof youtubePlayer.seekTo === 'function') {
+                youtubePlayer.seekTo(targetTime, true);
+            } else {
+                const videoPlayer = getOriginalVideoPlayer();
+                if (videoPlayer) {
+                    videoPlayer.currentTime = targetTime;
+                }
+            }
+        }
+
+        if (shouldPlay) {
+            if (youtubePlayer && typeof youtubePlayer.playVideo === 'function') {
+                if (force || !isOriginalPlaying()) {
+                    youtubePlayer.playVideo();
+                }
+                return;
+            }
+
+            const videoPlayer = getOriginalVideoPlayer();
+            if (videoPlayer && (force || videoPlayer.paused)) {
+                videoPlayer.play().catch(error => {
+                    console.error("無法同步播放影片: ", error);
+                });
+            }
+            return;
+        }
+
+        pauseOriginalPlayback();
+    }
+
+    function syncKaraokeAudioFromOriginalSeek(force = false) {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio) {
+            return false;
+        }
+
+        const originalTime = getOriginalCurrentTime();
+        const audioTime = karaokeAudio.currentTime || 0;
+        if (!Number.isFinite(originalTime)) {
+            return false;
+        }
+
+        const now = (window.performance && typeof window.performance.now === 'function')
+            ? window.performance.now()
+            : Date.now();
+        const isProgrammaticOriginalSeek = now < karaokeOriginalSeekControlUntil;
+        const originalJump = Math.abs(originalTime - karaokeLastOriginalTime);
+        const audioJump = Math.abs(audioTime - karaokeLastAudioTime);
+        const originalAudioGap = Math.abs(originalTime - audioTime);
+        const userLikelyDraggedOriginal = force || (
+            originalAudioGap > 0.9
+            && originalJump > 0.7
+            && audioJump < 0.7
+            && (!isProgrammaticOriginalSeek || originalAudioGap > 3)
+        );
+
+        karaokeLastOriginalTime = originalTime;
+        karaokeLastAudioTime = audioTime;
+
+        if (!userLikelyDraggedOriginal) {
+            return false;
+        }
+
+        try {
+            karaokeAudio.currentTime = originalTime;
+        } catch {
+            karaokeAudio.addEventListener('loadedmetadata', () => {
+                karaokeAudio.currentTime = originalTime;
+            }, { once: true });
+        }
+        updateLyricsDisplay(getKaraokeLyricsDisplayTime(originalTime));
+        karaokeLastAudioTime = originalTime;
+        karaokeOriginalSeekControlUntil = now + 500;
+        return true;
+    }
+
+    function syncKaraokeAudioToMobileOriginalClock(force = false) {
+        if (!karaokeMobileSyncProfile) {
+            return false;
+        }
+
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio || karaokeAudio.paused || !isOriginalPlaying()) {
+            return false;
+        }
+
+        const originalTime = getOriginalCurrentTime();
+        if (!Number.isFinite(originalTime)) {
+            return false;
+        }
+
+        const now = (window.performance && typeof window.performance.now === 'function')
+            ? window.performance.now()
+            : Date.now();
+        if (now < karaokeOriginalSeekControlUntil) {
+            return false;
+        }
+
+        const audioTime = karaokeAudio.currentTime || 0;
+        const gap = Math.abs(originalTime - audioTime);
+        const threshold = force ? 0.12 : Math.max(karaokeSyncSettings.seekThreshold, 0.28);
+        if (gap <= threshold) {
+            karaokeLastOriginalTime = originalTime;
+            karaokeLastAudioTime = audioTime;
+            return false;
+        }
+        try {
+            karaokeAudio.currentTime = originalTime;
+        } catch {
+            karaokeAudio.addEventListener('loadedmetadata', () => {
+                karaokeAudio.currentTime = originalTime;
+            }, { once: true });
+        }
+
+        updateLyricsDisplay(getKaraokeLyricsDisplayTime(originalTime));
+        karaokeLastOriginalTime = originalTime;
+        karaokeLastAudioTime = originalTime;
+        karaokeOriginalSeekControlUntil = now + karaokeSyncSettings.controlMs;
+        return true;
+    }
+
+    function isKaraokeOriginalControlEvent() {
+        const now = (window.performance && typeof window.performance.now === 'function')
+            ? window.performance.now()
+            : Date.now();
+        return now < karaokeOriginalControlUntil;
+    }
+
+    function pauseKaraokeAudioFromOriginalPlayback() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio || karaokeAudio.paused) {
+            return;
+        }
+
+        karaokeAudio.pause();
+        updatePlaybackButtons(false);
+    }
+
+    function playKaraokeAudioFromOriginalPlayback() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio || !karaokeAudio.paused) {
+            return;
+        }
+
+        const originalTime = getOriginalCurrentTime();
+        if (Number.isFinite(originalTime)) {
+            karaokeAudio.currentTime = originalTime || 0;
+        }
+
+        karaokeAudio.play().then(() => {
+            updatePlaybackButtons(true);
+        }).catch(error => {
+            logKaraokePlaybackError(error);
+        });
+    }
+
+    function syncKaraokeAudioTimeFromOriginalPlayback() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio) {
+            return;
+        }
+
+        const originalTime = getOriginalCurrentTime();
+        if (Number.isFinite(originalTime) && Math.abs((karaokeAudio.currentTime || 0) - originalTime) > 0.25) {
+            karaokeAudio.currentTime = originalTime || 0;
+            updateLyricsDisplay(getKaraokeLyricsDisplayTime(karaokeAudio.currentTime));
+        }
+    }
+
+    function seekOriginalPlayback(time, shouldPlay) {
+        if (youtubePlayer && typeof youtubePlayer.seekTo === 'function') {
+            youtubePlayer.seekTo(time || 0, true);
+            if (shouldPlay && typeof youtubePlayer.playVideo === 'function') {
+                youtubePlayer.playVideo();
+            }
+            return;
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        if (videoPlayer) {
+            videoPlayer.currentTime = time || 0;
+            if (shouldPlay) {
+                videoPlayer.play().catch(error => {
+                    console.error("無法自動播放，請用戶手動互動: ", error);
+                });
+            }
+        }
+    }
+
+    function getPlaybackTime() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio) {
+            return karaokeAudio.currentTime;
+        }
+
+        return getOriginalCurrentTime();
+    }
+
+    function getPlaybackDuration() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio && Number.isFinite(karaokeAudio.duration)) {
+            return karaokeAudio.duration;
+        }
+
+        if (youtubePlayer && typeof youtubePlayer.getDuration === 'function') {
+            return youtubePlayer.getDuration();
+        }
+
+        const videoPlayer = getOriginalVideoPlayer();
+        return videoPlayer && Number.isFinite(videoPlayer.duration) ? videoPlayer.duration : 0;
+    }
+
+    function seekPlayback(time, shouldPlay = true) {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio) {
+            const targetTime = time || 0;
+            karaokeAudio.currentTime = targetTime;
+            updateLyricsDisplay(getKaraokeLyricsDisplayTime(targetTime));
+            karaokeLastAudioTime = targetTime;
+            if (shouldPlay) {
+                karaokeAudio.play().catch(error => {
+                    logKaraokePlaybackError(error);
+                });
+            }
+            syncOriginalPlaybackToKaraoke(shouldPlay, true, targetTime);
+            return;
+        }
+
+        seekOriginalPlayback(time, shouldPlay);
+    }
+
+    function isPlaybackPaused() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio) {
+            return karaokeAudio.paused;
+        }
+
+        return !isOriginalPlaying();
+    }
+
+    function playPlayback() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio) {
+            karaokeAudio.play().catch(error => {
+                logKaraokePlaybackError(error);
+            });
+            syncOriginalPlaybackToKaraoke(true, true);
+            return;
+        }
+
+        seekOriginalPlayback(getOriginalCurrentTime(), true);
+    }
+
+    function pausePlaybackMedia() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio) {
+            karaokeAudio.pause();
+            syncOriginalPlaybackToKaraoke(false, true);
+            return;
+        }
+
+        pauseOriginalPlayback();
+    }
+
+    function hasKaraokeAudioSource(kind) {
+        if (kind === 'normal') {
+            return true;
+        }
+
+        return Boolean(karaokeAudioUrls[kind]);
+    }
+
+    function getKaraokeAudioLabel(kind) {
+        if (kind === 'normal') {
+            return '原曲模式';
+        }
+
+        return kind === 'vocals' ? '人聲模式' : '伴奏模式';
+    }
+
+    function updateKaraokeSourceButtons() {
+        document.getElementById('karaoke-source-normal')?.classList.toggle('active', karaokeAudioKind === 'normal');
+        document.getElementById('karaoke-source-instrumental')?.classList.toggle('active', karaokeAudioKind === 'instrumental');
+        document.getElementById('karaoke-source-vocals')?.classList.toggle('active', karaokeAudioKind === 'vocals');
+        const label = document.getElementById('karaoke-audio-label-text');
+        if (label) {
+            label.textContent = getKaraokeAudioLabel(karaokeAudioKind);
+        }
+    }
+
+    function logKaraokePlaybackError(error) {
+        if (error && error.name === 'AbortError') {
+            return;
+        }
+
+        console.error("無法播放卡拉 OK 音軌: ", error);
+    }
+
+    function pauseInactiveKaraokeAudio(activeAudio) {
+        document.querySelectorAll('.karaoke-audio-player').forEach(audio => {
+            if (audio !== activeAudio && !audio.paused) {
+                audio.pause();
+            }
+        });
+    }
+
+    function warmInactiveKaraokeAudio(time) {
+        if (!Number.isFinite(time) || time < 0) {
+            return;
+        }
+
+        const now = (window.performance && typeof window.performance.now === 'function')
+            ? window.performance.now()
+            : Date.now();
+        if (now - karaokeInactiveWarmupLastAt < 1200) {
+            return;
+        }
+        karaokeInactiveWarmupLastAt = now;
+
+        const activeAudio = getKaraokeAudioPlayer();
+        document.querySelectorAll('.karaoke-audio-player').forEach(audio => {
+            if (audio === activeAudio || audio.readyState < HTMLMediaElement.HAVE_METADATA) {
+                return;
+            }
+            if (Math.abs((audio.currentTime || 0) - time) > 1.2) {
+                try {
+                    audio.currentTime = time;
+                } catch {
+                    // Some browsers reject seeks before metadata is fully usable.
+                }
+            }
+        });
+    }
+
+    function playKaraokeAudioSmoothly(nextAudio, previousAudio) {
+        const switchToken = ++karaokeAudioSwitchToken;
+        let previousPaused = false;
+        syncKaraokeAudioVolume(nextAudio);
+        const pausePrevious = () => {
+            if (previousPaused || switchToken !== karaokeAudioSwitchToken) {
+                return;
+            }
+            previousPaused = true;
+            if (previousAudio && previousAudio !== nextAudio && !previousAudio.paused) {
+                previousAudio.pause();
+            }
+        };
+
+        nextAudio.addEventListener('playing', pausePrevious, { once: true });
+        nextAudio.play().then(() => {
+            if (nextAudio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+                pausePrevious();
+            }
+        }).catch(error => {
+            pausePrevious();
+            logKaraokePlaybackError(error);
+        });
+        setTimeout(pausePrevious, 700);
+    }
+
+    function switchKaraokeAudioSource(kind) {
+        if (!hasKaraokeAudioSource(kind)) {
+            return;
+        }
+
+        if (kind === 'normal') {
+            deactivateKaraokeInstrumental();
+            return;
+        }
+
+        const previousAudio = karaokeAudioActive ? getKaraokeAudioPlayer() : null;
+        const currentTime = previousAudio ? previousAudio.currentTime : getOriginalCurrentTime();
+        const shouldContinuePlaying = previousAudio ? !previousAudio.paused : isOriginalPlaying();
+        karaokeAudioKind = kind;
+        const nextAudio = getKaraokeAudioPlayer(kind);
+        if (!nextAudio) {
+            karaokeAudioKind = 'normal';
+            updateKaraokeSourceButtons();
+            return;
+        }
+
+        try {
+            nextAudio.currentTime = currentTime || 0;
+        } catch {
+            nextAudio.addEventListener('loadedmetadata', () => {
+                nextAudio.currentTime = currentTime || 0;
+            }, { once: true });
+        }
+        updateKaraokeSourceButtons();
+        syncKaraokeAudioVolume(nextAudio, kind);
+
+        karaokeAudioActive = true;
+        updateKaraokeAudioPanel();
+        updateLyricsDisplay(getKaraokeLyricsDisplayTime(nextAudio.currentTime || currentTime || 0));
+        karaokeLastOriginalTime = getOriginalCurrentTime();
+        karaokeLastAudioTime = nextAudio.currentTime || currentTime || 0;
+        startKaraokeSyncLoop();
+
+        if (shouldContinuePlaying) {
+            syncOriginalPlaybackToKaraoke(true, true);
+            playKaraokeAudioSmoothly(nextAudio, previousAudio);
+        } else {
+            pauseInactiveKaraokeAudio(nextAudio);
+        }
+    }
+
+    function startKaraokeSyncLoop() {
+        if (karaokeSyncFrame !== null) {
+            cancelAnimationFrame(karaokeSyncFrame);
+        }
+
+        const tick = () => {
+            if (!karaokeAudioActive) {
+                karaokeSyncFrame = null;
+                return;
+            }
+
+            const currentTime = getPlaybackTime();
+            updateLyricsDisplay(getKaraokeLyricsDisplayTime(currentTime));
+            warmInactiveKaraokeAudio(currentTime);
+            const karaokeAudio = getKaraokeAudioPlayer();
+            if (karaokeAudio && !karaokeAudio.paused && !syncKaraokeAudioToMobileOriginalClock() && !syncKaraokeAudioFromOriginalSeek()) {
+                syncOriginalPlaybackToKaraoke(true);
+            }
+            karaokeSyncFrame = requestAnimationFrame(tick);
+        };
+
+        karaokeSyncFrame = requestAnimationFrame(tick);
+    }
+
+    function stopKaraokeSyncLoop() {
+        if (karaokeSyncFrame !== null) {
+            cancelAnimationFrame(karaokeSyncFrame);
+            karaokeSyncFrame = null;
+        }
+    }
+
+    function updateKaraokeAudioPanel() {
+        const panel = document.getElementById('karaoke-audio-panel');
+        if (!panel) return;
+
+        panel.classList.toggle('is-active', karaokeAudioActive);
+        updateKaraokeSourceButtons();
+    }
+
+    function activateKaraokeInstrumental() {
+        const preferredKind = hasInstrumentalAudio ? 'instrumental' : (hasVocalsAudio ? 'vocals' : 'normal');
+        switchKaraokeAudioSource(preferredKind);
+    }
+
+    function deactivateKaraokeInstrumental() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (!karaokeAudioActive || !karaokeAudio) {
+            karaokeAudioActive = false;
+            karaokeAudioKind = 'normal';
+            updateKaraokeAudioPanel();
+            return;
+        }
+
+        const currentTime = karaokeAudio.currentTime || 0;
+        const shouldContinuePlaying = !karaokeAudio.paused;
+        karaokeAudio.pause();
+        karaokeAudioActive = false;
+        karaokeAudioKind = 'normal';
+        karaokeOriginalSeekControlUntil = 0;
+        karaokeLastOriginalTime = 0;
+        karaokeLastAudioTime = 0;
+        stopKaraokeSyncLoop();
+        updateKaraokeAudioPanel();
+        restoreOriginalMuteState();
+        if (shouldContinuePlaying || currentTime > 0.2) {
+            seekOriginalPlayback(currentTime, shouldContinuePlaying);
+        }
+        updateLyricsDisplay(getPlaybackTime());
+    }
+
+    // 從按鈕找到對應的時間戳輸入框，讀取更正後的值
+    function getTimestampFromButton(button) {
+        const lyricsLine = button.closest('.lyrics-line');
+        if (!lyricsLine) return null;
+        
+        // 優先從輸入框讀取（如果有編輯過）
+        const input = lyricsLine.querySelector('.timestamp-input');
+        if (input) {
+            return parseFloat(input.value);
+        }
+        
+        // 否則用 data-timestamp
+        return parseFloat(lyricsLine.dataset.timestamp);
+    }
+
+    // 從輸入框讀取時間並跳轉播放
+    function jumpToLyricFromInput(button) {
+        const time = getTimestampFromButton(button);
+        if (time !== null) {
+            jumpToLyric(time);
+        }
+    }
+
+    // 從輸入框讀取時間並暫停
+    function pausePlaybackFromInput(button) {
+        const time = getTimestampFromButton(button);
+        if (time !== null) {
+            pausePlayback(time);
+        }
+    }
+
+    // 從輸入框讀取時間並重播
+    function replayLineFromInput(button) {
+        const time = getTimestampFromButton(button);
+        if (time !== null) {
+            replayLineWithButton(time, button);
+        }
+    }
+
+    function getLyricPayloadFromButton(button) {
+        const lyricsLine = button.closest('.lyrics-line');
+        if (!lyricsLine) {
+            return null;
+        }
+
+        const time = parseFloat(lyricsLine.dataset.timestamp);
+        const matchedIndex = lyrics.findIndex(line => Math.abs(Number(line.TimeStamp) - time) < 0.05);
+        const matchedLyric = matchedIndex >= 0 ? lyrics[matchedIndex] : null;
+
+        return {
+            ...mikaAvatarSongContext,
+            index: matchedIndex,
+            lyricId: lyricsLine.dataset.lyricId || matchedLyric?.LyricID || '',
+            timeStamp: Number.isFinite(time) ? time : 0,
+            japanese: matchedLyric?.Japanese || lyricsLine.querySelector('.jp-line')?.innerHTML || '',
+            chinese: matchedLyric?.Chinese || lyricsLine.querySelector('.cn-line')?.textContent || '',
+            roman: matchedLyric?.Roman || lyricsLine.querySelector('.roman-line')?.textContent || ''
+        };
+    }
+
+    function speakLyricWithMikaFromInput(button) {
+        const payload = getLyricPayloadFromButton(button);
+        if (!payload || !payload.japanese) {
+            return;
+        }
+
+        pausePlaybackMedia();
+        updatePlaybackButtons(false);
+        disableReplayButtons();
+        document.querySelectorAll('.controls button.active').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        button.classList.add('active');
+        window.learnMoreMikaAvatar?.speakLyric?.(payload);
+    }
+
+    // 使用按鈕元素而非 buttonId 的重播函數
+    function replayLineWithButton(time, buttonElement) {
+        // 停止重播模式時處理
+        if (isReplaying && replayInterval) {
+            clearInterval(replayInterval);
+            replayInterval = null;
+            isReplaying = false;
+
+            document.querySelectorAll('.controls button.active').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            return;
+        }
+
+        isReplaying = true;
+
+        document.querySelectorAll('.controls button.active').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        if (buttonElement) {
+            buttonElement.classList.add('active');
+        }
+
+        // 找到下一行的時間作為結束時間
+        let lineEndTime = time + 5; // 預設 5 秒
+        for (let i = 0; i < lyrics.length; i++) {
+            if (Math.abs(lyrics[i].TimeStamp - time) < 0.5 && i < lyrics.length - 1) {
+                lineEndTime = lyrics[i + 1].TimeStamp;
+                break;
+            }
+        }
+
+        replayInterval = setInterval(() => {
+            const currentTime = getPlaybackTime();
+            if (currentTime < time || currentTime >= lineEndTime) {
+                seekPlayback(time, true);
+            }
+        }, 100);
+
+        seekPlayback(time, true);
+    }
+
+    let autoSyncLyrics = document.getElementById("sync-lyrics-toggle").checked;
+    let showRomanization = document.getElementById("show-romanization-toggle").checked;
+
+    document.getElementById("sync-lyrics-toggle").addEventListener("change", function() {
+        autoSyncLyrics = this.checked;
+        updateUserSettings();
+    });
+
+    document.getElementById("show-romanization-toggle").addEventListener("change", function() {
+        showRomanization = this.checked;
+        updateUserSettings();
+
+        document.querySelectorAll(".roman-line").forEach(line => {
+            line.style.display = showRomanization ? "block" : "none";
+        });
+    });
+
+    function updateUserSettings() {
+        fetch("@Url.Content("~/Lyrics/UpdateUserSettings")", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                IsEnableAuto: autoSyncLyrics,
+                IsEnableRoman: showRomanization
+            })
+        })
+        .then(response => response.json())
+        .catch(error => {
+            console.error("更新設定時發生錯誤", error);
+            alert("無法更新設定，請稍後再試！");
+        });
+    }
+
+    function loadYouTubeAPI() {
+        installYouTubeIframeAllowSanitizer();
+        if (!window.YT || !YT.Player) {
+            const tag = document.createElement("script");
+            tag.src = "https://www.youtube.com/iframe_api";
+            const firstScriptTag = document.getElementsByTagName("script")[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+        }
+    }
+
+    function installYouTubeIframeAllowSanitizer() {
+        if (window.__learnMoreYouTubeAllowSanitizerInstalled) {
+            return;
+        }
+        window.__learnMoreYouTubeAllowSanitizerInstalled = true;
+
+        const sanitizeAllow = value => String(value || '')
+            .split(';')
+            .map(part => part.trim())
+            .filter(part => part && part !== 'web-share')
+            .join('; ');
+
+        const originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
+        HTMLIFrameElement.prototype.setAttribute = function(name, value) {
+            if (String(name).toLowerCase() === 'allow') {
+                return originalSetAttribute.call(this, name, sanitizeAllow(value));
+            }
+
+            return originalSetAttribute.call(this, name, value);
+        };
+
+        const allowDescriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'allow');
+        if (allowDescriptor && allowDescriptor.set) {
+            Object.defineProperty(HTMLIFrameElement.prototype, 'allow', {
+                configurable: true,
+                enumerable: allowDescriptor.enumerable,
+                get: allowDescriptor.get,
+                set(value) {
+                    allowDescriptor.set.call(this, sanitizeAllow(value));
+                }
+            });
+        }
+    }
+
+    window.onYouTubeIframeAPIReady = function () {
+        youtubePlayer = new YT.Player('youtube-player', {
+            height: '360',
+            width: '640',
+            videoId: '@youtubeVideoId',
+            events: {
+                'onReady': onYouTubePlayerReady,
+                'onStateChange': onPlayerStateChange
+            }
+        });
+    };
+
+    function onYouTubePlayerReady() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudioActive && karaokeAudio && !karaokeAudio.paused) {
+            syncOriginalPlaybackToKaraoke(true, true);
+        }
+    }
+
+    // 預設隱藏羅馬拼音
+    document.addEventListener("DOMContentLoaded", function() {
+        loadYouTubeAPI();
+
+        // 確保所有播放按鈕初始狀態為 `fa-play`
+        updatePlaybackButtons(false);
+
+        var privateCommentCheckbox = document.getElementById("private-comment");
+        if (privateCommentCheckbox?.dataset.loginRequired === "true") {
+            const privateCommentOption = privateCommentCheckbox.closest(".comment-options > div");
+            const showPrivateLoginPrompt = function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                privateCommentCheckbox.checked = false;
+                alert("登入後才能使用私密留言唷！");
+            };
+
+            privateCommentOption?.addEventListener("click", showPrivateLoginPrompt, true);
+            privateCommentCheckbox.addEventListener("change", function () {
+                privateCommentCheckbox.checked = false;
+            });
+        }
+
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        tooltipTriggerList.forEach(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+
+        document.querySelectorAll('.karaoke-audio-player').forEach(karaokeAudio => {
+            karaokeAudio.addEventListener('play', () => {
+                if (karaokeAudioActive && karaokeAudio === getKaraokeAudioPlayer()) {
+                    syncOriginalPlaybackToKaraoke(true, true);
+                }
+            });
+            karaokeAudio.addEventListener('pause', () => {
+                if (karaokeAudioActive && karaokeAudio === getKaraokeAudioPlayer() && !karaokeAudio.ended) {
+                    syncOriginalPlaybackToKaraoke(false, true);
+                }
+            });
+            karaokeAudio.addEventListener('seeked', () => {
+                if (karaokeAudioActive && karaokeAudio === getKaraokeAudioPlayer() && !karaokeAudio.paused) {
+                    syncOriginalPlaybackToKaraoke(true, true);
+                }
+            });
+        });
+
+        const videoPlayer = getOriginalVideoPlayer();
+        if (videoPlayer) {
+            videoPlayer.addEventListener('pause', () => {
+                if (isKaraokeOriginalControlEvent()) {
+                    return;
+                }
+                pauseKaraokeAudioFromOriginalPlayback();
+            });
+            videoPlayer.addEventListener('play', () => {
+                if (isKaraokeOriginalControlEvent()) {
+                    return;
+                }
+                playKaraokeAudioFromOriginalPlayback();
+            });
+            videoPlayer.addEventListener('seeked', () => {
+                if (isKaraokeOriginalControlEvent()) {
+                    return;
+                }
+                syncKaraokeAudioTimeFromOriginalPlayback();
+            });
+        }
+    });
+
+    function pausePlayback(time) {
+        let isPaused = isPlaybackPaused();
+
+        if (isPaused) {
+            playPlayback();
+            updatePlaybackButtons(true); // 設定圖示為 `fa-pause`
+        } else {
+            pausePlaybackMedia();
+            updatePlaybackButtons(false); // 設定圖示為 `fa-play`
+        }
+    }
+
+    function updatePlaybackButtons(isPlaying) {
+        document.querySelectorAll('.controls button').forEach(button => {
+            const icon = button.querySelector('i.fas.fa-pause, i.fas.fa-play');
+            if (icon) {
+                if (isPlaying) {
+                    icon.classList.remove("fa-play");
+                    icon.classList.add("fa-pause");
+                    button.setAttribute("title", "暫停");
+                    button.setAttribute("data-bs-original-title", "暫停");
+                    button.setAttribute("aria-label", "暫停");
+                } else {
+                    icon.classList.remove("fa-pause");
+                    icon.classList.add("fa-play");
+                    button.setAttribute("title", "播放");
+                    button.setAttribute("data-bs-original-title", "播放");
+                    button.setAttribute("aria-label", "播放");
+                }
+            }
+
+            const tooltipInstance = bootstrap.Tooltip.getInstance(button);
+            if (tooltipInstance && typeof tooltipInstance.update === 'function') {
+                tooltipInstance.update();
+            } else if (!tooltipInstance) {
+                new bootstrap.Tooltip(button);
+            }
+        });
+    }
+
+    function startPlayback(time) {
+        seekPlayback(time, true);
+        disableReplayButtons();
+    }
+
+    function replayLine(time, buttonId) {
+        const buttonElement = document.getElementById(buttonId);
+
+        // 停止重播模式時處理
+        if (isReplaying && replayInterval) {
+            clearInterval(replayInterval);
+            replayInterval = null;
+            isReplaying = false;
+
+            // 清除所有按鈕的 active 樣式
+            document.querySelectorAll('.controls button.active').forEach(btn => {
+                btn.classList.remove('active');
+            });
+
+            return; // 停止重播
+        }
+
+        // 啟動重播模式時處理
+        isReplaying = true;
+
+        // 清除所有其他按鈕的 active 樣式
+        document.querySelectorAll('.controls button.active').forEach(btn => {
+            btn.classList.remove('active');
+        });
+
+        // 為當前按鈕添加 active 樣式
+        if (buttonElement) {
+            buttonElement.classList.add('active');
+        }
+
+        const lineEndTime = getNextLineTime(time);
+
+        // 設置重播間隔
+        replayInterval = setInterval(() => {
+            const currentTime = getPlaybackTime();
+            if (currentTime < time || currentTime >= lineEndTime) {
+                seekPlayback(time, true);
+            }
+        }, 100);
+
+        // 跳轉到指定時間並播放
+        seekPlayback(time, true);
+    }
+
+    function getNextLineTime(currentTime) {
+        // 找到當前行的結束時間（下一行的時間戳）
+        for (let i = 0; i < lyrics.length; i++) {
+            if (lyrics[i].TimeStamp === currentTime && i < lyrics.length - 1) {
+                return lyrics[i + 1].TimeStamp;
+            }
+        }
+        // 如果是最後一行，設置為歌曲結束時間
+        return getPlaybackDuration();
+    }
+
+    function jumpToLyric(time) {
+        seekPlayback(time, true);
+         // 更新所有播放/暫停按鈕圖示為「播放中」狀態（fa-pause）
+        updatePlaybackButtons(true);
+    }
+
+    function disableReplayButtons() {
+        isReplaying = false;
+
+        // 停止任何重播間隔
+        if (replayInterval) {
+            clearInterval(replayInterval);
+            replayInterval = null;
+        }
+
+        // 移除所有 replay 按鈕的 active 樣式
+        document.querySelectorAll('.controls button.active').forEach(btn => {
+            btn.classList.remove('active');
+        });
+    }
+
+    let currentMode = 1;
+
+    function switchMode(mode) {
+        currentMode = mode;
+        for (let i = 1; i <= 6; i++) {
+            const modeEl = document.getElementById('mode-' + i);
+            const tabEl = document.getElementById('tab-button-' + i);
+            if (modeEl) modeEl.style.display = (i === mode) ? 'flex' : 'none';
+            if (tabEl) tabEl.classList.toggle('active', i === mode);
+        }
+        updateKaraokeAudioPanel();
+        updateLyricsDisplay(getKaraokeLyricsDisplayTime(getCurrentTime()));
+    }
+
+    function getCurrentTime() {
+        return getPlaybackTime();
+    }
+
+    function revealTranslation(timestamp) {
+        const cnEl = document.getElementById('mode4-cn-' + timestamp);
+        const btn = cnEl ? cnEl.nextElementSibling : null;
+        if (cnEl) {
+            cnEl.classList.remove('mode4-cn-hidden');
+            cnEl.classList.add('mode4-cn-revealed');
+        }
+        if (btn) btn.style.display = 'none';
+    }
+
+    function revealJapanese(timestamp) {
+        const jpEl = document.getElementById('mode5-jp-' + timestamp);
+        const btn = jpEl ? jpEl.nextElementSibling : null;
+        if (jpEl) {
+            jpEl.classList.remove('mode5-jp-hidden');
+            jpEl.classList.add('mode5-jp-revealed');
+        }
+        if (btn) btn.style.display = 'none';
+    }
+
+    function getCurrentLyricIndex(currentTime) {
+        for (let i = 0; i < lyrics.length; i++) {
+            if (currentTime >= lyrics[i].TimeStamp && (i === lyrics.length - 1 || currentTime < lyrics[i + 1].TimeStamp)) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    function getModeLyricLines(mode) {
+        const selector = {
+            1: '#mode-1 .lyrics-line',
+            4: '#mode-4 .mode4-line',
+            5: '#mode-5 .mode5-line'
+        }[mode];
+
+        return selector ? document.querySelectorAll(selector) : [];
+    }
+
+    function scrollCurrentLyricIntoActiveMode(currentIndex) {
+        if (!autoSyncLyrics || ![1, 4, 5].includes(currentMode)) {
+            return;
+        }
+
+        const highlightedLine = getModeLyricLines(currentMode)[currentIndex];
+        const lyricsCard = highlightedLine?.closest('.lyric-card');
+        if (!highlightedLine || !lyricsCard) {
+            return;
+        }
+
+        const timestamp = lyrics[currentIndex]?.TimeStamp;
+        const scrollKey = `${currentMode}:${timestamp}`;
+        if (scrollKey === lastScrolledTimestamp) {
+            return;
+        }
+
+        lastScrolledTimestamp = scrollKey;
+        lyricsCard.scrollTo({
+            top: highlightedLine.offsetTop - lyricsCard.offsetTop - lyricsCard.clientHeight / 2,
+            behavior: 'smooth',
+        });
+    }
+
+    function updateMode456(currentTime) {
+        let currentIndex = getCurrentLyricIndex(currentTime);
+
+        if (currentIndex === -1) return;
+
+        // Mode 4 highlight
+        document.querySelectorAll('#mode-4 .mode4-line').forEach((line, idx) => {
+            line.classList.toggle('highlight', idx === currentIndex);
+        });
+
+        // Mode 5 highlight
+        document.querySelectorAll('#mode-5 .mode5-line').forEach((line, idx) => {
+            line.classList.toggle('highlight', idx === currentIndex);
+        });
+
+        // Mode 6: karaoke display
+        if (currentMode === 6) {
+            const line = lyrics[currentIndex];
+            const jpEl = document.getElementById('mode6-jp');
+            const romanEl = document.getElementById('mode6-roman');
+            const nextEl = document.getElementById('mode6-next');
+            const nextJpEl = document.getElementById('mode6-next-jp');
+            const nextRomanEl = document.getElementById('mode6-next-roman');
+            const nextCnEl = document.getElementById('mode6-next-cn');
+            if (jpEl) jpEl.innerHTML = line.Japanese || '';
+            if (romanEl) romanEl.textContent = line.Roman || '';
+
+            const nextLine = currentIndex < lyrics.length - 1 ? lyrics[currentIndex + 1] : null;
+            if (nextEl) {
+                nextEl.hidden = !nextLine;
+            }
+            if (nextJpEl) {
+                nextJpEl.innerHTML = nextLine?.Japanese || '';
+            }
+            if (nextRomanEl) {
+                nextRomanEl.textContent = nextLine?.Roman || '';
+            }
+            if (nextCnEl) {
+                nextCnEl.textContent = nextLine?.Chinese || '';
+            }
+
+            // Progress bar within current line
+            const lineStart = line.TimeStamp;
+            const lineEnd = currentIndex < lyrics.length - 1 ? lyrics[currentIndex + 1].TimeStamp : lineStart + 5;
+            const duration = lineEnd - lineStart;
+            const elapsed = currentTime - lineStart;
+            const pct = duration > 0 ? Math.min(100, (elapsed / duration) * 100) : 0;
+            const fillEl = document.getElementById('mode6-progress-fill');
+            if (fillEl) fillEl.style.width = pct + '%';
+        }
+    }
+
+    let lastScrolledTimestamp = null; // 記錄上次滾動的時間戳，避免重複滾動
+
+    function updateLyricsDisplay(currentTime) {
+        const displayTime = getLyricsDisplayTime(currentTime);
+        updateMode456(displayTime);
+        let currentIndex = getCurrentLyricIndex(displayTime);
+
+        if (currentIndex !== -1) {
+            document.querySelectorAll('#mode-1 .lyrics-line').forEach((line, index) => {
+                line.classList.toggle('highlight', index === currentIndex);
+            });
+
+            // 安全設定 innerHTML 的輔助函式（避免元素不存在時爆錯）
+            const safeSet = (el, html) => { if (el) el.innerHTML = html || ''; };
+
+            // 模式 2 Combined 區塊
+            const previousLineCombined = document.getElementById('previous-lyric-combined');
+            const currentLineCombined = document.getElementById('current-lyric-combined');
+            const nextLineCombined = document.getElementById('next-lyric-combined');
+
+            if (previousLineCombined) {
+                safeSet(previousLineCombined.querySelector('.jp-line'), currentIndex > 0 ? lyrics[currentIndex - 1].Japanese : '');
+                safeSet(previousLineCombined.querySelector('.cn-line'), currentIndex > 0 ? lyrics[currentIndex - 1].Chinese : '');
+                safeSet(previousLineCombined.querySelector('.roman-line'), currentIndex > 0 ? (lyrics[currentIndex - 1].Roman || '') : '');
+            }
+            if (currentLineCombined) {
+                safeSet(currentLineCombined.querySelector('.jp-line'), lyrics[currentIndex].Japanese);
+                safeSet(currentLineCombined.querySelector('.cn-line'), lyrics[currentIndex].Chinese);
+                safeSet(currentLineCombined.querySelector('.roman-line'), lyrics[currentIndex].Roman || '');
+            }
+            if (nextLineCombined) {
+                safeSet(nextLineCombined.querySelector('.jp-line'), currentIndex < lyrics.length - 1 ? lyrics[currentIndex + 1].Japanese : '');
+                safeSet(nextLineCombined.querySelector('.cn-line'), currentIndex < lyrics.length - 1 ? lyrics[currentIndex + 1].Chinese : '');
+                safeSet(nextLineCombined.querySelector('.roman-line'), currentIndex < lyrics.length - 1 ? (lyrics[currentIndex + 1].Roman || '') : '');
+            }
+
+            window.learnMoreMikaAvatar?.onLyricChange?.({
+                ...mikaAvatarSongContext,
+                index: currentIndex,
+                lyricId: lyrics[currentIndex].LyricID,
+                timeStamp: lyrics[currentIndex].TimeStamp,
+                japanese: lyrics[currentIndex].Japanese,
+                chinese: lyrics[currentIndex].Chinese,
+                roman: lyrics[currentIndex].Roman || ''
+            });
+
+            scrollCurrentLyricIntoActiveMode(currentIndex);
+        }
+    }
+
+    function onPlayerStateChange(event) {
+        if (karaokeAudioActive) {
+            if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
+                pauseKaraokeAudioFromOriginalPlayback();
+            }
+            if (event.data === YT.PlayerState.PLAYING) {
+                playKaraokeAudioFromOriginalPlayback();
+            }
+            return;
+        }
+
+        if (event.data === YT.PlayerState.ENDED) {
+            youtubePlayer.seekTo(0);
+            youtubePlayer.playVideo();
+        }
+        if (event.data === YT.PlayerState.PLAYING) {
+            const updateLyrics = () => {
+                const currentTime = youtubePlayer.getCurrentTime();
+                updateLyricsDisplay(currentTime);
+                warmInactiveKaraokeAudio(currentTime);
+                requestAnimationFrame(updateLyrics);
+            };
+            updateLyrics();
+        }
+    }
+
+    function onVideoEnded() {
+        const videoPlayer = document.getElementById('video-player');
+        if (karaokeAudioActive) {
+            pauseKaraokeAudioFromOriginalPlayback();
+            return;
+        }
+
+        videoPlayer.currentTime = 0;
+        videoPlayer.play();
+    }
+
+    function onKaraokeAudioEnded() {
+        const karaokeAudio = getKaraokeAudioPlayer();
+        if (karaokeAudio) {
+            karaokeAudio.currentTime = 0;
+            syncOriginalPlaybackToKaraoke(true, true);
+            karaokeAudio.play().catch(error => {
+                logKaraokePlaybackError(error);
+            });
+        }
+    }
+
+    function adjustControlsForScreenSize() {
+        const controls = document.querySelectorAll('.controls');
+        const isMobile = window.innerWidth <= 768;
+
+        controls.forEach(control => {
+            if (isMobile) {
+                control.style.position = 'static';
+                control.style.marginTop = '10px';
+                control.style.justifyContent = 'center';
+                control.querySelectorAll('button').forEach(button => {
+                    button.style.fontSize = '12px';
+                });
+                control.querySelectorAll('.fas').forEach(icon => {
+                    icon.style.fontSize = '12px';
+                });
+            } else {
+                control.style.position = 'absolute';
+                control.style.bottom = '2px';
+                control.style.right = '10px';
+                control.style.marginTop = '0';
+                control.style.justifyContent = 'flex-start';
+                control.querySelectorAll('button').forEach(button => {
+                    button.style.fontSize = '14px';
+                });
+                control.querySelectorAll('.fas').forEach(icon => {
+                    icon.style.fontSize = '14px';
+                });
+            }
+        });
+    }
+
+    window.addEventListener('resize', adjustControlsForScreenSize);
+    document.addEventListener('DOMContentLoaded', adjustControlsForScreenSize);
+
+    function adjustFontSizeForLyrics() {
+        const isMobile = window.innerWidth <= 768;
+        document.querySelectorAll('.lyrics-line').forEach(line => {
+            line.style.fontSize = isMobile ? '14px' : '18px';
+        });
+        document.querySelectorAll('.jp-line').forEach(line => {
+            line.style.fontSize = isMobile ? '14px' : '18px';
+        });
+        document.querySelectorAll('.cn-line').forEach(line => {
+            line.style.fontSize = isMobile ? '12px' : '14px';
+        });
+    }
+
+    window.addEventListener('resize', adjustFontSizeForLyrics);
+    document.addEventListener('DOMContentLoaded', adjustFontSizeForLyrics);
+
+    // 修改 reportBug 函數，新增訊息輸入框
+    function reportBug(lyricid) {
+        if (lyricid) {
+            const errorDescription = prompt("請描述您發現的問題：");
+            if (errorDescription) {
+                const bugReport = {
+                    errorDescription: errorDescription,
+                    errorSongUid: '@Model.SongUid',
+                    errorLyricID: lyricid
+                };
+
+                let url = "@Url.Content("~/ReportBug")"
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(bugReport)
+                })
+                .then(response => {
+                    if (response.ok) {
+                        alert('已成功通知作者修正歌詞！');
+                    } else {
+                        alert('回報失敗，請稍後再試！');
+                    }
+                })
+                .catch(error => {
+                    console.error('回報錯誤時發生問題:', error);
+                    alert('回報失敗，請稍後再試！');
+                });
+            }
+        }
+    }
+
+    function scrollToCurrentLyric() {
+        const highlightedLine = document.querySelector('.lyrics-line.highlight');
+        if (highlightedLine) {
+            highlightedLine.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center',
+            });
+        }
+    }
+
+    function scrollToTop() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth',
+        });
+    }
+
+    document.getElementById("submit-comment").addEventListener("click", function () {
+        var message = document.getElementById("comment-input").value.trim();
+        var isPrivate = document.getElementById("private-comment").checked;
+
+        if (!message) {
+            alert("留言內容不能為空！");
+            return;
+        }
+
+        var commentData = {
+            songUid: "@Model.SongUid",
+            message: message,
+            isPrivate: isPrivate
+        };
+
+        fetch("@Url.Content("~/Lyrics/AddComment")", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(commentData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                var commentSection = document.getElementById("comments-container");
+                var noCommentsMessage = commentSection.querySelector(".no-comments");
+
+                // 移除「目前沒有留言」的提示
+                if (noCommentsMessage) {
+                    noCommentsMessage.remove();
+                }
+
+                // 建立新留言元素
+                var newComment = document.createElement("div");
+                newComment.classList.add("comment");
+
+                // **加入使用者頭像**
+                var avatarElem = document.createElement("img");
+                avatarElem.classList.add("avatar");
+                avatarElem.src = data.avatar;
+                avatarElem.alt = "使用者頭像";
+                newComment.appendChild(avatarElem);
+
+                // 顯示留言者名稱
+                var userNameElem = document.createElement("strong");
+                userNameElem.textContent = (data.userName || "訪客") + "：";
+                newComment.appendChild(userNameElem);
+
+                if (data.isPrivate) {
+                    // 如果是悄悄話，顯示「🔒 悄悄話」
+                    var privateLabel = document.createElement("span");
+                    privateLabel.classList.add("private-label");
+                    privateLabel.textContent = "🔒 悄悄話";
+                    newComment.appendChild(privateLabel);
+
+                    var currentUserEmail = "@Model.UserEmail";
+                    // 只有當前使用者才顯示留言內容
+                    if (data.userEmail === currentUserEmail) {
+                        var messageElem = document.createElement("p");
+                        messageElem.textContent = data.message;
+                        newComment.appendChild(messageElem);
+                    }
+                } else {
+                    // 如果是公開留言，顯示留言內容
+                    var messageElem = document.createElement("p");
+                    messageElem.textContent = data.message;
+                    newComment.appendChild(messageElem);
+                }
+
+                // 顯示時間戳記
+                var timestampElem = document.createElement("span");
+                timestampElem.classList.add("timestamp");
+                timestampElem.textContent = data.timeStamp;
+                newComment.appendChild(timestampElem);
+
+                // 新留言插入至最上方
+                commentSection.insertBefore(newComment, commentSection.firstChild);
+
+                // 清空輸入框
+                document.getElementById("comment-input").value = "";
+                document.getElementById("private-comment").checked = false;
+            } else {
+                alert("留言提交失敗：" + (data.message || "未知錯誤"));
+            }
+        })
+        .catch(error => {
+            console.error("留言提交時發生錯誤", error);
+            alert("留言提交失敗，請稍後再試。");
+        });
+    });
+
+    function submitReply(commentId) {
+        var replyMessage = document.getElementById("reply-input-" + commentId).value.trim();
+        if (!replyMessage) {
+            alert("請輸入回覆內容！");
+            return;
+        }
+
+        var replyData = {
+            CommentId: commentId, // 傳送 GUID
+            ReplyMessage: replyMessage
+        };
+
+        fetch("/Lyrics/ReplyComment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(replyData)
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert("回覆成功！");
+                location.reload(); // 重新載入頁面以顯示最新回覆
+            } else {
+                alert("回覆失敗：" + data.message);
+            }
+        })
+        .catch(error => {
+            console.error("回覆時發生錯誤", error);
+            alert("回覆失敗，請稍後再試。");
+        });
+    }
+
+    // ========== 時間戳編輯功能 ==========
+    @if (Model.CanEditTimestamp)
+    {
+        <text>
+    var songUid = "@Model.SongUid";
+    var updateTimestampUrl = "@Url.Action("UpdateTimestamp", "Lyrics")";
+    
+    // 切換時間戳編輯模式
+    // 記住編輯前的自動同步狀態
+    let syncStateBeforeEdit = null;
+    
+    document.getElementById('edit-timestamp-toggle')?.addEventListener('change', function() {
+        var editors = document.querySelectorAll('.timestamp-editor');
+        var isEditing = this.checked;
+        var syncToggle = document.getElementById('sync-lyrics-toggle');
+        
+        editors.forEach(function(editor) {
+            editor.style.display = isEditing ? 'flex' : 'none';
+        });
+        
+        if (isEditing) {
+            // 進入編輯模式：記住當前狀態，然後關閉自動同步
+            syncStateBeforeEdit = syncToggle.checked;
+            syncToggle.checked = false;
+            autoSyncLyrics = false;
+        } else {
+            // 離開編輯模式：恢復之前的狀態
+            if (syncStateBeforeEdit !== null) {
+                syncToggle.checked = syncStateBeforeEdit;
+                autoSyncLyrics = syncStateBeforeEdit;
+                syncStateBeforeEdit = null;
+            }
+        }
+    });
+    
+    // 儲存時間戳
+    function saveTimestamp(button, lyricId) {
+        var editor = button.closest('.timestamp-editor');
+        var input = editor.querySelector('.timestamp-input');
+        var newTimestamp = parseFloat(input.value);
+        var originalTimestamp = parseFloat(input.dataset.original);
+        
+        if (isNaN(newTimestamp) || newTimestamp < 0) {
+            alert('請輸入有效的時間戳');
+            return;
+        }
+        
+        // 顯示載入狀態
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        
+        fetch(updateTimestampUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                SongUid: songUid,
+                LyricID: lyricId,
+                NewTimestamp: newTimestamp
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // 更新成功，更新 DOM
+                input.dataset.original = newTimestamp;
+                var lyricsLine = button.closest('.lyrics-line');
+                lyricsLine.dataset.timestamp = newTimestamp;
+                lyricsLine.id = 'lyric-' + newTimestamp;
+                
+                button.innerHTML = '<i class="fas fa-check" style="color: green;"></i>';
+                setTimeout(function() {
+                    button.innerHTML = '<i class="fas fa-check"></i>';
+                    button.disabled = false;
+                }, 1500);
+            } else {
+                alert('更新失敗：' + data.message);
+                input.value = originalTimestamp;
+                button.innerHTML = '<i class="fas fa-check"></i>';
+                button.disabled = false;
+            }
+        })
+        .catch(error => {
+            console.error('更新時間戳失敗', error);
+            alert('更新失敗，請稍後再試');
+            input.value = originalTimestamp;
+            button.innerHTML = '<i class="fas fa-check"></i>';
+            button.disabled = false;
+        });
+    }
+    
+    // 捕捉當前播放時間
+    function captureCurrentTime(button) {
+        var currentTime = getCurrentTime();
+        if (currentTime !== null) {
+            var editor = button.closest('.timestamp-editor');
+            var input = editor.querySelector('.timestamp-input');
+            input.value = currentTime.toFixed(2);
+            
+            // 視覺反饋
+            input.style.backgroundColor = '#e8f5e9';
+            setTimeout(function() {
+                input.style.backgroundColor = '';
+            }, 500);
+        }
+    }
+    
+    // 取得當前播放時間（支援 YouTube 和 HTML5 Video）
+    function getCurrentTime() {
+        return getPlaybackTime();
+    }
+        </text>
+    }
+</script>
+
+@section Scripts {
+    <script src="~/js/mika-avatar.js" asp-append-version="true"></script>
+}

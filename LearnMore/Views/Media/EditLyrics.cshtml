@@ -1,0 +1,633 @@
+﻿@model EditLyricsViewModel
+
+@{
+    ViewData["Title"] = "歌詞編輯";
+}
+
+<style>
+    .lyrics-editor-shell {
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+    }
+
+    .lyrics-editor-video-pane {
+        flex: 2 1 0;
+        min-width: 0;
+    }
+
+    .lyrics-editor-list-pane {
+        flex: 1 1 360px;
+        min-width: 300px;
+        max-height: 600px;
+        overflow-y: auto;
+        padding: 1rem;
+        border-radius: 8px;
+    }
+
+    .video-wrapper {
+        position: relative;
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        aspect-ratio: 16 / 9; /* 確保 16:9 比例 */
+        overflow: hidden;
+        border-radius: 8px;
+    }
+
+    #songPlayer {
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+
+    .draggable {
+        cursor: grab;
+    }
+
+    .dragging {
+        opacity: 0.5;
+        border: 2px dashed #000;
+    }
+
+    .lyrics-container {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* 歌詞區塊 */
+    .lyrics-container-wrapper {
+        background: #f9f9f9;
+        border-radius: 8px;
+        padding: 1rem;
+    }
+
+    /* 黑暗模式下的歌詞區塊 */
+    body.dark-theme .lyrics-container-wrapper {
+        background: #1e1e1e; /* 深色背景 */
+        color: #f1f1f1;
+    }
+
+    .lyrics-card {
+        background: #fff;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        border: 1px solid #ddd;
+    }
+
+    /* 黑暗模式下的歌詞卡片 */
+    body.dark-theme .lyrics-card {
+        background: #2a2a2a; /* 深灰背景 */
+        border: 1px solid #444; /* 讓邊框更有層次感 */
+    }
+
+    .lyrics-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+        .lyrics-row label {
+            white-space: nowrap;
+            font-weight: bold;
+            min-width: 80px;
+        }
+
+        .lyrics-row input {
+            flex: 1;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+    .lyrics-card.marked {
+        border-left: 5px solid #28a745; /* 綠色邊框 */
+        background-color: #f5fff5; /* 淡綠色背景增加區分 */
+        position: relative;
+    }
+
+    /* 黑暗模式 - 標記的歌詞卡 */
+    body.dark-theme .lyrics-card.marked {
+        border-left: 5px solid #28a745; /* 維持綠色邊框 */
+        background-color: #1e4428; /* 深綠色背景 */
+        color: #f1f1f1; /* 文字變亮 */
+    }
+
+    .marked-label {
+        position: absolute;
+        top: 5px; /* 調整到卡片的上方 */
+        left: 50%;
+        transform: translateX(-50%); /* 讓標籤置中 */
+        background: #28a745;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 5px;
+        font-size: 0.8rem;
+        font-weight: bold;
+        white-space: nowrap;
+    }
+
+    /* 黑暗模式 - 標記標籤 */
+    body.dark-theme .marked-label {
+        background: #218838; /* 調暗的綠色，適應黑暗模式 */
+        color: #ffffff; /* 保持白色文字 */
+        box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.3); /* 增加陰影，讓標籤更突出 */
+    }
+
+    .controls-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        margin-top: 1rem; /* 影片與按鈕的間距 */
+        text-align: center;
+    }
+
+    #markingProgress {
+        font-size: 0.8rem;
+        font-weight: bold;
+        margin-bottom: 0.5rem;
+    }
+
+    .button-row {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 1rem;
+    }
+
+    button {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+
+    /* 輸入框 */
+    .lyrics-row input {
+        padding: 5px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: white;
+        color: black;
+    }
+
+    /* 黑暗模式下的輸入框 */
+    body.dark-theme .lyrics-row input {
+        background: #333;
+        color: white;
+        border: 1px solid #555;
+    }
+    @@media (max-width: 991.98px) {
+        h2 {
+            font-size: 1.35rem;
+            overflow-wrap: anywhere;
+        }
+
+        .lyrics-editor-shell {
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .lyrics-editor-video-pane,
+        .lyrics-editor-list-pane {
+            width: 100%;
+            flex: none;
+            min-width: 0;
+        }
+
+        .lyrics-editor-list-pane {
+            max-height: none;
+            padding: 0.75rem 0;
+        }
+
+        .button-row {
+            width: 100%;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .button-row .btn,
+        #saveLyricsBtn {
+            flex: 1 1 160px;
+            min-height: 44px;
+        }
+
+        .lyrics-row {
+            align-items: stretch;
+        }
+    }
+
+    @@media (max-width: 576px) {
+        .lyrics-card {
+            padding: 0.85rem;
+        }
+
+        .lyrics-row {
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .lyrics-row label {
+            min-width: 0;
+            white-space: normal;
+        }
+
+        .lyrics-row input {
+            width: 100%;
+            min-height: 40px;
+        }
+
+        .marked-label {
+            position: static;
+            display: inline-flex;
+            transform: none;
+            margin: 0.25rem auto 0;
+        }
+    }
+</style>
+
+<h2>歌詞編輯 - @Model.MNmae</h2>
+<partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+{
+    Status = Model.HighAccuracyStatus,
+    ReasonText = Model.HighAccuracyStatusReason,
+    BadgeTitle = Model.HighAccuracyStatusReason,
+    ContainerCssClass = "alert alert-light border d-flex flex-column gap-1",
+    ReasonCssClass = "text-muted"
+}' />
+<input type="hidden" id="songUid" value="@Model.SongUid" />
+
+<main class="flex-container lyrics-editor-shell">
+    <div class="lyrics-editor-video-pane">
+        <div class="video-wrapper">
+            <video id="songPlayer" controls>
+                <source id="videoSource" src="@Model.YoutubeVideoUrl" type="video/mp4">
+                您的瀏覽器不支援影片播放。
+            </video>
+        </div>
+        <div class="controls-container">
+            <p id="markingProgress">標記進度：0 / @Model.Lyrics.Count</p>
+            <div class="button-row">
+                <button type="button" id="undoMarkTimeBtn" class="btn btn-warning">返回上一個標記</button>
+                <button type="button" id="markTimeBtn" class="btn btn-success">標記時間</button>
+            </div>
+            <button type="button" id="saveLyricsBtn" class="btn btn-primary">存檔</button>
+        </div>
+    </div>
+    <div class="lyrics-editor-list-pane">
+        <h3 class="text-center mb-3">全部歌詞</h3>
+        <div class="lyrics-container">
+            @for (int i = 0; i < Model.Lyrics.Count; i++)
+            {
+                <div class="lyrics-card draggable" data-id="@Model.Lyrics[i].LyricID">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span class="drag-handle">☰</span>
+                        <button type="button" class="btn btn-danger delete-btn" data-id="@Model.Lyrics[i].LyricID">刪除</button>
+                    </div>
+                    <div class="lyrics-row">
+                        <label>時間戳記</label>
+                        <input type="number" step="0.1" name="lyrics[@i].TimeStamp" value="@Model.Lyrics[i].TimeStamp" />
+                    </div>
+                    <div class="lyrics-row">
+                        <label>日文</label>
+                        <input type="text" name="lyrics[@i].Japanese" value="@Model.Lyrics[i].Japanese" />
+                    </div>
+                    <div class="lyrics-row">
+                        <label>中文</label>
+                        <input type="text" name="lyrics[@i].Chinese" value="@Model.Lyrics[i].Chinese" />
+                    </div>
+                    <div class="lyrics-row">
+                        <label>羅馬音</label>
+                        <input type="text" name="lyrics[@i].Roman" value="@Model.Lyrics[i].Roman" />
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</main>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        let videoPlayer = document.getElementById("songPlayer");
+        let videoSource = document.getElementById("videoSource");
+        const markTimeBtn = document.getElementById("markTimeBtn");
+        const undoMarkTimeBtn = document.getElementById("undoMarkTimeBtn"); // 返回上一個標記按鈕
+        const markingProgress = document.getElementById("markingProgress");
+        let totalLyrics = @Model.Lyrics.Count;
+        let currentIndex = 0;
+        let youtubePlayer = null;
+        let lyricsScrollContainer = document.querySelector(".lyrics-container").parentElement;
+
+        function updateProgress() {
+            markingProgress.textContent = `標記進度：${currentIndex} / ${totalLyrics}`;
+        }
+
+        function scrollToCurrentLyric() {
+            if (currentIndex < totalLyrics) {
+                let currentCard = document.querySelectorAll(".lyrics-card")[currentIndex-1];
+                if (currentCard && lyricsScrollContainer) {
+                    lyricsScrollContainer.scrollTo({
+                        top: currentCard.offsetTop - lyricsScrollContainer.offsetTop,
+                        behavior: "smooth"
+                    });
+                }
+            }
+        }
+
+        function markCardAsCompleted(index) {
+            let cards = document.querySelectorAll(".lyrics-card");
+            if (index < cards.length) {
+                let card = cards[index];
+                card.classList.add("marked");
+                if (!card.querySelector(".marked-label")) {
+                    let label = document.createElement("span");
+                    label.className = "marked-label";
+                    label.textContent = "✅ 已標記";
+                    card.appendChild(label);
+                }
+            }
+        }
+
+        function unmarkCard(index) {
+            let cards = document.querySelectorAll(".lyrics-card");
+            if (index < cards.length) {
+                let card = cards[index];
+                card.classList.remove("marked");
+                let label = card.querySelector(".marked-label");
+                if (label) {
+                    label.remove();
+                }
+            }
+        }
+
+        // **檢查是否為 YouTube 影片**
+        function isYouTubeVideo(url) {
+            return url.includes("youtube.com") || url.includes("youtu.be");
+        }
+
+        // **如果是 YouTube，轉換為嵌入格式**
+        function getYouTubeEmbedUrl(youtubeUrl) {
+            try {
+                let url = new URL(youtubeUrl);
+                let videoId = url.searchParams.get("v") || url.pathname.split("/").pop();
+                return videoId ? `https://www.youtube.com/embed/${videoId}?enablejsapi=1&autoplay=1&controls=1` : null;
+            } catch {
+                return null;
+            }
+        }
+
+        // **如果是 YouTube 影片，改用 YouTube API 播放**
+        if (isYouTubeVideo(videoSource.src)) {
+            let embedUrl = getYouTubeEmbedUrl(videoSource.src);
+            videoPlayer.outerHTML = `<div id="ytPlayer"></div>`; // 替換掉原本的 video 標籤
+            loadYouTubeAPI(embedUrl);
+        }
+
+        function loadYouTubeAPI(embedUrl) {
+            let tag = document.createElement("script");
+            tag.src = "https://www.youtube.com/iframe_api";
+            let firstScriptTag = document.getElementsByTagName("script")[0];
+            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
+
+            window.onYouTubeIframeAPIReady = function () {
+                youtubePlayer = new YT.Player("ytPlayer", {
+                    height: "100%",
+                    width: "100%",
+                    videoId: embedUrl.split("/").pop().split("?")[0],
+                    playerVars: {
+                        "autoplay": 1,
+                        "controls": 1,
+                        "modestbranding": 1,
+                        "rel": 0,
+                        "showinfo": 0,
+                        "playsinline": 1
+                    }
+                });
+            };
+        }
+
+        // **標記時間**
+        markTimeBtn.addEventListener("click", function () {
+            let currentTime = 0;
+
+            if (videoPlayer && !isYouTubeVideo(videoSource.src)) {
+                currentTime = videoPlayer.currentTime;
+            } else if (youtubePlayer) {
+                currentTime = youtubePlayer.getCurrentTime();
+            }
+
+            let timestampInputs = document.querySelectorAll("input[name$='TimeStamp']");
+            if (currentIndex < timestampInputs.length) {
+                timestampInputs[currentIndex].value = currentTime.toFixed(1);
+                markCardAsCompleted(currentIndex); // 標記已完成
+                currentIndex++;
+                updateProgress();
+                scrollToCurrentLyric(); // 確保滾動到最上方的卡片
+            } else {
+                alert("所有時間已標記完成！");
+            }
+        });
+
+        function syncScroll() {
+            let currentTime = 0;
+            if (videoPlayer && !isYouTubeVideo(videoSource.src)) {
+                currentTime = videoPlayer.currentTime;
+            } else if (youtubePlayer) {
+                currentTime = youtubePlayer.getCurrentTime();
+            }
+
+            let timestamps = Array.from(document.querySelectorAll("input[name$='TimeStamp']"));
+            let closestIndex = timestamps.findIndex(input => parseFloat(input.value) > currentTime);
+            if (closestIndex > 0) closestIndex--; // 讓滾動更自然
+
+            let currentCard = document.querySelectorAll(".lyrics-card")[closestIndex];
+            if (currentCard) {
+                currentCard.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
+        }
+
+        if (videoPlayer) {
+            videoPlayer.addEventListener("timeupdate", syncScroll);
+        }
+
+        // 依據標記進度來標示已完成的卡片
+        function updateMarkedCards() {
+            document.querySelectorAll(".lyrics-card").forEach((card, index) => {
+                if (index < currentIndex) {
+                    markCardAsCompleted(index);
+                }
+            });
+        }
+
+        // **返回上一個標記**
+        undoMarkTimeBtn.addEventListener("click", function () {
+            if (currentIndex > 0) {
+                currentIndex--; // 倒退一個標記
+                unmarkCard(currentIndex); // 取消標記樣式
+                updateProgress();
+                scrollToCurrentLyric(); // 滾動回上一個標記的卡片
+            } else {
+                alert("沒有標記可以返回！");
+            }
+        });
+
+        updateProgress();
+        updateMarkedCards();
+
+        document.querySelectorAll(".lyrics-card").forEach(card => {
+            const handle = card.querySelector(".drag-handle");
+            card.setAttribute("draggable", "true");
+
+            handle.addEventListener("mousedown", function () {
+                card.classList.add("draggable-enabled");
+            });
+
+            handle.addEventListener("mouseup", function () {
+                card.classList.remove("draggable-enabled");
+            });
+        });
+
+        const lyricsContainer = document.querySelector(".lyrics-container");
+
+        lyricsContainer.addEventListener("dragstart", function (e) {
+            if (e.target.classList.contains("draggable-enabled")) {
+                draggedCard = e.target.closest(".lyrics-card");
+                e.dataTransfer.setData("text/plain", "");
+                draggedCard.classList.add("dragging");
+                e.dataTransfer.effectAllowed = "move";
+            } else {
+                e.preventDefault();
+            }
+        });
+
+        lyricsContainer.addEventListener("dragover", function (e) {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(lyricsContainer, e.clientY);
+            if (afterElement == null) {
+                lyricsContainer.appendChild(draggedCard);
+            } else {
+                lyricsContainer.insertBefore(draggedCard, afterElement);
+            }
+        });
+
+        lyricsContainer.addEventListener("dragend", function () {
+            if (draggedCard) {
+                draggedCard.classList.remove("dragging");
+                draggedCard = null;
+
+                let newOrder = [];
+                document.querySelectorAll(".lyrics-card").forEach(card => {
+                    newOrder.push(parseInt(card.dataset.id));
+                });
+
+                console.log("Sending order:", newOrder);
+
+                let url = "@Url.Action("UpdateOrder", "Media")";
+                fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        songUid: songUid,
+                        newOrder: newOrder
+                    })
+                })
+                .then(response => response.json())
+                .then(data => console.log("Order updated successfully:", data))
+                .catch(error => console.error("Failed to update order:", error));
+            }
+        });
+
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll(".lyrics-card:not(.dragging)")];
+
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        const saveBtn = document.getElementById("saveLyricsBtn");
+
+        saveBtn.addEventListener("click", function () {
+            let songUid = document.getElementById("songUid").value.trim();
+            if (!songUid) {
+                alert("錯誤：songUid 無效！");
+                return;
+            }
+
+            let lyrics = [];
+            document.querySelectorAll(".lyrics-card").forEach(card => {
+                let lyricID = card.dataset.id ? parseInt(card.dataset.id) : null;
+                let timeStamp = card.querySelector('input[name$=".TimeStamp"]')?.value;
+                let japanese = card.querySelector('input[name$=".Japanese"]')?.value;
+                let chinese = card.querySelector('input[name$=".Chinese"]')?.value;
+                let roman = card.querySelector('input[name$=".Roman"]')?.value;
+
+                if (lyricID !== null && timeStamp !== undefined) {
+                    lyrics.push({
+                        LyricID: lyricID,
+                        TimeStamp: parseFloat(timeStamp),
+                        Japanese: japanese || "",
+                        Chinese: chinese || "",
+                        Roman: roman || ""
+                    });
+                }
+            });
+
+            if (lyrics.length === 0) {
+                alert("沒有可存檔的歌詞內容！");
+                return;
+            }
+
+            let url = "@Url.Content("~/Media/EditLyrics")";
+            fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    songUid: songUid,
+                    lyrics: lyrics
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert("歌詞存檔成功！");
+                    window.location.href = data.redirectUrl;
+                }
+            });
+        });
+
+        document.querySelector(".lyrics-container").addEventListener("click", function (event) {
+            let songUid = document.getElementById("songUid").value.trim();
+            if (event.target.classList.contains("delete-btn")) {
+                const lyricId = event.target.dataset.id;
+
+                let url = "@Url.Content("~/Media/DeleteLyric")";
+                if (confirm("確定要刪除這行歌詞嗎？")) {
+                    fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ lyricId: parseInt(lyricId), songUid: songUid })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            event.target.closest(".lyrics-card").remove();
+                            console.log("刪除成功");
+                        } else {
+                            console.error("刪除失敗", data.message);
+                        }
+                    })
+                    .catch(error => console.error("刪除請求失敗：", error));
+                }
+            }
+        });
+    });
+</script>

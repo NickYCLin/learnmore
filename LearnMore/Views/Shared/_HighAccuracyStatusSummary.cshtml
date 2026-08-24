@@ -1,0 +1,38 @@
+@model LearnMore.Models.HighAccuracyStatusSummaryViewModel
+
+@{
+    string? statusLabel = Model.Status switch
+    {
+        "high_accuracy_pending" => "高精度排隊中",
+        "high_accuracy_processing" => "高精度處理中",
+        "translation_pending_codex" => "翻譯待補",
+        "high_accuracy_partial" => "秒數待確認",
+        "high_accuracy_needs_review" => "需要人工校正",
+        "high_accuracy_failed" => "高精度失敗",
+        _ => null
+    };
+
+    string badgeClass = Model.Status switch
+    {
+        "high_accuracy_pending" => "bg-dark text-white border border-dark",
+        "high_accuracy_processing" => "bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+        "translation_pending_codex" => "bg-primary text-white border border-primary",
+        "high_accuracy_partial" => "bg-info-subtle text-info-emphasis border border-info-subtle",
+        "high_accuracy_needs_review" => "bg-warning-subtle text-warning-emphasis border border-warning-subtle",
+        "high_accuracy_failed" => "bg-danger-subtle text-danger-emphasis border border-danger-subtle",
+        _ => "bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
+    };
+}
+
+@if (statusLabel is not null)
+{
+    <div class="@Model.ContainerCssClass" role="status">
+        <div>
+            <span class="badge @badgeClass" title="@Model.BadgeTitle">@statusLabel</span>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(Model.ReasonText))
+        {
+            <small class="@Model.ReasonCssClass">@Model.ReasonText</small>
+        }
+    </div>
+}

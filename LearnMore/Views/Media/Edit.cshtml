@@ -1,0 +1,114 @@
+﻿@model EditSongViewModel
+
+@{
+    ViewData["Title"] = "編輯歌曲";
+}
+
+<div class="lm-page-card">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white text-center">
+                    <h4>編輯歌曲</h4>
+                </div>
+                <div class="card-body">
+                    <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+                    {
+                        Status = Model.Song.HighAccuracyStatus,
+                        ReasonText = Model.Song.HighAccuracyStatusReason,
+                        BadgeTitle = Model.Song.HighAccuracyStatusReason,
+                        ContainerCssClass = "alert alert-light border d-flex flex-column gap-1",
+                        ReasonCssClass = "text-muted"
+                    }' />
+                    <form asp-action="Edit" method="post">
+                        <input type="hidden" asp-for="Song.SongUid" />
+
+                        <div class="mb-3">
+                            <label class="form-label">歌名</label>
+                            <input asp-for="Song.Title" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">原唱歌手</label>
+                            <input asp-for="Song.Artist" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">演唱者</label>
+                            <input asp-for="Song.Performer" class="form-control" />
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">翻譯歌詞的人</label>
+                            <input asp-for="Song.Translator" class="form-control" />
+                        </div>
+
+                        <!-- 協作者清單 -->
+                        <div class="mb-3">
+                            <label class="form-label">協作者 Emails</label>
+                            <ul id="collaboratorsList" class="list-group mb-2">
+                                @foreach (var collaborator in Model.Collaborators)
+                                {
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        @collaborator
+                                        <button type="button" class="btn btn-danger btn-sm remove-collaborator" data-email="@collaborator">移除</button>
+                                    </li>
+                                }
+                            </ul>
+                            <input type="hidden" id="collaboratorsInput" name="Collaborators" value="@string.Join(",", Model.Collaborators)" />
+
+                            <div class="input-group">
+                                <input type="email" id="newCollaboratorEmail" class="form-control" placeholder="輸入 Email 新增協作者">
+                                <button type="button" id="addCollaboratorBtn" class="btn btn-success">新增</button>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-success">存檔</button>
+                            <a asp-action="Manage" class="btn btn-secondary">取消</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const collaboratorsList = document.getElementById("collaboratorsList");
+        const collaboratorsInput = document.getElementById("collaboratorsInput");
+        const newCollaboratorEmail = document.getElementById("newCollaboratorEmail");
+        const addCollaboratorBtn = document.getElementById("addCollaboratorBtn");
+
+        addCollaboratorBtn.addEventListener("click", function () {
+            const email = newCollaboratorEmail.value.trim();
+            if (email && !isEmailInList(email)) {
+                // 新增到清單
+                const listItem = document.createElement("li");
+                listItem.className = "list-group-item d-flex justify-content-between align-items-center";
+                listItem.innerHTML = `${email} <button type="button" class="btn btn-danger btn-sm remove-collaborator" data-email="${email}">移除</button>`;
+                collaboratorsList.appendChild(listItem);
+
+                // 更新隱藏欄位
+                updateHiddenInput();
+
+                // 清空輸入框
+                newCollaboratorEmail.value = "";
+            }
+        });
+
+        // 移除協作者
+        collaboratorsList.addEventListener("click", function (event) {
+            if (event.target.classList.contains("remove-collaborator")) {
+                event.target.closest("li").remove();
+                updateHiddenInput();
+            }
+        });
+
+        function isEmailInList(email) {
+            return [...collaboratorsList.children].some(item => item.textContent.includes(email));
+        }
+
+        function updateHiddenInput() {
+            const emails = [...collaboratorsList.children].map(item => item.textContent.trim().split(" ")[0]);
+            collaboratorsInput.value = emails.join(",");
+        }
+    });
+</script>

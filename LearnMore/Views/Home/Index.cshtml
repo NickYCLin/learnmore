@@ -1,0 +1,484 @@
+﻿@model IEnumerable<LearnMore.Models.Songs>
+
+@{
+    var totalSongs = ViewBag.TotalSongs is int total ? total : Model.Count();
+    ViewData["Title"] = "首頁";
+    ViewData["SearchTitle"] = "唱歌學日文｜日文歌詞・中文翻譯・羅馬拼音同步學習｜ビビ學日語";
+    ViewData["OpenGraphTitle"] = "ビビ學日語｜唱歌學日文・日文歌詞同步學習";
+    ViewData["Description"] = "想用唱歌學日文？ビビ學日語提供 YouTube 同步播放、假名標註、羅馬拼音與繁體中文翻譯，收錄超過 " + totalSongs + " 首日文歌曲，邊聽邊唱學日語。";
+    int rank = 0;
+    bool isRankingMode = ViewBag.Type == "weekly" || ViewBag.Type == "monthly";
+    bool isLoggedIn = !string.IsNullOrEmpty(Context.Session.GetString("UserId"));
+    var performerCollections = ViewBag.PerformerCollections as IEnumerable<LearnMore.Models.PerformerCollectionViewModel> ?? Enumerable.Empty<LearnMore.Models.PerformerCollectionViewModel>();
+    string selectedPerformer = ViewBag.SelectedPerformer as string ?? string.Empty;
+    var publicHomeBadgeStatuses = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "high_accuracy_pending",
+        "high_accuracy_processing"
+    };
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/home.css" asp-append-version="true" />
+}
+<script>
+    const isLoggedIn     = "@(isLoggedIn ? "true" : "false")";
+    const hasGroupId     = "@(ViewBag.GroupId != null ? "true" : "false")";
+    const currentGroupId = "@(ViewBag.GroupId ?? "")";
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const list = document.querySelector('.performer-collection-list');
+        const section = document.querySelector('.performer-collection-section');
+        if (!list || !section) return;
+
+        const prev = section.querySelector('.performer-collection-prev');
+        const next = section.querySelector('.performer-collection-next');
+        const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const originalCards = Array.from(list.querySelectorAll('.performer-collection-card'));
+        let resumeAutoAt = 0;
+        let autoTimer = null;
+        let infiniteSegmentWidth = 0;
+        let isNormalizingInfiniteScroll = false;
+
+        const hasOverflow = () => list.scrollWidth > list.clientWidth + 4;
+        const jumpToScrollLeft = (left) => {
+            list.classList.add('performer-collection-list-jump');
+            list.scrollTo({ left, behavior: 'auto' });
+            window.requestAnimationFrame(() => {
+                list.classList.remove('performer-collection-list-jump');
+            });
+        };
+        const cloneCards = (position) => originalCards.map(card => {
+            const clone = card.cloneNode(true);
+            clone.classList.add('performer-collection-card-clone');
+            clone.classList.add(position === 'before' ? 'performer-collection-card-clone-before' : 'performer-collection-card-clone-after');
+            clone.setAttribute('aria-hidden', 'true');
+            clone.querySelectorAll('a, button, input, select, textarea, [tabindex]').forEach(element => {
+                element.setAttribute('tabindex', '-1');
+            });
+            return clone;
+        });
+
+        const measureInfiniteSegment = () => {
+            const firstOriginal = originalCards[0];
+            const firstAfterClone = list.querySelector('.performer-collection-card-clone-after');
+            if (!firstOriginal || !firstAfterClone) return 0;
+            return Math.max(0, firstAfterClone.offsetLeft - firstOriginal.offsetLeft);
+        };
+
+        const normalizeInfiniteScroll = () => {
+            if (!infiniteSegmentWidth || isNormalizingInfiniteScroll) return;
+            const left = list.scrollLeft;
+            const edgeBuffer = getInfiniteEdgeBuffer();
+            let target = left;
+            if (left <= edgeBuffer) {
+                target = left + infiniteSegmentWidth;
+            } else if (left >= infiniteSegmentWidth * 2) {
+                target = left - infiniteSegmentWidth;
+            }
+            if (target === left) return;
+            isNormalizingInfiniteScroll = true;
+            jumpToScrollLeft(target);
+            window.requestAnimationFrame(() => { isNormalizingInfiniteScroll = false; });
+        };
+
+        const initializeInfiniteLoop = () => {
+            if (originalCards.length < 2 || !hasOverflow()) return;
+            list.prepend(...cloneCards('before'));
+            list.append(...cloneCards('after'));
+            list.classList.add('performer-collection-list-infinite');
+            infiniteSegmentWidth = measureInfiniteSegment();
+            if (infiniteSegmentWidth > 0) {
+                jumpToScrollLeft(infiniteSegmentWidth);
+            }
+        };
+
+        const getStep = () => {
+            const firstCard = originalCards[0] || list.querySelector('.performer-collection-card');
+            if (!firstCard) return Math.max(180, Math.floor(list.clientWidth * 0.75));
+            const styles = window.getComputedStyle(list);
+            const gap = parseFloat(styles.columnGap || styles.gap || '12') || 12;
+            return Math.max(160, firstCard.getBoundingClientRect().width + gap);
+        };
+
+        const getInfiniteEdgeBuffer = () => Math.max(8, Math.min(getStep() * 0.5, list.clientWidth * 0.25));
+
+        const updateNavState = () => {
+            const overflow = hasOverflow();
+            if (prev) prev.disabled = !overflow;
+            if (next) next.disabled = !overflow;
+        };
+
+        const prepareInfiniteScrollForDirection = (direction, step) => {
+            if (!infiniteSegmentWidth) return;
+            const left = list.scrollLeft;
+            const edgeBuffer = getInfiniteEdgeBuffer();
+            if (direction < 0 && left - step <= edgeBuffer) {
+                jumpToScrollLeft(left + infiniteSegmentWidth);
+            } else if (direction > 0 && left + step >= infiniteSegmentWidth * 2) {
+                jumpToScrollLeft(left - infiniteSegmentWidth);
+            }
+        };
+
+        const scrollByStep = (direction) => {
+            if (!hasOverflow()) return;
+            const step = getStep();
+            prepareInfiniteScrollForDirection(direction, step);
+            normalizeInfiniteScroll();
+            list.scrollTo({ left: list.scrollLeft + step * direction, behavior: reduceMotion ? 'auto' : 'smooth' });
+        };
+
+        const pauseAutoForUser = () => {
+            resumeAutoAt = Date.now() + 8000;
+        };
+
+        const handleNavClick = (button, direction) => {
+            if (!button || button.disabled || button.getAttribute('aria-disabled') === 'true' || !hasOverflow()) return;
+            pauseAutoForUser();
+            scrollByStep(direction);
+        };
+
+        prev?.addEventListener('click', () => handleNavClick(prev, -1));
+        next?.addEventListener('click', () => handleNavClick(next, 1));
+        ['pointerdown', 'wheel', 'touchstart', 'keydown'].forEach(eventName => {
+            list.addEventListener(eventName, pauseAutoForUser, { passive: true });
+        });
+        list.addEventListener('scroll', () => window.requestAnimationFrame(() => {
+            normalizeInfiniteScroll();
+            updateNavState();
+        }), { passive: true });
+        window.addEventListener('resize', () => {
+            infiniteSegmentWidth = measureInfiniteSegment();
+            if (infiniteSegmentWidth > 0) normalizeInfiniteScroll();
+            updateNavState();
+        });
+
+        initializeInfiniteLoop();
+        updateNavState();
+        if (!reduceMotion) {
+            autoTimer = window.setInterval(() => {
+                if (document.hidden || Date.now() < resumeAutoAt || !hasOverflow()) return;
+                scrollByStep(1);
+            }, 3500);
+        }
+
+        window.addEventListener('pagehide', () => {
+            if (autoTimer) window.clearInterval(autoTimer);
+        });
+    });
+</script>
+
+<header class="my-4 text-center">
+    <h1 class="mb-2">唱歌學日文：日文歌詞同步學習歌曲清單</h1>
+    <p class="text-muted mb-0">收錄 @totalSongs 首日文歌曲，搭配 YouTube 同步播放、假名標註、羅馬拼音與繁體中文翻譯，邊聽邊唱學日語。</p>
+</header>
+
+<div id="group-buttons-container" class="d-flex flex-wrap justify-content-center gap-3 mb-4" data-aos="fade-up" data-aos-delay="50">
+    <a href="@Url.Action("Index", "Home", new { type = "all" })"
+       class="btn btn-outline-primary px-4 py-2 rounded-pill @(ViewBag.Type == "all" && ViewBag.GroupId == null ? "active" : "")">全部</a>
+    <a href="@Url.Action("Index", "Home", new { type = "weekly" })"
+       class="btn btn-outline-warning px-4 py-2 rounded-pill @(ViewBag.Type == "weekly" ? "active" : "")">周排行 🔥</a>
+    <a href="@Url.Action("Index", "Home", new { type = "monthly" })"
+       class="btn btn-outline-soft-yellow px-4 py-2 rounded-pill @(ViewBag.Type == "monthly" ? "active-yellow" : "")">月排行 🌟</a>
+    <a href="@Url.Action("Index", "Home", new { type = "new" })"
+       class="btn btn-outline-success px-4 py-2 rounded-pill @(ViewBag.Type == "new" ? "active" : "")">本站新上架 🌱</a>
+
+    @if (ViewBag.Groups != null)
+    {
+        foreach (var group in ViewBag.Groups)
+        {
+            <a href="@Url.Action("Index", "Home", new { groupId = group.GroupId })"
+               class="btn btn-purple px-4 py-2 rounded-pill group-btn @(ViewBag.GroupId == group.GroupId ? "active" : "")"
+               data-group-id="@group.GroupId"
+               data-group-name="@group.GroupName"
+               data-group-uid="@group.GroupUid">
+                <span class="group-label">@group.GroupName</span>
+                <span class="group-actions">
+                    <span class="group-action-btn play" role="button" title="播放群組" aria-label="播放群組"><i class="fa-solid fa-play"></i></span>
+                    <span class="group-action-btn delete group-delete-icon" role="button" title="刪除群組" aria-label="刪除群組"><i class="fa-solid fa-trash-can"></i></span>
+                </span>
+            </a>
+        }
+    }
+</div>
+
+@if (ViewBag.Type == "all" && ViewBag.GroupId == null && performerCollections.Any())
+{
+    <section class="performer-collection-section mb-4" aria-labelledby="performer-collection-title">
+        <div class="performer-collection-header">
+            <div>
+                <p class="performer-collection-eyebrow">自動整理</p>
+                <h2 id="performer-collection-title" class="performer-collection-title">演唱者合輯</h2>
+            </div>
+            <div class="performer-collection-actions" aria-label="演唱者合輯滑動控制">
+                @if (!string.IsNullOrWhiteSpace(selectedPerformer))
+                {
+                    <a class="performer-collection-clear" asp-action="Index" asp-controller="Home" asp-route-type="all">顯示全部歌曲</a>
+                }
+                <button type="button" class="performer-collection-nav performer-collection-prev" aria-label="向左滑動演唱者合輯">
+                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                </button>
+                <button type="button" class="performer-collection-nav performer-collection-next" aria-label="向右滑動演唱者合輯">
+                    <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                </button>
+            </div>
+        </div>
+        <div class="performer-collection-list" role="list" aria-label="可左右滑動的演唱者合輯">
+            @foreach (var collection in performerCollections)
+            {
+                bool isSelectedCollection = string.Equals(selectedPerformer, collection.Performer, StringComparison.OrdinalIgnoreCase);
+                <a class="performer-collection-card @(isSelectedCollection ? "active" : "")"
+                   asp-action="PlayPerformer"
+                   asp-controller="GroupPlayer"
+                   asp-route-performer="@collection.Performer"
+                   role="listitem"
+                   aria-current="@(isSelectedCollection ? "true" : null)">
+                    @if (!string.IsNullOrWhiteSpace(collection.ThumbnailUrl))
+                    {
+                        <img class="performer-collection-thumb" src="@collection.ThumbnailUrl" alt="@collection.Performer 合輯縮圖" loading="lazy" decoding="async" />
+                    }
+                    else
+                    {
+                        <span class="performer-collection-thumb fallback"><i class="fa-solid fa-music"></i></span>
+                    }
+                    <span class="performer-collection-meta">
+                        <strong>@collection.Performer</strong>
+                        <span>@collection.SongCount 首歌曲</span>
+                    </span>
+                </a>
+            }
+        </div>
+    </section>
+}
+
+<div class="container">
+    <div class="row row-cols-2 row-cols-sm-2 row-cols-md-4 row-cols-lg-6 g-3">
+        @foreach (var song in Model)
+        {
+            rank++;
+            var videoId = GetYouTubeVideoId(song.YouTubeVideoUrl);
+            var thumbnailUrl = !string.IsNullOrEmpty(videoId)
+            ? $"https://img.youtube.com/vi/{videoId}/mqdefault.jpg"
+            : null;
+            var lyricsHref = Url.Action("Index", "Lyrics", new { songUid = song.SongUid });
+            var imageLoading = rank <= 12 ? "eager" : "lazy";
+            var imageFetchPriority = rank <= 6 ? "high" : "auto";
+
+            <div class="col" data-aos="fade-up" data-aos-delay="100">
+                <div class="card h-100 position-relative card-hover"
+                     data-songuid="@song.SongUid"
+                     data-channel-thumbnail="@song.ChannelThumbnailUrl"
+                     data-video-id="@videoId"
+                     data-title="@song.Title"
+                     data-subtitle="@song.Artist"
+                     data-performer="@song.Performer"
+                     data-lyricshref="@lyricsHref"
+                     data-in-current-group="@((ViewBag.GroupId != null).ToString().ToLower())">
+
+                    @if (isRankingMode)
+                    {
+                        <div class="ranking-badge" data-aos="zoom-in" data-aos-delay="200">#@rank</div>
+                    }
+
+                    @if (ViewBag.Type == "new"
+                                        && !string.IsNullOrWhiteSpace(song.HighAccuracyStatus)
+                                        && publicHomeBadgeStatuses.Contains(song.HighAccuracyStatus ?? string.Empty))
+                    {
+                        <div class="home-processing-badge">
+                            <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
+                            {
+                                Status = song.HighAccuracyStatus,
+                                ReasonText = null,
+                                BadgeTitle = song.HighAccuracyStatusReason,
+                                ContainerCssClass = "d-flex",
+                                ReasonCssClass = "d-none"
+                            }' />
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(thumbnailUrl))
+                    {
+                        <a href="@lyricsHref" class="thumb-link">
+                            <img src="@thumbnailUrl"
+                                 class="card-img-top"
+                                 alt="@($"{song.Artist} - {song.Title}")"
+                                 loading="@imageLoading"
+                                 decoding="async"
+                                 fetchpriority="@imageFetchPriority"
+                                 width="320"
+                                 height="180" />
+                        </a>
+                    }
+                    else
+                    {
+                        <div class="bg-secondary d-flex align-items-center justify-content-center thumb-fallback">
+                            <span class="text-white">無影片</span>
+                        </div>
+                    }
+
+                    <!-- 右上角迷你愛心（常駐；未加入=空心/灰、已加入=實心/紅） -->
+                    <button type="button" class="mini-heart-btn" title="加入群組">
+                        <i class="fa-regular fa-heart"></i>
+                    </button>
+
+                    <a href="@lyricsHref" class="text-decoration-none">
+                        <div class="card-body card-body-compact">
+                            <h5 class="card-title clamp-1 fw-bold mb-2">@song.Title</h5>
+                            <div class="song-meta-stack" aria-label="歌曲資訊">
+                                @if (!string.IsNullOrWhiteSpace(song.Performer))
+                                {
+                                    <p class="song-meta-line song-meta-line-primary card-performer home-song-performer clamp-1 mb-0">
+                                        <span class="song-meta-label">演唱者</span>
+                                        <span class="song-meta-value">@song.Performer</span>
+                                    </p>
+                                }
+                                <p class="song-meta-line card-subtitle clamp-1 mb-0">
+                                    <span class="song-meta-label">原唱</span>
+                                    <span class="song-meta-value">@song.Artist</span>
+                                </p>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@if (ViewBag.ShowHomePagination == true)
+{
+    var currentPage = ViewBag.CurrentPage is int current ? current : 1;
+    var pageSize = ViewBag.PageSize is int size ? size : Model.Count();
+    var totalPages = ViewBag.TotalPages is int pages ? pages : Math.Max(1, (int)Math.Ceiling(totalSongs / (double)Math.Max(1, pageSize)));
+    var startCount = Math.Min(totalSongs, ((currentPage - 1) * pageSize) + 1);
+    var endCount = Math.Min(totalSongs, currentPage * pageSize);
+    var firstPage = Math.Max(1, currentPage - 2);
+    var lastPage = Math.Min(totalPages, firstPage + 4);
+    firstPage = Math.Max(1, lastPage - 4);
+    <nav class="home-pagination" aria-label="歌曲清單分頁">
+        <div class="home-pagination-summary">
+            <span>第 @currentPage / @totalPages 頁</span>
+            <span>第 @startCount - @endCount 首，共 @totalSongs 首</span>
+        </div>
+        <div class="home-pagination-controls" aria-label="頁碼與分頁操作">
+            <a class="home-pagination-link home-pagination-edge @(currentPage == 1 ? "disabled" : "")"
+               asp-action="Index"
+               asp-controller="Home"
+               asp-route-type="@ViewBag.Type"
+               asp-route-page="1"
+               aria-disabled="@(currentPage == 1 ? "true" : null)"
+               tabindex="@(currentPage == 1 ? "-1" : null)">
+                <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
+                <span>第一頁</span>
+            </a>
+            <a class="home-pagination-link home-pagination-edge @(currentPage == 1 ? "disabled" : "")"
+               asp-action="Index"
+               asp-controller="Home"
+               asp-route-type="@ViewBag.Type"
+               asp-route-page="@(Math.Max(1, currentPage - 1))"
+               aria-disabled="@(currentPage == 1 ? "true" : null)"
+               tabindex="@(currentPage == 1 ? "-1" : null)">
+                <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+                <span>上一頁</span>
+            </a>
+
+            <div class="home-pagination-pages" aria-label="可選頁碼">
+                @if (firstPage > 1)
+                {
+                    <a class="home-pagination-number"
+                       asp-action="Index"
+                       asp-controller="Home"
+                       asp-route-type="@ViewBag.Type"
+                       asp-route-page="1">1</a>
+                    @if (firstPage > 2)
+                    {
+                        <span class="home-pagination-ellipsis" aria-hidden="true">...</span>
+                    }
+                }
+
+                @for (int pageNumber = firstPage; pageNumber <= lastPage; pageNumber++)
+                {
+                    if (pageNumber == currentPage)
+                    {
+                        <span class="home-pagination-number active" aria-current="page">@pageNumber</span>
+                    }
+                    else
+                    {
+                        <a class="home-pagination-number"
+                           asp-action="Index"
+                           asp-controller="Home"
+                           asp-route-type="@ViewBag.Type"
+                           asp-route-page="@pageNumber">@pageNumber</a>
+                    }
+                }
+
+                @if (lastPage < totalPages)
+                {
+                    @if (lastPage < totalPages - 1)
+                    {
+                        <span class="home-pagination-ellipsis" aria-hidden="true">...</span>
+                    }
+                    <a class="home-pagination-number"
+                       asp-action="Index"
+                       asp-controller="Home"
+                       asp-route-type="@ViewBag.Type"
+                       asp-route-page="@totalPages">@totalPages</a>
+                }
+            </div>
+
+            <a class="home-pagination-link home-pagination-edge @(currentPage == totalPages ? "disabled" : "")"
+               asp-action="Index"
+               asp-controller="Home"
+               asp-route-type="@ViewBag.Type"
+               asp-route-page="@(Math.Min(totalPages, currentPage + 1))"
+               aria-disabled="@(currentPage == totalPages ? "true" : null)"
+               tabindex="@(currentPage == totalPages ? "-1" : null)">
+                <span>下一頁</span>
+                <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+            </a>
+            <a class="home-pagination-link home-pagination-edge @(currentPage == totalPages ? "disabled" : "")"
+               asp-action="Index"
+               asp-controller="Home"
+               asp-route-type="@ViewBag.Type"
+               asp-route-page="@totalPages"
+               aria-disabled="@(currentPage == totalPages ? "true" : null)"
+               tabindex="@(currentPage == totalPages ? "-1" : null)">
+                <span>最後頁</span>
+                <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
+            </a>
+        </div>
+    </nav>
+}
+
+@functions {
+    private string GetYouTubeVideoId(string url)
+    {
+        if (string.IsNullOrEmpty(url)) return "";
+        try
+        {
+            var uri = new Uri(url);
+            if (uri.Host.Contains("youtu.be")) return uri.AbsolutePath.TrimStart('/');
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            return query["v"] ?? "";
+        }
+        catch { return ""; }
+    }
+}
+
+<script>
+    window.learnMoreHomeConfig = {
+        urls: {
+            groupPlay: '@Url.Action("PlayByQuery", "GroupPlayer")',
+            deleteGroup: '@Url.Action("DeleteGroup", "SongGroup")',
+            homeAll: '@Url.Action("Index", "Home", new { type = "all" })',
+            home: '@Url.Action("Index", "Home")',
+            groupsContainingSong: '@Url.Action("GetGroupsContainingSong", "SongGroup")',
+            createGroup: '@Url.Action("CreateGroup", "SongGroup")',
+            getGroups: '@Url.Action("GetGroups", "SongGroup")',
+            getJoinedUids: '@Url.Action("GetJoinedUids", "SongGroup")',
+            addSongToGroup: '@Url.Action("AddSongToGroup", "SongGroup")',
+            removeSongFromGroup: '@Url.Action("RemoveSongFromGroup", "SongGroup")'
+        }
+    };
+</script>
+<script src="~/js/home.js" asp-append-version="true"></script>

@@ -1,0 +1,155 @@
+﻿@{
+    ViewData["Title"] = "登入";
+    Layout = "_LayoutLogin";
+}
+<div class="login-container">
+    <div class="user-avatar">
+        <span class="material-icons">account_circle</span>
+        <h2>使用者登入</h2>
+    </div>
+    <p class="login-subtitle">使用 Google 帳號快速登入</p>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <div id="g_id_onload"
+         data-client_id="931415269255-lqkhgd5gvm12o7s9gps060iboekcpjp5.apps.googleusercontent.com"
+         data-login_uri="@Url.Action("ValidGoogleLogin", "Login")"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin"
+         data-type="standard"
+         data-size="large"
+         data-theme="outline"
+         data-text="sign_in_with"
+         data-shape="rectangular"
+         data-logo_alignment="left">
+    </div>
+    <div style="margin-top: 20px;">
+        <form asp-controller="Home" asp-action="Index" method="get">
+            <button type="submit" class="btn btn-home">
+                <span>🏠 回首頁</span>
+            </button>
+        </form>
+    </div>
+</div>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+    .login-container {
+        text-align: center;
+        font-family: 'Arial', sans-serif;
+        max-width: 400px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .user-avatar {
+        margin-bottom: 16px;
+    }
+
+    .material-icons {
+        font-size: 76px;
+        color: #6366f1;
+        filter: drop-shadow(0 10px 24px rgba(99, 102, 241, 0.24));
+    }
+
+    .login-subtitle {
+        color: var(--text-tertiary, #888);
+        font-size: 14px;
+        margin-bottom: 24px;
+    }
+
+    .login-container .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 25px;
+        font-size: 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transition: transform 0.2s, box-shadow 0.2s;
+        width: 100%;
+        max-width: 280px;
+        margin: 0 auto;
+    }
+
+    .login-container .btn-google {
+        background: #ffffff;
+        color: #333;
+        border: 1px solid #dadce0;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+        .login-container .btn-google:hover {
+            background: #f8f9fa;
+        }
+
+        .login-container .btn-google:active {
+            background: #e8eaed;
+        }
+
+    .login-container .btn-home {
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 52%, #38bdf8 100%);
+        color: #fff;
+        box-shadow: 0 14px 28px rgba(79, 70, 229, 0.28);
+    }
+
+    .login-container .btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+    }
+
+    .login-container .btn:active {
+        transform: scale(0.95);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .login-container h2 {
+        margin-bottom: 8px;
+        color: var(--text-primary, #333);
+        font-size: 1.5rem;
+    }
+
+    /* Google 登入按鈕容器 */
+    .g_id_signin {
+        display: flex;
+        justify-content: center;
+        margin-bottom: 16px;
+    }
+
+    /* 手機版優化 */
+    @@media (max-width: 480px) {
+        .login-container {
+            padding: 16px;
+        }
+
+        .material-icons {
+            font-size: 64px;
+        }
+
+        .login-container h2 {
+            font-size: 1.25rem;
+        }
+
+        .login-subtitle {
+            font-size: 13px;
+        }
+
+        .login-container .btn {
+            padding: 10px 20px;
+            font-size: 14px;
+        }
+    }
+
+    /* 暗色模式 */
+    .dark-theme .material-icons {
+        color: var(--text-secondary);
+    }
+
+    .dark-theme .login-container h2 {
+        color: var(--text-primary);
+    }
+
+    .dark-theme .login-subtitle {
+        color: var(--text-tertiary);
+    }
+</style>

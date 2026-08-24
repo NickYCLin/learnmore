@@ -1,0 +1,312 @@
+﻿@model IEnumerable<LearnMore.Models.TranscriptionSegment>
+
+@{
+    ViewData["Title"] = "歌曲召喚";
+}
+
+<div class="lm-page-card">
+    <h1 class="lm-page-title text-center mb-4">@ViewData["Title"]</h1>
+
+    <div>
+        <form method="post" id="transcribeForm">
+            <div class="mb-3">
+                <label for="youtubeUrl" class="form-label">YouTube 連結：</label>
+                <input type="text" id="youtubeUrl" name="youtubeUrl" required class="form-control" />
+                <div class="form-text text-muted">自動轉換僅支援 6 分鐘內歌曲；超過 6 分鐘請改用自填歌詞／歌曲召喚流程手動上傳。</div>
+            </div>
+            <div class="mb-3">
+                <label for="title" class="form-label">歌名：</label>
+                <input type="text" id="title" name="title" required class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="chineseTitleAlias" class="form-label">中文歌名（選填）：</label>
+                <input type="text" id="chineseTitleAlias" name="chineseTitleAlias" class="form-control" placeholder="可填繁中譯名或常用搜尋別名" />
+                <div class="form-text text-muted">只會寫入搜尋別名，不會覆蓋原始歌名；未填時不會呼叫 OpenAI API。</div>
+            </div>
+            <div class="mb-3">
+                <label for="artist" class="form-label">原唱歌手：</label>
+                <input type="text" id="artist" name="artist" required class="form-control" />
+            </div>
+            <div class="mb-3">
+                <label for="performer" class="form-label">演唱者：</label>
+                <input type="text" id="performer" name="performer" class="form-control" />
+            </div>
+            <button type="submit" class="btn btn-primary w-100">我已放好供品</button>
+        </form>
+    </div>
+</div>
+
+<div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex align-items-center justify-content-center text-white fw-bold fs-4 d-none">
+    <div class="bg-secondary p-3 rounded text-center">
+        <div>✨ 魔法施展中，請稍候...</div>
+        <p id="progress-msg" class="mt-2 mb-0 fs-6 fw-normal text-light"></p>
+    </div>
+</div>
+<div id="loading_update" class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex align-items-center justify-content-center text-white fw-bold fs-4 d-none">
+    <div class="bg-secondary p-3 rounded">生成羅馬拼音並召喚中，請稍候...</div>
+</div>
+
+<div id="result" class="lm-page-card lm-page-card-wide">
+    <h2 class="lm-page-section-title mb-3">魔法展示結果</h2>
+    <div class="table-responsive">
+        <table class="table table-bordered" style="background-color: transparent !important;">
+            <thead>
+                <tr>
+                    <th>開始秒數</th>
+                    <th>日文歌詞</th>
+                    <th>中文歌詞</th>
+                </tr>
+            </thead>
+            <tbody id="transcriptionTable">
+                <tr>
+                    <td colspan="3" class="text-center">尚無辨識結果</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <button id="addRow" class="btn btn-primary w-100">新增欄位</button>
+    <button id="submitChanges" class="btn btn-success w-100">召喚</button>
+</div>
+
+@section Scripts {
+    <script>
+        document.getElementById("addRow").addEventListener("click", () => {
+            const tableBody = document.getElementById("transcriptionTable");
+
+            // 建立新的列 (tr)
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><input type="number" step="0.1" class="form-control" /></td>
+                <td><input type="text" class="form-control" /></td>
+                <td><input type="text" class="form-control" /></td>
+                <td><button type="button" class="btn btn-danger btn-sm deleteRow">刪除</button></td>
+            `;
+
+            tableBody.appendChild(row);
+
+            // 監聽刪除按鈕事件
+            row.querySelector(".deleteRow").addEventListener("click", () => {
+                row.remove();
+            });
+        });
+
+        // 將 segment 資料填入表格列
+        function fillTable(segments) {
+            const tableBody = document.getElementById("transcriptionTable");
+            tableBody.innerHTML = '';
+
+            if (!Array.isArray(segments) || segments.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="3" class="text-center">尚無辨識結果</td></tr>';
+                return;
+            }
+
+            segments.forEach((segment, idx) => {
+                const row = document.createElement('tr');
+                row.dataset.segmentId = idx;
+                row.innerHTML = `
+                    <td><input type="number" step="0.1" value="${(segment.start ?? segment.timeStamp ?? 0).toFixed(1)}" class="form-control" /></td>
+                    <td><input type="text" value="${(segment.text || segment.japanese || '').replace(/"/g, '&quot;')}" class="form-control" /></td>
+                    <td><input type="text" value="${(segment.chinese || '翻譯中...').replace(/"/g, '&quot;')}" class="form-control" data-chinese-cell /></td>
+                    <td><button type="button" class="btn btn-danger btn-sm deleteRow">刪除</button></td>
+                `;
+                tableBody.appendChild(row);
+                row.querySelector(".deleteRow").addEventListener("click", () => row.remove());
+            });
+        }
+
+        // 用 translations 事件更新表格中文欄位
+        function applyTranslations(updates) {
+            if (!Array.isArray(updates)) return;
+            const tableBody = document.getElementById("transcriptionTable");
+            updates.forEach(update => {
+                const row = tableBody.querySelector(`tr[data-segment-id="${update.id}"]`);
+                if (row) {
+                    const chineseInput = row.querySelector('[data-chinese-cell]');
+                    if (chineseInput) chineseInput.value = update.chinese || '';
+                }
+            });
+        }
+
+        async function readFriendlyErrorMessage(response, fallbackMessage) {
+            const contentType = response.headers.get('content-type') || '';
+            const rawText = await response.text();
+            if (contentType.includes('application/json')) {
+                try {
+                    const json = JSON.parse(rawText);
+                    return json.message || json.error || fallbackMessage;
+                } catch {
+                    return fallbackMessage;
+                }
+            }
+
+            if (contentType.includes('text/html') || rawText.trimStart().startsWith('<!DOCTYPE') || rawText.trimStart().startsWith('<html')) {
+                return `${fallbackMessage}（伺服器回傳錯誤頁，請稍後再試或通知管理員）`;
+            }
+
+            const normalized = rawText.replace(/\s+/g, ' ').trim();
+            return normalized ? `${fallbackMessage}: ${normalized.slice(0, 300)}` : fallbackMessage;
+        }
+
+        document.getElementById("transcribeForm").addEventListener("submit", async (event) => {
+            event.preventDefault();
+
+            const loadingEl = document.getElementById("loading");
+            const progressMsg = document.getElementById("progress-msg");
+            loadingEl.classList.remove("d-none");
+            progressMsg.textContent = '';
+
+            const youtubeUrl = document.getElementById("youtubeUrl").value;
+            const title = document.getElementById("title").value;
+            const chineseTitleAlias = document.getElementById("chineseTitleAlias").value;
+            const artist = document.getElementById("artist").value;
+            const performer = document.getElementById("performer").value;
+            const apiUrl = "@Url.Action("WebTranscribe", "Media")";
+
+            let buffer = '';
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ YouTubeUrl: youtubeUrl, Title: title, ChineseTitleAlias: chineseTitleAlias, Artist: artist, Performer: performer, Language: 'ja' })
+                });
+
+                if (!response.ok) {
+                    throw new Error(await readFriendlyErrorMessage(response, '辨識失敗'));
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // 解析 SSE：以 \n\n 分隔事件
+                    const events = buffer.split('\n\n');
+                    // 最後一個可能不完整，留在 buffer
+                    buffer = events.pop();
+
+                    for (const rawEvent of events) {
+                        if (!rawEvent.trim()) continue;
+
+                        const lines = rawEvent.split('\n');
+                        let eventName = 'message';
+                        let dataStr = '';
+
+                        for (const line of lines) {
+                            if (line.startsWith('event: ')) {
+                                eventName = line.slice(7).trim();
+                            } else if (line.startsWith('data: ')) {
+                                dataStr = line.slice(6).trim();
+                            }
+                        }
+
+                        if (!dataStr) continue;
+
+                        let data;
+                        try { data = JSON.parse(dataStr); }
+                        catch { continue; }
+
+                        if (eventName === 'progress' && data.message) {
+                            progressMsg.textContent = data.message;
+                        } else if (eventName === 'segments') {
+                            fillTable(data);
+                        } else if (eventName === 'translations') {
+                            applyTranslations(data);
+                        } else if (eventName === 'done') {
+                            loadingEl.classList.add("d-none");
+                            document.getElementById("submitChanges").disabled = true;
+                            document.getElementById("submitChanges").textContent = "已建立歌曲";
+                            if (data.redirectUrl) {
+                                window.location.href = data.redirectUrl;
+                                return;
+                            }
+                        } else if (eventName === 'error') {
+                            throw new Error(data.message || '發生錯誤');
+                        }
+                    }
+                }
+
+                // 確保 loading 已隱藏
+                loadingEl.classList.add("d-none");
+
+            } catch (error) {
+                console.error("錯誤發生:", error);
+                alert(error.message);
+                loadingEl.classList.add("d-none");
+            }
+        });
+
+        document.getElementById("submitChanges").addEventListener("click", async (event) => {
+            event.preventDefault();
+            document.getElementById("loading_update").classList.remove("d-none");
+            const youtubeUrl = document.getElementById("youtubeUrl").value;
+            const title = document.getElementById("title").value;
+            const chineseTitleAlias = document.getElementById("chineseTitleAlias").value;
+            const artist = document.getElementById("artist").value;
+            let performer = document.getElementById("performer").value;
+
+            performer = performer === "" ? null : performer;
+
+            const rows = document.querySelectorAll("#transcriptionTable tr");
+            const updatedSegments = [];
+
+            rows.forEach(row => {
+                const inputs = row.querySelectorAll("td input"); // 取得 row 內的所有 input 欄位
+                if (inputs.length === 3) { // 確保有足夠的欄位
+                    const start = inputs[0].value || "0";
+                    const text = inputs[1].value || "";
+                    const chinese = inputs[2].value || "";
+
+                    updatedSegments.push({
+                        start: parseFloat(start),
+                        text: text,
+                        chinese: chinese
+                    });
+                }
+            });
+
+            const apiUrl = "@Url.Action("UpdateTranscription", "Media")";
+
+            const payload = {
+                songData: {
+                    youtubeUrl: youtubeUrl,
+                    title: title,
+                    chineseTitleAlias: chineseTitleAlias,
+                    artist: artist,
+                    performer: performer
+                },
+                segments: updatedSegments
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error(await readFriendlyErrorMessage(response, '新增失敗'));
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    alert("新增成功！");
+                    window.location.href = result.redirectUrl; // 導向 Manage 頁面
+                } else {
+                    alert("新增失敗");
+                }
+            } catch (error) {
+                console.error("錯誤發生:", error);
+                alert(error.message);
+            } finally {
+                document.getElementById("loading_update").classList.add("d-none");
+            }
+        });
+    </script>
+}

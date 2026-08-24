@@ -1,0 +1,72 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem var(--bg-primary), 0 0 0 0.25rem rgba(99,102,241,0.25);
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+  overflow-x: clip;
+}
+
+img,
+iframe,
+video,
+svg {
+  max-width: 100%;
+}
+
+.table-responsive {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 640px) {
+  body {
+    margin-bottom: 32px;
+  }
+
+  .container,
+  .container-fluid {
+    max-width: 100%;
+  }
+
+  .card {
+    min-width: 0;
+  }
+
+  .card-body {
+    padding: 1rem;
+  }
+
+  input,
+  select,
+  textarea,
+  .form-control,
+  .form-select {
+    font-size: 16px;
+  }
+
+  .btn,
+  button[type="submit"],
+  button[type="button"] {
+    min-height: 44px;
+  }
+
+  .btn-group,
+  .d-flex.flex-wrap {
+    max-width: 100%;
+  }
+}

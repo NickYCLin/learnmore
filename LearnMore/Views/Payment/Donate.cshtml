@@ -1,0 +1,182 @@
+﻿@{
+    ViewData["Title"] = "贊助本站";
+}
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+    .donate-container {
+        width: min(100%, 600px);
+        margin: 40px auto;
+        padding: 0 16px;
+        text-align: center;
+    }
+    
+    .donate-hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 20px;
+        padding: 40px 28px;
+        color: white;
+        margin-bottom: 32px;
+    }
+    
+    .donate-hero h1 {
+        font-size: 1.8rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+    }
+    
+    .donate-hero p {
+        font-size: 1.05rem;
+        line-height: 1.9;
+        opacity: 0.95;
+    }
+    
+    .qr-section {
+        background: var(--bg-secondary, #f8fafc);
+        border-radius: 20px;
+        padding: 32px 24px;
+        border: 1px solid var(--border-color, #e2e8f0);
+    }
+    
+    .dark-theme .qr-section {
+        background: #2d3748;
+        border-color: #4a5568;
+    }
+    
+    .qr-code {
+        width: 180px;
+        height: 180px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        transition: transform 0.3s ease;
+    }
+    
+    .qr-code:hover {
+        transform: scale(1.05);
+    }
+    
+    .donate-btn {
+        display: inline-block;
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: white;
+        padding: 14px 40px;
+        border-radius: 50px;
+        font-size: 1.1rem;
+        font-weight: 600;
+        text-decoration: none;
+        box-shadow: 0 4px 16px rgba(16, 185, 129, 0.35);
+        transition: all 0.3s ease;
+    }
+    
+    .donate-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(16, 185, 129, 0.45);
+        color: white;
+    }
+    
+    .payment-methods {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        margin-top: 20px;
+    }
+    
+    .payment-badge {
+        background: var(--bg-primary, white);
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        color: var(--text-secondary, #64748b);
+        box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    
+    .dark-theme .payment-badge {
+        background: #4a5568;
+        color: #e2e8f0;
+    }
+
+    .thank-note {
+        margin-top: 28px;
+        font-size: 0.95rem;
+        color: var(--text-tertiary, #94a3b8);
+    }
+
+    .donate-hero {
+        overflow-wrap: anywhere;
+    }
+
+    .donate-btn {
+        width: min(100%, 320px);
+        min-height: 44px;
+    }
+
+    .payment-methods {
+        gap: 8px;
+    }
+
+    /* 手機版 */
+    @@media (max-width: 480px) {
+        .donate-hero {
+            padding: 32px 20px;
+        }
+        
+        .donate-hero h1 {
+            font-size: 1.5rem;
+        }
+        
+        .donate-hero p {
+            font-size: 0.95rem;
+        }
+        
+        .qr-section {
+            padding: 24px 16px;
+        }
+        
+        .qr-code {
+            width: 150px;
+            height: 150px;
+        }
+        
+        .donate-btn {
+            padding: 12px 32px;
+            font-size: 1rem;
+        }
+    }
+</style>
+
+<div class="donate-container">
+    <div class="donate-hero">
+        <h1>🌸 贊助「ビビ學日語」</h1>
+        <p>
+            因為喜歡日文，也喜歡聽日文歌，<br>
+            所以用熱情做了這個網站。<br><br>
+            如果你也喜歡，歡迎贊助支持 ❤️
+        </p>
+    </div>
+    
+    <div class="qr-section">
+        <a href="https://p.ecpay.com.tw/B1F465C" target="_blank">
+            <img src="https://payment.ecpay.com.tw/Upload/QRCode/202502/QRCode_fe529ce0-2132-4d82-ae29-906bbd54b630.png"
+                 class="qr-code mx-auto" alt="掃描 QR Code 贊助">
+        </a>
+        
+        <p style="margin-top: 16px; font-size: 0.9rem; color: var(--text-tertiary, #94a3b8);">
+            掃描 QR Code 或點擊下方按鈕
+        </p>
+        
+        <div style="margin-top: 20px;">
+            <a href="https://p.ecpay.com.tw/B1F465C" target="_blank" class="donate-btn">
+                前往贊助
+            </a>
+        </div>
+        
+        <div class="payment-methods">
+            <span class="payment-badge">💳 信用卡</span>
+            <span class="payment-badge">🏧 ATM</span>
+            <span class="payment-badge">🏪 超商</span>
+        </div>
+        
+        <p class="thank-note">感謝你的支持 🙏</p>
+    </div>
+</div>

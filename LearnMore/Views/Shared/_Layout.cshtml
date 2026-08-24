@@ -1,0 +1,99 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - ビビ學日語｜日文歌詞同步學習平台</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="@(ViewData["Description"] ?? "免費日語歌詞學習平台！提供 YouTube 同步播放、假名標註（振り仮名）、羅馬拼音、繁體中文翻譯。邊聽邊學，輕鬆記住日文歌詞，適合日語初學者到進階學習者。")" />
+    <meta name="keywords" content="日文歌詞,日語學習,羅馬拼音,假名標註,中文翻譯,唱歌學日語,JPOP,日本歌曲,振り仮名,歌詞同步,日文學習網站" />
+    <meta name="author" content="ビビ學日語" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://magicplus-design.serveirc.com/LearnMore" />
+    
+    <!-- Open Graph (Facebook, LINE, Discord 分享預覽) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="@ViewData["Title"] - ビビ學日語｜日文歌詞同步學習" />
+    <meta property="og:description" content="免費日語歌詞學習平台！YouTube 同步播放 + 假名標註 + 羅馬拼音 + 中文翻譯，邊聽邊學日文歌！" />
+    <meta property="og:url" content="https://magicplus-design.serveirc.com/LearnMore" />
+    <meta property="og:site_name" content="ビビ學日語" />
+    <meta property="og:locale" content="zh_TW" />
+    
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="@ViewData["Title"] - ビビ學日語" />
+    <meta name="twitter:description" content="免費日語歌詞學習平台！YouTube 同步播放 + 假名標註 + 中文翻譯" />
+    
+    <!-- 結構化資料 (Schema.org) -->
+    <script type="application/ld+json">
+    {
+        "@@context": "https://schema.org",
+        "@@type": "WebSite",
+        "name": "ビビ學日語",
+        "alternateName": ["Bibi Learn Japanese", "日文歌詞學習平台"],
+        "url": "https://magicplus-design.serveirc.com/LearnMore",
+        "description": "免費日語歌詞學習平台，提供 YouTube 同步播放、假名標註、羅馬拼音、繁體中文翻譯",
+        "inLanguage": ["zh-TW", "ja"],
+        "potentialAction": {
+            "@@type": "SearchAction",
+            "target": "https://magicplus-design.serveirc.com/LearnMore/Home/Index?search={search_term_string}",
+            "query-input": "required name=search_term_string"
+        }
+    }
+    </script>
+    <script type="application/ld+json">
+    {
+        "@@context": "https://schema.org",
+        "@@type": "EducationalOrganization",
+        "name": "ビビ學日語",
+        "url": "https://magicplus-design.serveirc.com/LearnMore",
+        "description": "透過日文歌曲學習日語的免費線上平台",
+        "areaServed": "TW",
+        "availableLanguage": ["zh-TW", "ja"]
+    }
+    </script>
+    
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/LearnMore.styles.css" asp-append-version="true" />
+</head>
+<body>
+    <header>
+        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
+            <div class="container-fluid">
+                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">ビビ學日語</a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                        aria-expanded="false" aria-label="Toggle navigation">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                    <ul class="navbar-nav flex-grow-1">
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Home</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link text-dark" asp-area="" asp-controller="User" asp-action="About">本站說明</a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+    </header>
+    <div class="container">
+        <main role="main" class="pb-3">
+            @RenderBody()
+        </main>
+    </div>
+
+    <footer class="border-top footer text-muted">
+        <div class="container">
+            &copy; 2025 - ビビ學日語 - <a asp-area="" asp-controller="User" asp-action="About">本站說明</a>
+        </div>
+    </footer>
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

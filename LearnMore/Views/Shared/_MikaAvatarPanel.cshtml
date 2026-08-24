@@ -1,0 +1,41 @@
+@{
+    var avatarBaseUrl = "https://ycspace.myvnc.com/mika-avatar";
+}
+
+<aside class="mika-avatar-panel"
+       data-mika-avatar-panel
+       data-avatar-base-url="@avatarBaseUrl"
+       data-avatar-image-url="@($"{avatarBaseUrl}/avatars/mao.png")"
+       data-avatar-ws-url="wss://ycspace.myvnc.com/mika-avatar/client-ws"
+       data-avatar-framing="lyrics-rail"
+       data-avatar-id="mao_pro"
+       data-avatar-runtime="live2d"
+       aria-label="Mika">
+    <div class="mika-avatar-stage">
+        <iframe class="mika-avatar-live2d"
+                src="about:blank"
+                title="Mika Live2D"
+                loading="eager"
+                data-mika-avatar-live2d></iframe>
+        <div class="mika-avatar-switcher" data-mika-avatar-switcher aria-label="選擇 Mika 角色">
+            <button type="button" data-mika-avatar-choice="mao_pro">2D</button>
+        </div>
+        <img class="mika-avatar-image mika-avatar-fallback"
+             src="@($"{avatarBaseUrl}/avatars/mao.png")"
+             alt="Mika"
+             loading="lazy"
+             onerror="this.style.display='none';" />
+        <span class="mika-avatar-status" data-mika-avatar-status aria-label="連線狀態"></span>
+    </div>
+    <div class="mika-avatar-console">
+        <div class="mika-avatar-header">
+            <strong>Mika</strong>
+            <button type="button" class="mika-avatar-connect" data-mika-avatar-connect>連線</button>
+        </div>
+        <div class="mika-avatar-message" data-mika-avatar-message>待機中</div>
+        <form class="mika-avatar-form" data-mika-avatar-form>
+            <input type="text" data-mika-avatar-input maxlength="160" placeholder="問 Mika..." autocomplete="off" />
+            <button type="submit">送出</button>
+        </form>
+    </div>
+</aside>

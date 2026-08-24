@@ -1,0 +1,77 @@
+﻿@{
+    ViewData["Title"] = "本站說明";
+}
+
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+
+
+@{
+    ViewData["Title"] = "本站說明";
+}
+
+<div class="lm-page-card">
+    <h1 class="lm-page-title">@ViewData["Title"]</h1>
+
+    <p class="mt-4 lm-page-text">
+        歡迎來到本網站！我們致力於為所有日語學習者提供一個輕鬆、有趣的學習環境，特別是透過歌曲來學習日文。
+        我們相信音樂不僅能讓學習變得更生動，也能幫助使用者更自然地掌握發音、語法與單字。
+    </p>
+
+    <h2 class="lm-page-section-title">特色與功能</h2>
+    <ul class="list-disc list-inside mt-2 lm-page-text space-y-2">
+        <li><strong>唱歌學日文：</strong> 透過各種日文歌曲，輕鬆培養聽力與語感。</li>
+        <li><strong>免費使用：</strong> 本網站所有內容皆可免費使用，無需任何費用或訂閱。</li>
+        <li><strong>歌詞輔助：</strong> 提供日文歌詞對照，並標示重點單字及語法解析。</li>
+        <li><strong>發音與語調學習：</strong> 配合音樂旋律，幫助掌握正確的日語發音與語調。</li>
+        <li><strong>詞彙與文法解析：</strong> 針對每首歌曲提供相關單字、語法講解，讓學習更有系統。</li>
+        <li><strong>日文注音與羅馬拼音：</strong> 除了提供日文注音功能外，也提供羅馬拼音輔助功能。</li>
+        <li><strong>自行上傳歌曲：</strong> 登入後可自行上傳喜歡的日文歌曲，打造個人專屬的學習內容。</li>
+        <li><strong>協作編輯歌詞：</strong> 自行上傳的歌曲可以邀請其他使用者共同編輯歌詞內容，只需輸入對方的 Google 電子信箱即可協作。</li>
+        <li><strong>許願留言板：</strong> 使用者可在留言板上提供想要學習的日文歌曲，我們將參考大家的建議陸續新增歌曲內容。</li>
+        <li><strong>互動學習：</strong> 未來將陸續增加互動功能，如測驗、小遊戲等，幫助使用者檢視學習成果。</li>
+    </ul>
+
+    <h2 class="lm-page-section-title">適合對象</h2>
+    <ul class="list-disc list-inside mt-2 lm-page-text space-y-2">
+        <li>初學者：透過歌曲培養對日語的興趣，輕鬆入門。</li>
+        <li>進階學習者：深入學習歌詞內的語法與單字，提高日語理解力。</li>
+        <li>日語愛好者：享受日語歌曲的同時提升語言能力。</li>
+    </ul>
+
+    <h2 class="lm-page-section-title">Mika 角色與語音來源</h2>
+    <p class="mt-2 lm-page-text">
+        本站歌詞頁的 Mika 角色功能使用 Live2D Cubism Sample Data「Niziiro Mao (PRO Version)」作為 Live2D 角色模型，
+        並依據 Live2D 官方「Free Material License Agreement」與「Terms of Use for Live2D Cubism Sample Data」使用。
+        模型插畫與建模：Live2D Inc.
+    </p>
+    <p class="mt-2 lm-page-text text-sm break-words">
+        This content uses sample data owned and copyrighted by Live2D Inc. The sample data are utilized in accordance with terms and conditions set by Live2D Inc. This content itself is created at the author’s sole discretion.
+    </p>
+    <ul class="list-disc list-inside mt-2 lm-page-text space-y-2">
+        <li>
+            Live2D Sample Data：
+            <a class="text-blue-600 hover:underline" href="https://www.live2d.com/en/learn/sample/" target="_blank" rel="noopener noreferrer">官方範例資料頁</a>、
+            <a class="text-blue-600 hover:underline" href="https://www.live2d.com/en/learn/sample/model-terms/" target="_blank" rel="noopener noreferrer">範例模型使用條款</a>
+        </li>
+        <li>
+            Mika 唸歌詞使用 AivisSpeech Engine 進行語音合成，語音模型標示：AivisSpeech: まお。
+            模型來源：
+            <a class="text-blue-600 hover:underline" href="https://hub.aivis-project.com/aivm-models/a59cb814-0083-4369-8542-f51a29e72af7" target="_blank" rel="noopener noreferrer">AivisHub まお</a>
+        </li>
+        <li>
+            Mika 服務開發參考：
+            <a class="text-blue-600 hover:underline" href="https://github.com/Open-LLM-VTuber/Open-LLM-VTuber" target="_blank" rel="noopener noreferrer">Open-LLM-VTuber</a>
+        </li>
+    </ul>
+
+    <h2 class="lm-page-section-title">免責聲明</h2>
+    <p class="mt-2 lm-page-text">
+        本網站的內容僅供學習與研究用途，所有歌曲版權歸原作者或相關機構所有。
+        如果您是版權擁有者，對本站內容有任何疑問，請與我們聯繫。
+    </p>
+
+    <p class="mt-4 lm-page-text">
+        我們希望這個網站能夠幫助更多人輕鬆學習日文，享受語言與音樂的樂趣！
+        如果您有任何建議或想法，歡迎與我們聯絡，一起讓學習變得更有趣、更有效！
+    </p>
+</div>
