@@ -1,46 +1,93 @@
+<p align="center">
+  <img src="LearnMore/wwwroot/favicon-192.png" width="96" height="96" alt="LearnMore 圖示">
+</p>
+
 # LearnMore
 
-LearnMore 是一個以日文歌曲為核心的學習網站。它把歌詞時間軸、日文注音、羅馬拼音、繁體中文翻譯與跟唱模式放在同一個頁面，也整合了字幕、LRC 與語音辨識來源，方便整理不同品質的歌曲資料。
+以日文歌曲練聽力與跟唱，把同步歌詞、漢字注音（Ruby／Furigana）、羅馬拼音、繁體中文翻譯、卡拉 OK 與語音辨識整理在同一個網站。
 
-線上版本：[https://magicplus-design.serveirc.com/LearnMore](https://magicplus-design.serveirc.com/LearnMore)
+LearnMore is an ASP.NET Core Japanese song learning web app with synchronized lyrics, furigana, romaji, Traditional Chinese translations, karaoke, and Whisper-based speech-to-text.
 
-## 目前功能
+[線上使用 LearnMore](https://magicplus-design.serveirc.com/LearnMore) · [閱讀程式架構](docs/ARCHITECTURE.md) · [開始本機開發](#本機開發)
 
-- 依播放時間同步顯示日文、中文、Ruby 注音與 Roman。
-- 從 YouTube 字幕、LRCLIB、NetEase、TypingTube 與 Whisper 整理歌詞。
-- 使用 MeCab、Kuroshiro 與專案內的修正規則產生日文讀音。
-- 提供歌曲召喚、人工編修、審核佇列與高精度對齊流程。
-- 支援卡拉 OK 模式、音軌分離、歌曲群組、個人收藏與 Mika 角色互動。
-- 管理歌曲、演出者、留言、收藏與使用者設定。
+## 這個專案在做什麼
+
+LearnMore 不只是歌詞播放器，也包含從歌曲資料建立、字幕與歌詞來源整合、語音辨識、日文讀音產生，到人工校正與審核的完整流程。
+
+- 依 YouTube 播放時間同步顯示日文、中文、Ruby 注音與 Roman。
+- 提供卡拉 OK、逐句練習、歌曲群組、個人收藏與行動版播放介面。
+- 整合 YouTube 字幕、LRCLIB、NetEase、TypingTube 與 Whisper 歌詞來源。
+- 使用 MeCab、Kuroshiro、Kuromoji 與專案修正規則產生日文讀音。
+- 支援歌曲召喚、歌詞編修、審核佇列與高精度時間軸對齊。
+- 透過 FFmpeg、yt-dlp 與 Demucs 處理音訊下載及人聲／伴奏分離。
+- 支援 Google 登入、歌曲管理、願望清單、留言、收藏與使用者設定。
+
+## 核心資料流程
+
+```mermaid
+flowchart LR
+    Y[YouTube 網址] --> M[Metadata / 字幕]
+    L[LRCLIB / NetEase / TypingTube] --> P[歌詞整理]
+    Y --> A[yt-dlp / FFmpeg]
+    A --> W[Whisper / WhisperX]
+    W --> P
+    M --> P
+    P --> J[MeCab / Kuroshiro / Ruby 修正]
+    J --> R[人工編修與審核]
+    R --> D[(SQL Server)]
+    D --> V[Razor 同步歌詞播放器]
+```
 
 ## 技術組成
 
-- ASP.NET Core 8 MVC、Razor Views
-- SQL Server
-- xUnit
-- OpenAI Whisper、faster-whisper、WhisperX
-- MeCab、Kuroshiro、Kuromoji
-- FFmpeg、yt-dlp、Demucs
-- Playwright
+| 範圍 | 技術 |
+| --- | --- |
+| Web | .NET 8、ASP.NET Core MVC、Razor Views、JavaScript、Bootstrap |
+| 資料 | SQL Server、ADO.NET |
+| 日文處理 | MeCab、Kuroshiro、Kuromoji |
+| 語音與音訊 | OpenAI Whisper、faster-whisper、WhisperX、FFmpeg、yt-dlp、Demucs |
+| 外部歌詞來源 | YouTube 字幕、LRCLIB、NetEase、TypingTube |
+| 驗證 | xUnit、Playwright、服務與畫面契約測試 |
+
+## 從哪裡開始看程式碼
+
+| 想了解的內容 | 建議入口 |
+| --- | --- |
+| 啟動、DI、Middleware、背景服務 | [`LearnMore/Program.cs`](LearnMore/Program.cs) |
+| 首頁、搜尋與歌曲清單 | [`LearnMore/Controllers/HomeController.cs`](LearnMore/Controllers/HomeController.cs) |
+| 同步歌詞與練習模式 | [`LearnMore/Controllers/LyricsController.cs`](LearnMore/Controllers/LyricsController.cs) |
+| 上傳、編修、審核與轉錄流程 | [`LearnMore/Controllers/MediaController.cs`](LearnMore/Controllers/MediaController.cs) |
+| Whisper 工作流程 | [`LearnMore/Services/WhisperTranscribeWorkflowService.cs`](LearnMore/Services/WhisperTranscribeWorkflowService.cs) |
+| 日文 Ruby 產生與清理 | [`LearnMore/Services/JapaneseRubyGeneratorService.cs`](LearnMore/Services/JapaneseRubyGeneratorService.cs) |
+| 音軌分離背景工作 | [`LearnMore/Services/AudioStemProcessingHostedService.cs`](LearnMore/Services/AudioStemProcessingHostedService.cs) |
+| 測試案例 | [`LearnMore.Tests`](LearnMore.Tests) |
+
+更完整的模組、資料流與修改入口整理在 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
 ## 專案結構
 
 ```text
-LearnMore/          Web 專案、Controller、Service、View 與靜態資源
-LearnMore.Tests/    核心流程與畫面行為測試
-LearnMore/Scripts/  語音辨識與高精度對齊輔助程式
+LearnMore/
+├─ Controllers/       MVC 頁面與 API 入口
+├─ Services/          歌詞、轉錄、日文處理與背景工作
+├─ Models/            頁面與流程資料模型
+├─ Views/             Razor Views
+├─ Scripts/           Whisper / WhisperX 輔助程式
+└─ wwwroot/           JavaScript、CSS、圖示與前端套件
+LearnMore.Tests/      xUnit 與畫面契約測試
+docs/                 架構與程式碼導覽
 ```
 
-## 開發環境
+## 本機開發
 
-基本需求：
+### 需求
 
 - .NET 8 SDK
 - SQL Server
 - Node.js 20 以上
 - FFmpeg 與 yt-dlp
 
-若要使用本機高精度辨識或音軌分離，還需要 Python、faster-whisper、WhisperX 或 Demucs。這些功能可以先保持關閉，不影響閱讀程式碼與執行一般測試。
+本機高精度辨識或音軌分離另需 Python、faster-whisper、WhisperX 或 Demucs；不使用這些功能時可以先不設定。
 
 ### 1. 還原前端套件
 
@@ -54,7 +101,7 @@ npm ci --prefix LearnMore/wwwroot/js
 Copy-Item LearnMore/appsettings.Local.example.json LearnMore/appsettings.Local.json
 ```
 
-修改 `appsettings.Local.json` 的 SQL Server 連線資訊，需要使用的外部服務再填入對應金鑰。這個檔案已加入 `.gitignore`，請勿提交正式憑證。
+填入本機 SQL Server 連線資訊，需要使用外部服務時再設定對應金鑰。`appsettings.Local.json` 已被忽略，請勿提交任何正式憑證。
 
 ### 3. 還原與測試
 
@@ -69,10 +116,10 @@ dotnet test LearnMore.sln
 dotnet run --project LearnMore/LearnMore.csproj
 ```
 
-完整啟動需要相容的 SQL Server schema。正式站的歌曲、歌詞、會員與留言資料不包含在這個公開倉庫中。
+完整啟動需要相容的 SQL Server schema；正式站的歌曲、歌詞、會員、留言與憑證不包含在公開倉庫中。
 
-## 公開範圍
+## 公開範圍與授權
 
-這裡分享的是應用程式原始碼與測試，不包含正式環境設定、Cookie、API Key、資料庫備份、完整歌曲歌詞、翻譯資料及使用者內容。第三方套件與日文字典依各自附帶的授權條款使用。
+這個倉庫公開應用程式原始碼與測試，但不包含正式環境設定、Cookie、API Key、資料庫備份、完整歌曲歌詞、翻譯資料及使用者內容。第三方套件與日文字典依各自附帶的授權條款使用。
 
-目前專案仍持續維護。若只是想看看實際操作，可以直接使用上方的線上版本。
+目前倉庫尚未附上專案層級的開源授權；公開可讀不代表已授權複製、修改或再散布。若只是想體驗功能，可直接使用[線上版本](https://magicplus-design.serveirc.com/LearnMore)。
