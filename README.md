@@ -5,6 +5,7 @@
 # LearnMore
 
 [![CI](https://github.com/NickYCLin/learnmore/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NickYCLin/learnmore/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 以日文歌曲練聽力與跟唱，把同步歌詞、漢字注音（Ruby／Furigana）、羅馬拼音、繁體中文翻譯、卡拉 OK 與語音辨識整理在同一個網站。
 
@@ -126,4 +127,4 @@ dotnet run --project LearnMore/LearnMore.csproj
 
 這個倉庫公開應用程式原始碼與測試，但不包含正式環境設定、Cookie、API Key、資料庫備份、完整歌曲歌詞、翻譯資料及使用者內容。第三方套件與日文字典依各自附帶的授權條款使用。
 
-目前倉庫尚未附上專案層級的開源授權；公開可讀不代表已授權複製、修改或再散布。若只是想體驗功能，可直接使用[線上版本](https://magicplus-design.serveirc.com/LearnMore)。
+除另有註明外，本專案自行撰寫的原始碼與文件採 [MIT License](LICENSE)。第三方函式庫、IPADIC 字典、專案視覺素材，以及歌曲、歌詞、翻譯、封面與影音內容不一定適用 MIT，詳細範圍請參閱 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
