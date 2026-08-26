@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: .NET 8 測試
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: 下載原始碼
+        uses: actions/checkout@v7
+
+      - name: 安裝 .NET 8 SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+
+      - name: 還原套件
+        run: dotnet restore LearnMore.sln
+
+      - name: 執行測試
+        run: dotnet test LearnMore.sln --configuration Release --no-restore

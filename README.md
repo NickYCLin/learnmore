@@ -4,9 +4,13 @@
 
 # LearnMore
 
+[![CI](https://github.com/NickYCLin/learnmore/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NickYCLin/learnmore/actions/workflows/ci.yml)
+
 以日文歌曲練聽力與跟唱，把同步歌詞、漢字注音（Ruby／Furigana）、羅馬拼音、繁體中文翻譯、卡拉 OK 與語音辨識整理在同一個網站。
 
 LearnMore is an ASP.NET Core Japanese song learning web app with synchronized lyrics, furigana, romaji, Traditional Chinese translations, karaoke, and Whisper-based speech-to-text.
+
+![LearnMore 首頁：同步歌詞與日文歌曲學習介面](docs/images/learnmore-home.png)
 
 [線上使用 LearnMore](https://magicplus-design.serveirc.com/LearnMore) · [閱讀程式架構](docs/ARCHITECTURE.md) · [開始本機開發](#本機開發)
 
