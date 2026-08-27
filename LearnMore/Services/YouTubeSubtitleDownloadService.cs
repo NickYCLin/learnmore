@@ -25,30 +25,37 @@ public class YouTubeSubtitleDownloadService : IYouTubeSubtitleDownloadService
     public async Task<List<LyricSegment>?> TryDownloadSubtitlesAsync(string youTubeUrl, CancellationToken cancellationToken = default)
         => await TryDownloadSubtitleFileAsync(
             youTubeUrl,
-            "--write-sub --sub-lang ja",
+            ["--write-sub", "--sub-lang", "ja"],
             "ja",
             cancellationToken);
 
     public async Task<List<LyricSegment>?> TryDownloadTranslationSubtitlesAsync(string youTubeUrl, CancellationToken cancellationToken = default)
         => await TryDownloadSubtitleFileAsync(
             youTubeUrl,
-            "--write-sub --sub-langs zh-TW,zh-Hant",
+            ["--write-sub", "--sub-langs", "zh-TW,zh-Hant"],
             "zh-TW",
             cancellationToken);
 
     public async Task<List<LyricSegment>?> TryDownloadAutoCaptionTimeAnchorsAsync(string youTubeUrl, CancellationToken cancellationToken = default)
         => await TryDownloadSubtitleFileAsync(
             youTubeUrl,
-            "--write-auto-subs --sub-langs ja-orig,ja",
+            ["--write-auto-subs", "--sub-langs", "ja-orig,ja"],
             "ja-orig",
             cancellationToken);
 
     private async Task<List<LyricSegment>?> TryDownloadSubtitleFileAsync(
         string youTubeUrl,
-        string subtitleArgs,
+        IReadOnlyList<string> subtitleArgs,
         string preferredLanguage,
         CancellationToken cancellationToken)
     {
+        var normalizedYouTubeUrl = YouTubeVideoIdExtractor.NormalizeWatchUrl(youTubeUrl);
+        if (normalizedYouTubeUrl is null)
+        {
+            _logger.LogWarning("拒絕使用無效的 YouTube 網址或影片 ID 下載字幕");
+            return null;
+        }
+
         var ytDlpPath = string.IsNullOrWhiteSpace(_options.YtDlpPath) ? "yt-dlp" : _options.YtDlpPath;
         var tempDir = Path.GetTempPath();
         var guid = Guid.NewGuid().ToString();
@@ -56,22 +63,34 @@ public class YouTubeSubtitleDownloadService : IYouTubeSubtitleDownloadService
         try
         {
             var cookiesPath = _options.YtDlpCookiesPath;
-            var cookiesArg = !string.IsNullOrEmpty(cookiesPath) && File.Exists(cookiesPath)
-                ? $"--cookies \"{cookiesPath}\" "
-                : string.Empty;
-            var args = $"{cookiesArg}{subtitleArgs} --sub-format vtt --skip-download --no-write-playlist-metafiles --ignore-errors -o \"{Path.Combine(tempDir, guid)}\" \"{youTubeUrl}\"";
-
             using (var process = new Process())
             {
                 process.StartInfo = new ProcessStartInfo
                 {
                     FileName = ytDlpPath,
-                    Arguments = args,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
                     CreateNoWindow = true
                 };
+                if (!string.IsNullOrEmpty(cookiesPath) && File.Exists(cookiesPath))
+                {
+                    process.StartInfo.ArgumentList.Add("--cookies");
+                    process.StartInfo.ArgumentList.Add(cookiesPath);
+                }
+                foreach (var argument in subtitleArgs)
+                {
+                    process.StartInfo.ArgumentList.Add(argument);
+                }
+                process.StartInfo.ArgumentList.Add("--sub-format");
+                process.StartInfo.ArgumentList.Add("vtt");
+                process.StartInfo.ArgumentList.Add("--skip-download");
+                process.StartInfo.ArgumentList.Add("--no-write-playlist-metafiles");
+                process.StartInfo.ArgumentList.Add("--ignore-errors");
+                process.StartInfo.ArgumentList.Add("-o");
+                process.StartInfo.ArgumentList.Add(Path.Combine(tempDir, guid));
+                process.StartInfo.ArgumentList.Add("--");
+                process.StartInfo.ArgumentList.Add(normalizedYouTubeUrl);
 
                 _logger.LogInformation("開始以 yt-dlp 下載 YouTube 字幕，PreferredLanguage={PreferredLanguage}", preferredLanguage);
 

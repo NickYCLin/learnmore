@@ -231,7 +231,7 @@ namespace LearnMore.Controllers.API
                 await EnsureColumnExists(connection, tableName, request.Column);
 
                 // 1. 讀取所有需要轉換的日文歌詞
-                string selectQuery = $"SELECT LyricID, Japanese FROM [{tableName}] WHERE Japanese IS NOT NULL";
+                string selectQuery = $"SELECT LyricID, Japanese FROM [{tableName}] WHERE Japanese IS NOT NULL ORDER BY LyricID";
                 var lyricsList = new List<(int LyricID, string Japanese)>();
 
                 using (SqlCommand selectCommand = new SqlCommand(selectQuery, connection))
@@ -291,12 +291,8 @@ namespace LearnMore.Controllers.API
 
                 if (convertedArray.Length != lyricsList.Count)
                 {
-                    // 行數不一致：強制取前 N 行繼續更新
-                    // 強制取前 Math.Min 行繼續更新，不要直接放棄
-                    int takeCount = Math.Min(convertedArray.Length, lyricsList.Count);
-                    if (takeCount == 0) return BadRequest("轉換結果為空");
-                    convertedArray = convertedArray.Take(takeCount).ToArray();
-                    lyricsList = lyricsList.Take(takeCount).ToList();
+                    return BadRequest(
+                        $"轉換結果筆數不一致，預期 {lyricsList.Count} 筆，實際 {convertedArray.Length} 筆，未更新任何資料");
                 }
 
                 // 4. 對應每一句轉換結果準備更新資料庫
@@ -426,7 +422,7 @@ namespace LearnMore.Controllers.API
                     await EnsureColumnExists(connection, tableName, request.Column);
 
                     // 讀取所有需要轉換的日文歌詞
-                    string selectQuery = $"SELECT LyricID, Japanese FROM [{tableName}] WHERE Japanese IS NOT NULL";
+                    string selectQuery = $"SELECT LyricID, Japanese FROM [{tableName}] WHERE Japanese IS NOT NULL ORDER BY LyricID";
                     var lyricsList = new List<(int LyricID, string Japanese)>();
 
                     using (SqlCommand selectCommand = new SqlCommand(selectQuery, connection))

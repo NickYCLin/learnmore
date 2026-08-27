@@ -329,7 +329,7 @@ ORDER BY S.SongID DESC, G.CreateTime DESC;";
             string? email = HttpContext.Session.GetString("Email");
             if (string.IsNullOrEmpty(email))
             {
-                return RedirectToAction("Login", "Account");
+                return RedirectToAction("Index", "Login");
             }
 
             if (string.IsNullOrWhiteSpace(Title) || string.IsNullOrWhiteSpace(Content))
@@ -408,10 +408,6 @@ ORDER BY S.SongID DESC, G.CreateTime DESC;";
         #region 贊助頁面
         public IActionResult CreateOrder()
         {
-            IConfiguration Config = new ConfigurationBuilder().AddJsonFile("appSettings.json").Build();
-            // 產生測試資訊
-            ViewData["CustomerURL"] = $"{Request.Scheme}://{Request.Host}{Request.Path}/LearnMore/Payment/CallbackCustomer"; //商店取號網址
-            ViewData["ClientBackURL"] = $"{Request.Scheme}://{Request.Host}{Request.Path}/LearnMore"; //返回商店網址 
             return View();
         }
         #endregion

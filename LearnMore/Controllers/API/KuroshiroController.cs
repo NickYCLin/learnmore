@@ -13,6 +13,7 @@ namespace LearnMore.Controllers
     [Route("api/[controller]")]
     public class KuroshiroController : ControllerBase
     {
+        private static readonly TimeSpan NodeProcessTimeout = TimeSpan.FromMinutes(2);
         private readonly IWebHostEnvironment _env;
         private readonly IConfiguration _configuration;
         private readonly JapaneseRubyGeneratorService _rubyGenerator;
@@ -199,9 +200,35 @@ namespace LearnMore.Controllers
 
             process.Start();
 
-            string errorOutput = await process.StandardError.ReadToEndAsync();
-            string standardOutput = await process.StandardOutput.ReadToEndAsync();
-            await process.WaitForExitAsync();
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+            var errorOutputTask = process.StandardError.ReadToEndAsync();
+
+            using var timeout = new CancellationTokenSource(NodeProcessTimeout);
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                try
+                {
+                    if (!process.HasExited)
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // 子程序已在檢查與終止之間結束。
+                }
+
+                await Task.WhenAll(standardOutputTask, errorOutputTask);
+                throw new TimeoutException($"Kuroshiro 轉換超過 {NodeProcessTimeout.TotalSeconds:0} 秒，已終止子程序");
+            }
+
+            await Task.WhenAll(standardOutputTask, errorOutputTask);
+            string standardOutput = await standardOutputTask;
+            string errorOutput = await errorOutputTask;
 
             if (process.ExitCode != 0)
             {

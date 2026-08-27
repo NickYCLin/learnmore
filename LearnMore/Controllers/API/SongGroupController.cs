@@ -137,6 +137,10 @@ namespace LearnMore.Controllers.API
         [HttpGet("songs")]
         public IActionResult GetSongsInGroup([FromQuery] int groupId)
         {
+            var userId = HttpContext.Session.GetString("UserId");
+            if (string.IsNullOrEmpty(userId)) return Unauthorized();
+            if (!_repository.IsGroupOwnedByUser(groupId, userId)) return Forbid();
+
             var songs = _repository.GetSongsInGroup(groupId);
             return Ok(songs);
         }

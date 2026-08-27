@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using System.Data.SqlClient;
+using System.Security.Cryptography;
+using System.Text;
 using Google.Apis.Auth;
 using LearnMore.Services;
 
@@ -7,6 +9,8 @@ namespace LearnMore.Controllers
 {
     public class LoginController : Controller
     {
+        private const string SmokeTokenHeaderName = "X-LearnMore-Smoke-Token";
+
         #region 基本參數
         private readonly string _connectionString;
         private readonly IConfiguration _configuration;
@@ -22,15 +26,21 @@ namespace LearnMore.Controllers
 
         #region 測試帳號登入（僅供開發測試用）
         [HttpPost("Login/TestLogin")]
-        public async Task<IActionResult> TestLogin([FromBody] TestLoginRequest request)
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        public async Task<IActionResult> TestLogin([FromBody] TestLoginRequest? request)
         {
+            var configuredSmokeToken = _configuration["TestAccount:SmokeToken"];
+            var providedSmokeToken = Request.Headers[SmokeTokenHeaderName].ToString();
+            if (!IsValidSmokeToken(configuredSmokeToken, providedSmokeToken))
+                return NotFound();
+
             var testEmail = _configuration["TestAccount:Email"];
             var testPassword = _configuration["TestAccount:Password"];
 
             if (string.IsNullOrEmpty(testEmail) || string.IsNullOrEmpty(testPassword))
                 return NotFound("測試帳號未設定");
 
-            if (request.Email != testEmail || request.Password != testPassword)
+            if (request == null || request.Email != testEmail || request.Password != testPassword)
                 return Unauthorized("帳號或密碼錯誤");
 
             var userProfile = await LoadPreferredUserProfileAsync(testEmail, null);
@@ -42,6 +52,16 @@ namespace LearnMore.Controllers
                 userProfile.DisplayPicture);
 
             return Ok(new { success = true, email = testEmail });
+        }
+
+        private static bool IsValidSmokeToken(string? configuredToken, string? providedToken)
+        {
+            if (string.IsNullOrWhiteSpace(configuredToken) || string.IsNullOrWhiteSpace(providedToken))
+                return false;
+
+            var configuredHash = SHA256.HashData(Encoding.UTF8.GetBytes(configuredToken));
+            var providedHash = SHA256.HashData(Encoding.UTF8.GetBytes(providedToken));
+            return CryptographicOperations.FixedTimeEquals(configuredHash, providedHash);
         }
 
         public class TestLoginRequest

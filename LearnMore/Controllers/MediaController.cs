@@ -469,6 +469,13 @@ namespace LearnMore.Controllers
                 await SendEvent("error", new { message = "YouTube URL is required." });
                 return new EmptyResult();
             }
+            var normalizedYouTubeUrl = YouTubeVideoIdExtractor.NormalizeWatchUrl(request.YouTubeUrl);
+            if (normalizedYouTubeUrl is null)
+            {
+                await SendEvent("error", new { message = "請輸入有效的 YouTube 網址或影片 ID。" });
+                return new EmptyResult();
+            }
+            request.YouTubeUrl = normalizedYouTubeUrl;
 
             try
             {

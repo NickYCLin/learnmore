@@ -53,18 +53,6 @@
                 <input type="text" class="form-control" id="Email" v-model="addForm.Email">
             </div>
         </div>
-        <div class="row mb-2">
-            <div class="col-md-6">
-                <label class="form-label">商店取號網址</label>
-                <input type="text" class="form-control" id="CustomerURL" v-model="addForm.CustomerURL">
-            </div>
-        </div>
-        <div class="row mb-2">
-            <div class="col-md-6">
-                <label class="form-label">返回商店網址</label>
-                <input type="text" class="form-control" id="ClientBackURL" v-model="addForm.ClientBackURL">
-            </div>
-        </div>
         <button type="button" class="btn btn-primary" v-on:click="SendToNewebPay('VACC')">ATM 付款</button>
     </div>
 </div>
@@ -77,8 +65,6 @@
                     addForm: {
                         ItemDesc: '測試商品'
                         , Amt: '100'
-                        , CustomerURL: '@ViewData["CustomerURL"]'
-                        , ClientBackURL: '@ViewData["ClientBackURL"]'
                         , Email: 'xxxx@gmail.com'
                     }
                 }
@@ -93,8 +79,6 @@
                     postData['ChannelID'] = ChannelID;
                     postData['ItemDesc'] = self.addForm.ItemDesc;
                     postData['Amt'] = self.addForm.Amt;
-                    postData['CustomerURL'] = self.addForm.CustomerURL;
-                    postData['ClientBackURL'] = self.addForm.ClientBackURL;
                     postData['Email'] = self.addForm.Email;
 
                     // 使用 jQuery Ajax 傳送至後端

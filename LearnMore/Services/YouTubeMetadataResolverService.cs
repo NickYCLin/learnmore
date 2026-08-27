@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using LearnMore.Options;
 using Microsoft.Extensions.Options;
@@ -26,10 +27,22 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
 
         var resolvedTitle = title ?? string.Empty;
         var resolvedArtist = artist ?? string.Empty;
+        var normalizedYouTubeUrl = YouTubeVideoIdExtractor.NormalizeWatchUrl(youTubeUrl);
+        if (normalizedYouTubeUrl is null)
+        {
+            _logger.LogWarning("拒絕無效的 YouTube 網址或影片 ID");
+            if (!string.IsNullOrWhiteSpace(resolvedTitle) && !string.IsNullOrWhiteSpace(resolvedArtist))
+            {
+                resolvedTitle = StripArtistPrefixFromTitle(
+                    NormalizeProvidedSongTitle(resolvedTitle),
+                    resolvedArtist);
+            }
+            return new YouTubeMetadataResolutionResult(resolvedTitle, resolvedArtist);
+        }
 
         if (!string.IsNullOrWhiteSpace(resolvedTitle) && !string.IsNullOrWhiteSpace(resolvedArtist))
         {
-            var durationSeconds = await ResolveDurationSecondsAsync(youTubeUrl, cancellationToken);
+            var durationSeconds = await ResolveDurationSecondsAsync(normalizedYouTubeUrl, cancellationToken);
             resolvedTitle = StripArtistPrefixFromTitle(NormalizeProvidedSongTitle(resolvedTitle), resolvedArtist);
             return new YouTubeMetadataResolutionResult(resolvedTitle, resolvedArtist, durationSeconds);
         }
@@ -38,16 +51,16 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
 
         try
         {
-            using var ytProcess = new System.Diagnostics.Process();
-            ytProcess.StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = ytDlpPath,
-                Arguments = $"--print title --print artist --print creator --print uploader --print channel --print duration \"{youTubeUrl}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+            using var ytProcess = new Process();
+            ytProcess.StartInfo = CreateYtDlpStartInfo(
+                ytDlpPath,
+                "--print", "title",
+                "--print", "artist",
+                "--print", "creator",
+                "--print", "uploader",
+                "--print", "channel",
+                "--print", "duration",
+                "--", normalizedYouTubeUrl);
             ytProcess.Start();
 
             var outputTask = ytProcess.StandardOutput.ReadToEndAsync();
@@ -63,7 +76,7 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 TryKillProcess(ytProcess);
-                _logger.LogWarning("YouTube metadata resolution timed out after 30 seconds for {YouTubeUrl}", youTubeUrl);
+                _logger.LogWarning("YouTube metadata resolution timed out after 30 seconds for {YouTubeUrl}", normalizedYouTubeUrl);
                 return new YouTubeMetadataResolutionResult(resolvedTitle, resolvedArtist);
             }
             catch (OperationCanceledException)
@@ -129,7 +142,7 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "YouTube metadata resolution failed for {YouTubeUrl}", youTubeUrl);
+            _logger.LogWarning(ex, "YouTube metadata resolution failed for {YouTubeUrl}", normalizedYouTubeUrl);
             return new YouTubeMetadataResolutionResult(resolvedTitle, resolvedArtist);
         }
     }
@@ -138,7 +151,8 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        if (string.IsNullOrWhiteSpace(youTubeUrl))
+        var normalizedYouTubeUrl = YouTubeVideoIdExtractor.NormalizeWatchUrl(youTubeUrl);
+        if (normalizedYouTubeUrl is null)
         {
             return null;
         }
@@ -147,16 +161,11 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
 
         try
         {
-            using var ytProcess = new System.Diagnostics.Process();
-            ytProcess.StartInfo = new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = ytDlpPath,
-                Arguments = $"--print duration \"{youTubeUrl}\"",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+            using var ytProcess = new Process();
+            ytProcess.StartInfo = CreateYtDlpStartInfo(
+                ytDlpPath,
+                "--print", "duration",
+                "--", normalizedYouTubeUrl);
             ytProcess.Start();
 
             var outputTask = ytProcess.StandardOutput.ReadToEndAsync();
@@ -172,7 +181,7 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 TryKillProcess(ytProcess);
-                _logger.LogWarning("YouTube duration resolution timed out after 30 seconds for {YouTubeUrl}", youTubeUrl);
+                _logger.LogWarning("YouTube duration resolution timed out after 30 seconds for {YouTubeUrl}", normalizedYouTubeUrl);
                 return null;
             }
             catch (OperationCanceledException)
@@ -198,9 +207,27 @@ public class YouTubeMetadataResolverService : IYouTubeMetadataResolverService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "YouTube duration resolution failed for {YouTubeUrl}", youTubeUrl);
+            _logger.LogWarning(ex, "YouTube duration resolution failed for {YouTubeUrl}", normalizedYouTubeUrl);
             return null;
         }
+    }
+
+    private static ProcessStartInfo CreateYtDlpStartInfo(string ytDlpPath, params string[] arguments)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = ytDlpPath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        return startInfo;
     }
 
     public static double? TryParseDurationSeconds(string? rawDuration)

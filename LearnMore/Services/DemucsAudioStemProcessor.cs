@@ -80,6 +80,8 @@ public sealed class DemucsAudioStemProcessor : IAudioStemProcessor
 
     private async Task<string> DownloadAudioAsync(AudioStemJob job, string jobRoot, CancellationToken cancellationToken)
     {
+        string normalizedYouTubeUrl = YouTubeVideoIdExtractor.NormalizeWatchUrl(job.YouTubeVideoUrl)
+            ?? throw new InvalidOperationException("音軌分離工作包含無效的 YouTube 網址或影片 ID");
         string outputTemplate = Path.Combine(jobRoot, "source.%(ext)s");
         var arguments = new List<string>
         {
@@ -93,7 +95,8 @@ public sealed class DemucsAudioStemProcessor : IAudioStemProcessor
             outputTemplate,
             "--print",
             "after_move:filepath",
-            job.YouTubeVideoUrl
+            "--",
+            normalizedYouTubeUrl
         };
 
         if (!string.IsNullOrWhiteSpace(_options.YtDlpCookiesPath) && File.Exists(_options.YtDlpCookiesPath))

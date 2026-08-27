@@ -50,26 +50,42 @@ public class YtDlpAudioDownloaderService
 
     private async Task<string> DownloadAudioCoreAsync(string youTubeUrl, bool extractAudioAsMp3)
     {
+        var normalizedYouTubeUrl = YouTubeVideoIdExtractor.NormalizeWatchUrl(youTubeUrl)
+            ?? throw new ArgumentException("無效的 YouTube 網址或影片 ID", nameof(youTubeUrl));
         var ytDlpPath = GetYtDlpExecutablePath();
         var ffmpegPath = GetFfmpegExecutablePath();
         var outputFilePath = extractAudioAsMp3
             ? Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.mp3")
             : Path.Combine(Path.GetTempPath(), $"{Guid.NewGuid()}.%(ext)s");
 
-        var ytDlpArgs = extractAudioAsMp3
-            ? $"-f bestaudio --extract-audio --audio-format mp3 --ffmpeg-location \"{ffmpegPath}\" --audio-quality 0 -o \"{outputFilePath}\" \"{youTubeUrl}\""
-            : $"-f bestaudio --ffmpeg-location \"{ffmpegPath}\" -o \"{outputFilePath}\" \"{youTubeUrl}\"";
-
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
             FileName = ytDlpPath,
-            Arguments = ytDlpArgs,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        process.StartInfo.ArgumentList.Add("-f");
+        process.StartInfo.ArgumentList.Add("bestaudio");
+        if (extractAudioAsMp3)
+        {
+            process.StartInfo.ArgumentList.Add("--extract-audio");
+            process.StartInfo.ArgumentList.Add("--audio-format");
+            process.StartInfo.ArgumentList.Add("mp3");
+        }
+        process.StartInfo.ArgumentList.Add("--ffmpeg-location");
+        process.StartInfo.ArgumentList.Add(ffmpegPath);
+        if (extractAudioAsMp3)
+        {
+            process.StartInfo.ArgumentList.Add("--audio-quality");
+            process.StartInfo.ArgumentList.Add("0");
+        }
+        process.StartInfo.ArgumentList.Add("-o");
+        process.StartInfo.ArgumentList.Add(outputFilePath);
+        process.StartInfo.ArgumentList.Add("--");
+        process.StartInfo.ArgumentList.Add(normalizedYouTubeUrl);
 
         _logger.LogInformation("開始以 yt-dlp 下載音訊，extractAudioAsMp3={ExtractAudioAsMp3}", extractAudioAsMp3);
 

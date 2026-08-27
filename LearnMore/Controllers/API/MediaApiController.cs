@@ -93,10 +93,11 @@ WHERE YouTubeVideoUrl IS NOT NULL AND LTRIM(RTRIM(YouTubeVideoUrl)) <> ''";
             {
                 using var conn = new SqlConnection(_connectionString);
                 await conn.OpenAsync();
+                using var transaction = conn.BeginTransaction();
 
                 // 1. 檢查歌曲是否存在
                 var checkQuery = "SELECT COUNT(1) FROM Songs WHERE SongUid = @SongUid";
-                using (var checkCmd = new SqlCommand(checkQuery, conn))
+                using (var checkCmd = new SqlCommand(checkQuery, conn, transaction))
                 {
                     checkCmd.Parameters.AddWithValue("@SongUid", request.SongUid);
                     var count = (int)(await checkCmd.ExecuteScalarAsync() ?? 0);
@@ -106,7 +107,7 @@ WHERE YouTubeVideoUrl IS NOT NULL AND LTRIM(RTRIM(YouTubeVideoUrl)) <> ''";
                     }
                 }
 
-                if (!await CanDeleteSongAsync(conn, userEmail, request.SongUid))
+                if (!await CanDeleteSongAsync(conn, transaction, userEmail, request.SongUid))
                 {
                     _logger.LogWarning("DeleteSong: 使用者 {User} 嘗試刪除無權限歌曲 {SongUid}", userEmail, request.SongUid);
                     return Forbid();
@@ -115,7 +116,7 @@ WHERE YouTubeVideoUrl IS NOT NULL AND LTRIM(RTRIM(YouTubeVideoUrl)) <> ''";
                 // 2. 刪除歌詞資料表（使用動態 SQL，但 SongUid 已驗證過格式）
                 var tableName = $"Songs_{request.SongUid}";
                 var dropTableQuery = $"IF OBJECT_ID('dbo.{tableName}', 'U') IS NOT NULL DROP TABLE dbo.[{tableName}]";
-                using (var dropCmd = new SqlCommand(dropTableQuery, conn))
+                using (var dropCmd = new SqlCommand(dropTableQuery, conn, transaction))
                 {
                     await dropCmd.ExecuteNonQueryAsync();
                     _logger.LogInformation("DeleteSong: 已刪除資料表 {Table}", tableName);
@@ -123,13 +124,14 @@ WHERE YouTubeVideoUrl IS NOT NULL AND LTRIM(RTRIM(YouTubeVideoUrl)) <> ''";
 
                 // 3. 刪除主表記錄
                 var deleteSongQuery = "DELETE FROM Songs WHERE SongUid = @SongUid";
-                using (var deleteCmd = new SqlCommand(deleteSongQuery, conn))
+                using (var deleteCmd = new SqlCommand(deleteSongQuery, conn, transaction))
                 {
                     deleteCmd.Parameters.AddWithValue("@SongUid", request.SongUid);
                     var rowsAffected = await deleteCmd.ExecuteNonQueryAsync();
                     _logger.LogInformation("DeleteSong: 已刪除 Songs 記錄，影響 {Rows} 列", rowsAffected);
                 }
 
+                await transaction.CommitAsync();
                 return Ok(new { success = true, deleted = request.SongUid });
             }
             catch (Exception ex)
@@ -139,7 +141,11 @@ WHERE YouTubeVideoUrl IS NOT NULL AND LTRIM(RTRIM(YouTubeVideoUrl)) <> ''";
             }
         }
 
-        private static async Task<bool> CanDeleteSongAsync(SqlConnection conn, string userEmail, string songUid)
+        private static async Task<bool> CanDeleteSongAsync(
+            SqlConnection conn,
+            SqlTransaction transaction,
+            string userEmail,
+            string songUid)
         {
             const string query = @"
 SELECT U.Id,
@@ -150,7 +156,7 @@ FROM Users U
 LEFT JOIN Songs S ON S.SongUid = @SongUid
 WHERE U.Email = @Email";
 
-            await using var cmd = new SqlCommand(query, conn);
+            await using var cmd = new SqlCommand(query, conn, transaction);
             cmd.Parameters.AddWithValue("@Email", userEmail);
             cmd.Parameters.AddWithValue("@SongUid", songUid);
 

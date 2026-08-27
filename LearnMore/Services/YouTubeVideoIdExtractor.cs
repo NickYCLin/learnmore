@@ -23,8 +23,10 @@ public static class YouTubeVideoIdExtractor
         }
 
         string host = uri.Host.ToLowerInvariant();
-        bool isYoutubeHost = host.EndsWith("youtube.com", StringComparison.OrdinalIgnoreCase)
-                             || host.EndsWith("youtube-nocookie.com", StringComparison.OrdinalIgnoreCase);
+        bool isYoutubeHost = host == "youtube.com"
+                             || host.EndsWith(".youtube.com", StringComparison.OrdinalIgnoreCase)
+                             || host == "youtube-nocookie.com"
+                             || host.EndsWith(".youtube-nocookie.com", StringComparison.OrdinalIgnoreCase);
         bool isShortYoutubeHost = host is "youtu.be" or "www.youtu.be";
         if (!isYoutubeHost && !isShortYoutubeHost)
         {
@@ -51,6 +53,14 @@ public static class YouTubeVideoIdExtractor
         }
 
         return null;
+    }
+
+    public static string? NormalizeWatchUrl(string? urlOrVideoId)
+    {
+        var videoId = Extract(urlOrVideoId);
+        return videoId is null
+            ? null
+            : $"https://www.youtube.com/watch?v={videoId}";
     }
 
     private static string? NormalizeVideoId(string? videoId)
