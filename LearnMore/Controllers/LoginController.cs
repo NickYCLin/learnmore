@@ -90,7 +90,7 @@ namespace LearnMore.Controllers
             string? cookiesToken = Request.Cookies["g_csrf_token"]; //Cookie 令牌
 
             // 驗證 Google Token
-            GoogleJsonWebSignature.Payload? payload = VerifyGoogleToken(formCredential, formToken, cookiesToken).Result;
+            GoogleJsonWebSignature.Payload? payload = await VerifyGoogleToken(formCredential, formToken, cookiesToken);
             if (payload == null)
             {
                 // 驗證失敗
@@ -100,9 +100,36 @@ namespace LearnMore.Controllers
             string? userId = null;
             string? uploadedAvatar = null;
             string? googlePicture = payload.Picture;
+            var accountEmail = payload.Email;
             using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
+
+                using var transaction = connection.BeginTransaction(System.Data.IsolationLevel.Serializable);
+
+                if (_configuration.GetValue<bool>("MobileAuth:Enabled"))
+                {
+                    using (var linked = new SqlCommand(@"
+SELECT U.Email FROM dbo.MobileIdentities I
+INNER JOIN dbo.Users U ON U.Id = I.UserId
+WHERE I.Provider = 'google' AND I.Subject = @Subject", connection, transaction))
+                    {
+                        linked.Parameters.AddWithValue("@Subject", payload.Subject);
+                        if (await linked.ExecuteScalarAsync() is string linkedEmail) accountEmail = linkedEmail;
+                    }
+                    // An Apple-created account must be explicitly linked before Google can access it.
+                    // Never merge an Apple identity into a website account merely because emails match.
+                    using var identityCheck = new SqlCommand(@"
+SELECT COUNT(*) FROM dbo.Users U WITH (UPDLOCK, HOLDLOCK)
+WHERE U.Email = @Email
+AND EXISTS (SELECT 1 FROM dbo.MobileIdentities I WHERE I.UserId = U.Id)
+AND NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities I WHERE I.UserId = U.Id AND I.Provider = 'google' AND I.Subject = @Subject)
+", connection, transaction);
+                    identityCheck.Parameters.AddWithValue("@Email", accountEmail);
+                    identityCheck.Parameters.AddWithValue("@Subject", payload.Subject);
+                    if (Convert.ToInt32(await identityCheck.ExecuteScalarAsync()) > 0)
+                        return StatusCode(409, "請先在 LearnMore App 登入原帳號，再於帳號頁連結此 Google 帳號。");
+                }
 
                 var query = @"
 IF EXISTS (SELECT 1 FROM Users WHERE Email = @Email)
@@ -126,19 +153,19 @@ BEGIN
            ,1)
 END";
 
-                using (var command = new SqlCommand(query, connection))
+                using (var command = new SqlCommand(query, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@Name", payload.Name ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@Email", payload.Email);
+                    command.Parameters.AddWithValue("@Email", accountEmail);
                     command.Parameters.AddWithValue("@Picture", payload.Picture ?? (object)DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
 
                 var getIdQuery = @"SELECT Id, Avatar, Picture FROM Users WHERE Email = @Email";
-                using (var getIdCommand = new SqlCommand(getIdQuery, connection))
+                using (var getIdCommand = new SqlCommand(getIdQuery, connection, transaction))
                 {
-                    getIdCommand.Parameters.AddWithValue("@Email", payload.Email);
+                    getIdCommand.Parameters.AddWithValue("@Email", accountEmail);
                     using var reader = await getIdCommand.ExecuteReaderAsync();
                     if (await reader.ReadAsync())
                     {
@@ -147,12 +174,13 @@ END";
                         googlePicture = reader.IsDBNull(2) ? payload.Picture : reader.GetString(2);
                     }
                 }
+                await transaction.CommitAsync();
             }
 
             string displayPicture = UserAvatarUrlResolver.Resolve(uploadedAvatar, googlePicture, Request.PathBase);
             await _persistentLoginSessionService.PersistAsync(
                 HttpContext,
-                payload.Email ?? "None",
+                accountEmail ?? "None",
                 userId ?? string.Empty,
                 payload.Name ?? "None",
                 displayPicture);
@@ -192,7 +220,7 @@ END";
         public async Task<GoogleJsonWebSignature.Payload?> VerifyGoogleToken(string? formCredential, string? formToken, string? cookiesToken)
         {
             // 檢查空值
-            if (formCredential == null || formToken == null && cookiesToken == null)
+            if (string.IsNullOrWhiteSpace(formCredential) || string.IsNullOrWhiteSpace(formToken) || string.IsNullOrWhiteSpace(cookiesToken))
             {
                 return null;
             }
@@ -207,13 +235,14 @@ END";
                 }
 
                 // 驗證憑證
-                IConfiguration Config = new ConfigurationBuilder().AddJsonFile("appSettings.json").Build();
-                string GoogleApiClientId = Config.GetSection("GoogleApiClientId").Value ?? string.Empty;
+                string GoogleApiClientId = _configuration["GoogleApiClientId"] ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(GoogleApiClientId)) return null;
                 var settings = new GoogleJsonWebSignature.ValidationSettings()
                 {
                     Audience = new List<string>() { GoogleApiClientId }
                 };
                 payload = await GoogleJsonWebSignature.ValidateAsync(formCredential, settings);
+                if (!payload.EmailVerified) return null;
                 if (!payload.Issuer.Equals("accounts.google.com") && !payload.Issuer.Equals("https://accounts.google.com"))
                 {
                     return null;

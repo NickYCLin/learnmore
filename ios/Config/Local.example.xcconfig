@@ -1,0 +1,6 @@
+// These identifiers are public. Do not put OAuth secrets or Apple private keys here.
+LEARNMORE_BUNDLE_ID = com.yourcompany.learnmore
+LEARNMORE_TEAM_ID = YOURTEAMID
+GOOGLE_IOS_CLIENT_ID = YOUR_IOS_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_SERVER_CLIENT_ID = YOUR_WEB_CLIENT_ID.apps.googleusercontent.com
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.YOUR_IOS_CLIENT_ID
