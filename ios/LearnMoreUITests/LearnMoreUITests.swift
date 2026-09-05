@@ -31,8 +31,11 @@ final class LearnMoreUITests: XCTestCase {
         XCTAssertTrue(app.switches["歌詞自動捲動"].waitForExistence(timeout: 5))
         let chinese = app.switches["顯示中文翻譯"]
         XCTAssertTrue(chinese.exists)
-        chinese.tap()
-        XCTAssertEqual(chinese.value as? String, "0")
+        // iOS 26 exposes both the row and its UISwitch; tap the actual control.
+        let chineseControl = chinese.switches.firstMatch
+        XCTAssertTrue(chineseControl.exists)
+        chineseControl.tap()
+        XCTAssertEqual(chineseControl.value as? String, "0")
         app.swipeUp()
         let lyric = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "こんにちは")).firstMatch
         XCTAssertTrue(lyric.waitForExistence(timeout: 5))

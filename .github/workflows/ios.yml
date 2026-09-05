@@ -59,6 +59,13 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" \
             -resultBundlePath "$RUNNER_TEMP/LearnMoreUITests.xcresult" \
             -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test-without-building
+      - name: Summarize UI test results
+        if: always()
+        run: |
+          if [[ -d "$RUNNER_TEMP/LearnMoreUITests.xcresult" ]]; then
+            xcrun xcresulttool get test-results summary \
+              --path "$RUNNER_TEMP/LearnMoreUITests.xcresult" --compact
+          fi
       - name: Preserve UI test report
         if: always()
         uses: actions/upload-artifact@v7

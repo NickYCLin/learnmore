@@ -10,7 +10,7 @@
 - Xcode 26.3／iOS 26.2 SDK：Release simulator build 與 Swift PlaybackCore 4 項測試通過（commit `be3f37e`，[run 33985683642](https://github.com/NickYCLin/learnmore/actions/runs/33985683642)）。這是未簽章的模擬器編譯，尚未產生可上傳的 archive。
 - 修正 Debug App 與 Swift Package 的 active architecture 設定不一致，避免找不到 GoogleSignInSwift module。
 - UI 測試：iPhone 17 Pro／iOS 26.0.1 上 3 項全部通過，與上述 iOS CI 同一 run。已修正先前錄影確認的「無影片提示佔滿歌曲頁」問題；現在訪客可讀歌詞、切換閱讀設定，登入與隱私、錯誤重試流程亦通過。
-- 截圖核對確認無影片提示已不再遮住歌詞；另發現測試啟動參數固定了閱讀開關值，原測試僅驗證可點擊，未證明切換有效。已改為可變更的測試初始設定，新增開關值與中文歌詞隱藏檢查，正在重跑。
+- 截圖核對確認無影片提示已不再遮住歌詞。閱讀切換測試已改用可變更的初始設定，並檢查開關值及中文歌詞隱藏；iOS 26 同時把整列及實際控制項暴露為 Switch，已根據失敗報告改點列內控制項，正在重跑。
 - 本機 CoreSimulator 無法及時提供可用目的裝置；雲端流程已拆開編譯、啟動與測試階段並設逾時。
 - 正式站 `api/mobile/v1/songs?pageSize=1`：HTTP 404，尚未部署。
 - Xcode 16.4、macOS 15.7.9；本機 codesigning identities：0。尚不符合提交環境要求。
