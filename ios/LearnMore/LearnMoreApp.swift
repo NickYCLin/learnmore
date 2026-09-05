@@ -127,6 +127,18 @@ final class CatalogModel {
 @main
 struct LearnMoreApp: App {
     @State private var account = AccountModel()
+
+    init() {
+        #if DEBUG
+        if UITestURLProtocol.enabled {
+            // Set stored defaults, not launch-argument overrides, so UI tests can change them.
+            for key in ["showChinese", "showRoman", "followLyrics"] {
+                UserDefaults.standard.set(true, forKey: key)
+            }
+        }
+        #endif
+    }
+
     var body: some Scene {
         WindowGroup {
             TabView {

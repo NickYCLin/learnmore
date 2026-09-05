@@ -17,8 +17,7 @@ final class LearnMoreUITests: XCTestCase {
 
     private func launch(_ args: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing", "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
-                               "-showChinese", "YES", "-showRoman", "YES", "-followLyrics", "YES"] + args
+        app.launchArguments = ["--ui-testing", "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW"] + args
         app.launch()
         return app
     }
@@ -33,8 +32,11 @@ final class LearnMoreUITests: XCTestCase {
         let chinese = app.switches["顯示中文翻譯"]
         XCTAssertTrue(chinese.exists)
         chinese.tap()
+        XCTAssertEqual(chinese.value as? String, "0")
         app.swipeUp()
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "こんにちは")).firstMatch.waitForExistence(timeout: 5))
+        let lyric = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "こんにちは")).firstMatch
+        XCTAssertTrue(lyric.waitForExistence(timeout: 5))
+        XCTAssertFalse(lyric.label.contains("你好"))
         let capture = XCTAttachment(screenshot: app.screenshot())
         capture.name = "Internal QA — guest lyrics (test fixtures)"; capture.lifetime = .keepAlways
         add(capture)
