@@ -71,7 +71,7 @@ flowchart LR
 
 ## iOS App（開發中）
 
-原生 SwiftUI 專案位於 [`ios/`](ios/README.md)，目標為 App Store 發佈，透過現有 .NET 後端共用線上資料。已建立歌曲搜尋與歌詞閱讀；會員收藏、原生同步播放與送審準備尚待完成。新增 mobile API 需部署後才可連線使用。
+原生 SwiftUI 專案位於 [`ios/`](ios/README.md)，目標為 App Store 發佈，透過現有 .NET 後端共用線上資料。已實作歌曲搜尋、同步歌詞、Google／Apple 登入、會員收藏與帳號刪除，並附上送審素材與驗證流程。新增 mobile API 仍須部署；簽章、真機整合、內容授權及 TestFlight 尚未完成，目前不能送審。最新進度見 [驗證紀錄](ios/AppStore/VALIDATION.md)。
 
 ## 專案結構
 
