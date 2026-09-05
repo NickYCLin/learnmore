@@ -1,0 +1,7 @@
+// Copy Local.example.xcconfig to Local.xcconfig and fill developer identifiers.
+LEARNMORE_BUNDLE_ID = com.learnmore.ios
+LEARNMORE_TEAM_ID =
+GOOGLE_IOS_CLIENT_ID =
+GOOGLE_SERVER_CLIENT_ID =
+GOOGLE_REVERSED_CLIENT_ID =
+#include? "Local.xcconfig"

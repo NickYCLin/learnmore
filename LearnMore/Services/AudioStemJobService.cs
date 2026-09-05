@@ -181,6 +181,18 @@ WHERE Id = @Id", connection);
 
         try
         {
+            // A worker may finish after its song/account was deleted. Do not recreate orphaned stems.
+            await using (var exists = new SqlCommand("SELECT COUNT(*) FROM dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", connection, transaction))
+            {
+                exists.Parameters.AddWithValue("@SongUid", songUid);
+                if (Convert.ToInt32(await exists.ExecuteScalarAsync(cancellationToken)) == 0)
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    File.Delete(instrumentalPath);
+                    File.Delete(vocalsPath);
+                    return;
+                }
+            }
             await using (var deleteCommand = new SqlCommand("DELETE FROM dbo.SongAudioStems WHERE SongUid = @SongUid AND StemKind IN (N'instrumental', N'vocals')", connection, transaction))
             {
                 deleteCommand.Parameters.AddWithValue("@SongUid", songUid);

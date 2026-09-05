@@ -19,6 +19,8 @@ LearnMore/wwwroot/uploads/
 !.env.example
 *.pem
 *.pfx
+*.p8
+*.mobileprovision
 *.key
 *.cookies
 cookies.txt
@@ -41,3 +43,12 @@ var/
 *.flac
 *.srt
 *.vtt
+
+# Xcode local build and signing state
+ios/DerivedData/
+**/xcuserdata/
+*.xcuserstate
+*.ipa
+*.xcarchive/
+ios/Config/Local.xcconfig
+**/.build/

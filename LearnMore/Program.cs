@@ -12,6 +12,10 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
 using System.Text;
+using LearnMore.Services.Mobile;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
+using Microsoft.IdentityModel.Tokens;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -142,6 +146,17 @@ builder.Services.AddSession(options =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PersistentLoginSessionService>();
+builder.Services.AddScoped<IMobileIdentityVerifier, MobileIdentityVerifier>();
+builder.Services.AddScoped<IMobileAccountStore, MobileAccountStore>();
+builder.Services.AddScoped<MobileAuthorizeFilter>();
+builder.Services.AddHostedService<MobileFileCleanupService>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("mobile-auth", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions
+        { PermitLimit = 30, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 
 builder.Services.AddScoped<WhisperController>();
 builder.Services.AddScoped<KuroshiroController>();
@@ -207,7 +222,24 @@ app.UseSession();
 
 app.Use(async (context, next) =>
 {
-    await context.RequestServices.GetRequiredService<PersistentLoginSessionService>().RestoreSessionAsync(context);
+    if (!context.Request.Path.StartsWithSegments("/api/mobile"))
+    {
+        await context.RequestServices.GetRequiredService<PersistentLoginSessionService>().RestoreSessionAsync(context);
+        // Revokes old website sessions too after an account is deleted, including a reused email address.
+        if (context.Session.GetString("Email") is string email)
+        {
+            await using var db = new SqlConnection(app.Configuration.GetConnectionString("DefaultConnection"));
+            await db.OpenAsync(context.RequestAborted);
+            using var check = new SqlCommand("SELECT COUNT(*) FROM dbo.Users WHERE Id = @Id AND Email = @Email", db);
+            check.Parameters.AddWithValue("@Id", int.TryParse(context.Session.GetString("UserId"), out var id) ? id : -1);
+            check.Parameters.AddWithValue("@Email", email);
+            if (Convert.ToInt32(await check.ExecuteScalarAsync(context.RequestAborted)) != 1)
+            {
+                context.Session.Clear();
+                context.RequestServices.GetRequiredService<PersistentLoginSessionService>().ClearPersistentCookie(context);
+            }
+        }
+    }
     await next();
 });
 
@@ -264,6 +296,29 @@ app.Use(async (context, next) =>
 });
 
 app.UseRouting();
+app.UseRateLimiter();
+app.Use(async (context, next) =>
+{
+    if (!context.Request.Path.StartsWithSegments("/api/mobile")) { await next(); return; }
+    try { await next(); }
+    catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { }
+    catch (Exception exception) when (!context.Response.HasStarted)
+    {
+        var (status, message) = exception switch
+        {
+            MobileAuthException auth => (auth.Status, auth.Message),
+            SecurityTokenException => (401, "登入驗證失敗，請重新登入。"),
+            SqlException sql when sql.Number is 2601 or 2627 => (409, "帳號或歌單資料已變更，請重新整理後再試。"),
+            _ => (503, "服務暫時無法使用，請稍後再試。")
+        };
+        // Do not log OAuth responses or credentials, including exception messages containing JWTs.
+        app.Logger.LogWarning("Mobile request failed: {ExceptionType}, status {Status}", exception.GetType().Name, status);
+        context.Response.Clear();
+        context.Response.StatusCode = status;
+        context.Response.Headers.CacheControl = "no-store";
+        await context.Response.WriteAsJsonAsync(new { error = message });
+    }
+});
 
 app.MapControllerRoute(
     name: "default",

@@ -1,0 +1,42 @@
+name: iOS
+
+on:
+  pull_request:
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  push:
+    branches: [main, codex/ios-app-store]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify submission SDK
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks
+      - name: Playback core tests
+        run: swift test --package-path ios/PlaybackCore
+      - name: Release build
+        run: >-
+          xcodebuild -project ios/LearnMore.xcodeproj -scheme LearnMore
+          -configuration Release -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" -jobs 2
+          CODE_SIGNING_ALLOWED=NO build
+      - name: UI tests
+        shell: bash
+        run: |
+          simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for runtime, devices in d["devices"].items() if "iOS-26" in runtime for x in devices if x["name"].startswith("iPhone")))')"
+          xcodebuild -project ios/LearnMore.xcodeproj -scheme LearnMore \
+            -destination "platform=iOS Simulator,id=$simulator_id" \
+            -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" \
+            -resultBundlePath "$RUNNER_TEMP/LearnMoreUITests.xcresult" \
+            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test

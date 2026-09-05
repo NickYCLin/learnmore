@@ -69,6 +69,10 @@ flowchart LR
 
 更完整的模組、資料流與修改入口整理在 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
 
+## iOS App（開發中）
+
+原生 SwiftUI 專案位於 [`ios/`](ios/README.md)，目標為 App Store 發佈，透過現有 .NET 後端共用線上資料。已建立歌曲搜尋與歌詞閱讀；會員收藏、原生同步播放與送審準備尚待完成。新增 mobile API 需部署後才可連線使用。
+
 ## 專案結構
 
 ```text
