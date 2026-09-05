@@ -120,15 +120,16 @@ final class AccountModel {
         request.httpMethod = method
         request.timeoutInterval = 25
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let requestToken = token
         if authenticated {
-            guard let token else { throw MemberError.message("請先登入。") }
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            guard let requestToken else { throw MemberError.message("請先登入。") }
+            request.setValue("Bearer \(requestToken)", forHTTPHeaderField: "Authorization")
         }
         if let body { request.httpBody = body; request.setValue("application/json", forHTTPHeaderField: "Content-Type") }
         let (data, response) = try await network.data(for: request)
         guard let response = response as? HTTPURLResponse else { throw CatalogError.invalidResponse }
         if response.statusCode == 401 && authenticated {
-            clear()
+            if token == requestToken { clear() }
             throw MemberError.message("登入已過期，請重新登入。")
         }
         guard (200...299).contains(response.statusCode) else {

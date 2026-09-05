@@ -89,6 +89,9 @@ struct SongView: View {
             if phase != .active { playback.pause() }
         }
         .onDisappear { playback.pause() }
+        .onChange(of: account.member?.id) { _, id in
+            if id == nil { showFavorites = false }
+        }
     }
 
     @ViewBuilder
