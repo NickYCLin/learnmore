@@ -3,6 +3,18 @@ import XCTest
 final class LearnMoreUITests: XCTestCase {
     override func setUpWithError() throws { continueAfterFailure = false }
 
+    override func tearDownWithError() throws {
+        if (testRun?.failureCount ?? 0) > 0 {
+            let app = XCUIApplication()
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.name = "Internal QA — failure"; screenshot.lifetime = .keepAlways
+            add(screenshot)
+            let hierarchy = XCTAttachment(string: app.debugDescription)
+            hierarchy.name = "Accessibility hierarchy"; hierarchy.lifetime = .keepAlways
+            add(hierarchy)
+        }
+    }
+
     private func launch(_ args: [String] = []) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["--ui-testing", "-AppleLanguages", "(zh-Hant)", "-AppleLocale", "zh_TW",
@@ -17,7 +29,7 @@ final class LearnMoreUITests: XCTestCase {
         XCTAssertTrue(song.waitForExistence(timeout: 20))
         song.tap()
         XCTAssertTrue(app.navigationBars["歌曲練習"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.switches["歌詞自動捲動"].exists)
+        XCTAssertTrue(app.switches["歌詞自動捲動"].waitForExistence(timeout: 5))
         let chinese = app.switches["顯示中文翻譯"]
         XCTAssertTrue(chinese.exists)
         chinese.tap()

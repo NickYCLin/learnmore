@@ -111,7 +111,14 @@ struct SongView: View {
             }
 
         } else {
-            ContentUnavailableView("這首歌目前無法播放", systemImage: "play.slash", description: Text("找不到有效的 YouTube 影片。"))
+            VStack(spacing: 12) {
+                Image(systemName: "play.slash").font(.largeTitle).accessibilityHidden(true)
+                Text("這首歌目前無法播放").font(.headline)
+                Text("找不到有效的 YouTube 影片，仍可閱讀下方歌詞。")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+                .multilineTextAlignment(.center)
+                .padding()
                 .frame(minHeight: 200)
         }
     }
@@ -167,13 +174,13 @@ private struct PlayerFailure: View {
     let videoURL: URL?
 
     var body: some View {
-        ContentUnavailableView {
-            Label("播放器無法使用", systemImage: "play.slash")
-        } description: {
-            Text(message)
-        } actions: {
-            Button("重試", action: retry)
-            if let videoURL { Link("在 YouTube 開啟", destination: videoURL) }
+        VStack(spacing: 12) {
+            Label("播放器無法使用", systemImage: "play.slash").font(.headline)
+            Text(message).font(.footnote).foregroundStyle(.secondary)
+            HStack {
+                Button("重試", action: retry)
+                if let videoURL { Link("在 YouTube 開啟", destination: videoURL) }
+            }.buttonStyle(.bordered)
         }
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))

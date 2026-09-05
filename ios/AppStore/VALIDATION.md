@@ -1,16 +1,22 @@
 # 發佈驗證紀錄
 
-## 本機已完成（持續更新）
+## 已完成的自動驗證（2026-09-06）
 
 - 原歌曲 Mobile API：11 項測試通過。
 - 會員／收藏／網站登入／隱私相關測試第一輪：47 項通過。
 - Xcode project、Info.plist、PrivacyInfo.xcprivacy 格式檢查通過。
 - 完整 .NET 測試：546 項通過；Swift PlaybackCore：4 項通過。
-- iOS 初次 Debug build 因建置中才新增 AppNetwork 檔案而失敗；已將檔案加入專案，待完整重建結果。
-- 本機 UI test 尚未執行：Xcode 16.4 找不到已列出的 iOS 18.6 目的裝置，CoreSimulator 查詢亦出現長時間未回應；正在排查，不能視為通過。
-- Release build：執行中；另新增 Xcode 26.3 的 GitHub Actions 驗證流程，尚未執行。
+- Windows GitHub Actions：完整 .NET CI 通過（commit `624ccc2`，[run 33984301863](https://github.com/NickYCLin/learnmore/actions/runs/33984301863)）。
+- Xcode 26.3／iOS 26.2 SDK：Release simulator build 與 Swift PlaybackCore 4 項測試通過（commit `624ccc2`，[run 33984301856](https://github.com/NickYCLin/learnmore/actions/runs/33984301856)）。這是未簽章的模擬器編譯，尚未產生可上傳的 archive。
+- 修正 Debug App 與 Swift Package 的 active architecture 設定不一致，避免找不到 GoogleSignInSwift module。
+- UI 測試程式已在 Xcode 26.3 編譯成功（commit `5aa4018`，[run 33984959130](https://github.com/NickYCLin/learnmore/actions/runs/33984959130)）；該次 Release 編譯亦通過。iPhone 17 Pro／iOS 26.0.1 的 UI 測試 2 項通過、1 項失敗：登入與隱私、錯誤重試通過；無影片提示佔滿歌曲頁，使閱讀設定不可見。已從錄影確認並改用不會撐滿高度的提示區，待重跑驗證。
+- 本機 CoreSimulator 無法及時提供可用目的裝置；雲端流程已拆開編譯、啟動與測試階段並設逾時。
 - 正式站 `api/mobile/v1/songs?pageSize=1`：HTTP 404，尚未部署。
 - Xcode 16.4、macOS 15.7.9；本機 codesigning identities：0。尚不符合提交環境要求。
+
+## 自動驗證的範圍
+
+後端測試尚未連接 staging SQL Server，不能證明正式 schema 的 migration、並行收藏與刪除已驗證。UI 測試使用 Debug 專用原創例句，涵蓋訪客歌詞閱讀、閱讀開關、登入提示、隱私頁與 API 錯誤重試；Google／Apple 實際授權、YouTube 播放及跨平台資料仍需下列整合測試。
 
 ## staging / 真機必要測試（未執行）
 

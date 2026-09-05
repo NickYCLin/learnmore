@@ -35,7 +35,7 @@ FROM sys.foreign_keys FK
 JOIN sys.foreign_key_columns FC ON FC.constraint_object_id = FK.object_id
 JOIN sys.columns PC ON PC.object_id = FC.parent_object_id AND PC.column_id = FC.parent_column_id
 JOIN sys.columns RC ON RC.object_id = FC.referenced_object_id AND RC.column_id = FC.referenced_column_id
-WHERE OBJECT_NAME(FK.referenced_object_id) IN ('Users','SongGroup','Comments','Wish')
+WHERE OBJECT_NAME(FK.referenced_object_id) IN ('Users','Songs','SongGroup','Comments','Wish')
 ORDER BY ParentTable, ChildTable;
 
 SELECT C.name AS PotentialIdentityColumn, OBJECT_NAME(C.object_id) AS TableName
