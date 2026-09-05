@@ -187,9 +187,21 @@ WHERE Id = @Id", connection);
                 exists.Parameters.AddWithValue("@SongUid", songUid);
                 if (Convert.ToInt32(await exists.ExecuteScalarAsync(cancellationToken)) == 0)
                 {
-                    await transaction.RollbackAsync(cancellationToken);
-                    File.Delete(instrumentalPath);
-                    File.Delete(vocalsPath);
+                    // Keep cleanup durable when mobile account deletion is installed.
+                    await using var cleanup = new SqlCommand(@"
+IF OBJECT_ID('dbo.MobileFileDeletionJobs', 'U') IS NOT NULL
+BEGIN
+    INSERT INTO dbo.MobileFileDeletionJobs (FileName, Kind) VALUES (@SongUid, 'song');
+    SELECT 1;
+END
+ELSE SELECT 0;", connection, transaction);
+                    cleanup.Parameters.AddWithValue("@SongUid", songUid);
+                    if (Convert.ToInt32(await cleanup.ExecuteScalarAsync(cancellationToken)) == 0)
+                    {
+                        File.Delete(instrumentalPath);
+                        File.Delete(vocalsPath);
+                    }
+                    await transaction.CommitAsync(cancellationToken);
                     return;
                 }
             }

@@ -11,6 +11,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ios-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
 jobs:
   ios:
     runs-on: macos-15
@@ -40,3 +44,11 @@ jobs:
             -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" \
             -resultBundlePath "$RUNNER_TEMP/LearnMoreUITests.xcresult" \
             -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test
+      - name: Preserve UI test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-UI-QA
+          path: ${{ runner.temp }}/LearnMoreUITests.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
