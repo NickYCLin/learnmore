@@ -30,20 +30,35 @@ jobs:
       - name: Playback core tests
         run: swift test --package-path ios/PlaybackCore
       - name: Release build
+        timeout-minutes: 10
         run: >-
-          xcodebuild -project ios/LearnMore.xcodeproj -scheme LearnMore
+          xcodebuild -quiet -project ios/LearnMore.xcodeproj -scheme LearnMore
           -configuration Release -destination 'generic/platform=iOS Simulator'
           -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" -jobs 2
           CODE_SIGNING_ALLOWED=NO build
-      - name: UI tests
+      - name: Select UI test simulator
         shell: bash
         run: |
           simulator_id="$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for runtime, devices in d["devices"].items() if "iOS-26" in runtime for x in devices if x["name"].startswith("iPhone")))')"
-          xcodebuild -project ios/LearnMore.xcodeproj -scheme LearnMore \
-            -destination "platform=iOS Simulator,id=$simulator_id" \
+          echo "LEARNMORE_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+      - name: Build UI tests
+        timeout-minutes: 10
+        run: |
+          xcodebuild -quiet -project ios/LearnMore.xcodeproj -scheme LearnMore \
+            -destination "platform=iOS Simulator,id=$LEARNMORE_SIMULATOR_ID" \
+            -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" \
+            -jobs 2 CODE_SIGNING_ALLOWED=NO build-for-testing
+      - name: Boot UI test simulator
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$LEARNMORE_SIMULATOR_ID" -b
+      - name: UI tests
+        timeout-minutes: 15
+        run: |
+          xcodebuild -quiet -project ios/LearnMore.xcodeproj -scheme LearnMore \
+            -destination "platform=iOS Simulator,id=$LEARNMORE_SIMULATOR_ID" \
             -derivedDataPath "$RUNNER_TEMP/LearnMoreBuild" \
             -resultBundlePath "$RUNNER_TEMP/LearnMoreUITests.xcresult" \
-            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test
+            -parallel-testing-enabled NO -jobs 2 CODE_SIGNING_ALLOWED=NO test-without-building
       - name: Preserve UI test report
         if: always()
         uses: actions/upload-artifact@v7

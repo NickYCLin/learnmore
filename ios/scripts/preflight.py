@@ -54,8 +54,14 @@ else:
 
 status = json.loads((ROOT / "AppStore/release-status.json").read_text())
 if args.stage == "submission":
-    for key, value in status.items():
-        if isinstance(value, bool): check(key, value, "Record evidence in ios/AppStore/VALIDATION.md")
+    required_evidence = [
+        "contentRightsConfirmed", "privacyOperationsConfirmed", "databaseMigrationVerified",
+        "realDeviceOAuthVerified", "crossPlatformFavoritesVerified", "accountDeletionVerified",
+        "testFlightVerified", "screenshotsReady", "reviewAccessReady", "ageRatingCompleted",
+        "appPrivacyCompleted",
+    ]
+    for key in required_evidence:
+        check(key, status.get(key) is True, "Requires boolean true and evidence in ios/AppStore/VALIDATION.md")
     check("Public support email", bool(re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", status.get("supportEmail", ""))))
     check("Operator name", bool(status.get("operatorName", "").strip()))
 
