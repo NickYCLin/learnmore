@@ -80,6 +80,8 @@ LearnMore/
 ├─ Scripts/           Whisper / WhisperX 輔助程式
 └─ wwwroot/           JavaScript、CSS、圖示與前端套件
 LearnMore.Tests/      xUnit 與畫面契約測試
+LearnMoreAPI/         遠端翻譯、辨識與音軌處理服務
+scripts/             資料整理與部署驗證工具
 docs/                 架構與程式碼導覽
 ```
 
@@ -122,6 +124,12 @@ dotnet run --project LearnMore/LearnMore.csproj
 ```
 
 完整啟動需要相容的 SQL Server schema；正式站的歌曲、歌詞、會員、留言與憑證不包含在公開倉庫中。
+
+## 部署與儲存庫同步
+
+GitLab 與 GitHub 的 `main` 維持相同的原始碼、測試、文件與設定範本。兩邊保留各自的提交歷史，部署時使用相同環境設定、資料庫和外部服務。
+
+發布前先還原 npm 套件，再執行 `dotnet publish`；`node_modules` 與舊的 `publish` 成品不納入 Git。正式設定放在伺服器的 `appsettings.Local.json`，不會隨發布檔覆寫。既有站台第一次改用這個版本時，請先保存原本的設定，詳細步驟見 [部署說明](docs/DEPLOYMENT.md)。
 
 ## 公開範圍與授權
 

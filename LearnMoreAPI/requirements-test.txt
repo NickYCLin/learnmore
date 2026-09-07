@@ -1,0 +1,7 @@
+# Unit tests stub GPU and external CLI work; no model download is needed.
+fastapi==0.115.14
+pydantic==2.11.7
+httpx==0.28.1
+pytest==8.4.1
+pykakasi==2.3.0
+requests==2.32.5

@@ -24,7 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Update="wwwroot/js/node_modules/**/*">
+    <Content Update="appsettings.Local.json;appsettings.*.local.json">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
+    <Content Include="wwwroot/js/node_modules/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>wwwroot/js/node_modules/%(RecursiveDir)%(Filename)%(Extension)</Link>

@@ -192,65 +192,65 @@ LEFT JOIN [Songs] BaseSongs ON BaseSongs.SongUid = S.SongUid ";
                     }
                 }
                 else using (var conn = new SqlConnection(_connectionString))
-                {
-                    await conn.OpenAsync();
-                    totalSongs = await GetCachedHomeSongsCountAsync(conn);
-                    if (shouldPageHomeAll && totalSongs.HasValue)
                     {
-                        int totalPages = Math.Max(1, (int)Math.Ceiling(totalSongs.Value / (double)homeAllPageSize));
-                        ViewBag.TotalPages = totalPages;
-                        if (currentPage > totalPages)
+                        await conn.OpenAsync();
+                        totalSongs = await GetCachedHomeSongsCountAsync(conn);
+                        if (shouldPageHomeAll && totalSongs.HasValue)
                         {
-                            return RedirectToAction(nameof(Index), new { type, page = totalPages });
-                        }
-                    }
-
-                    using (var cmd = new SqlCommand(query, conn))
-                    {
-                        if (parameters.Count > 0)
-                        {
-                            cmd.Parameters.AddRange(parameters.ToArray());
-                        }
-
-                        using (var reader = await cmd.ExecuteReaderAsync())
-                        {
-                            while (await reader.ReadAsync())
+                            int totalPages = Math.Max(1, (int)Math.Ceiling(totalSongs.Value / (double)homeAllPageSize));
+                            ViewBag.TotalPages = totalPages;
+                            if (currentPage > totalPages)
                             {
-                                Songs song = new Songs
-                                {
-                                    SongID = reader.GetInt32(reader.GetOrdinal("SongID")),
-                                    Title = reader.GetString(reader.GetOrdinal("Title")),
-                                    Artist = reader.GetString(reader.GetOrdinal("Artist")),
-                                    Performer = HasColumn(reader, "Performer") && !reader.IsDBNull(reader.GetOrdinal("Performer"))
-                                        ? reader.GetString(reader.GetOrdinal("Performer"))
-                                        : null,
-                                    YouTubeVideoUrl = reader.IsDBNull(reader.GetOrdinal("YouTubeVideoUrl")) ? string.Empty : reader.GetString(reader.GetOrdinal("YouTubeVideoUrl")),
-                                    ChannelThumbnailUrl = reader.IsDBNull(reader.GetOrdinal("ChannelThumbnailUrl")) ? string.Empty : reader.GetString(reader.GetOrdinal("ChannelThumbnailUrl")),
-                                    SongUid = reader.IsDBNull(reader.GetOrdinal("SongUid")) ? string.Empty : reader.GetString(reader.GetOrdinal("SongUid")),
-                                    HighAccuracyStatus = HasColumn(reader, "HighAccuracyStatus") && !reader.IsDBNull(reader.GetOrdinal("HighAccuracyStatus"))
-                                        ? reader.GetString(reader.GetOrdinal("HighAccuracyStatus"))
-                                        : null,
-                                    HighAccuracyStatusReason = HasColumn(reader, "HighAccuracyStatusReason") && !reader.IsDBNull(reader.GetOrdinal("HighAccuracyStatusReason"))
-                                        ? reader.GetString(reader.GetOrdinal("HighAccuracyStatusReason"))
-                                        : null
-                                };
-                                songs.Add(song);
+                                return RedirectToAction(nameof(Index), new { type, page = totalPages });
                             }
                         }
-                    }
 
-                    if (canUseHomeSongsCache)
-                    {
-                        _cache.Set(
-                            homeSongsCacheKey,
-                            songs,
-                            new MemoryCacheEntryOptions
+                        using (var cmd = new SqlCommand(query, conn))
+                        {
+                            if (parameters.Count > 0)
                             {
-                                AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2),
-                                SlidingExpiration = TimeSpan.FromSeconds(45)
-                            });
+                                cmd.Parameters.AddRange(parameters.ToArray());
+                            }
+
+                            using (var reader = await cmd.ExecuteReaderAsync())
+                            {
+                                while (await reader.ReadAsync())
+                                {
+                                    Songs song = new Songs
+                                    {
+                                        SongID = reader.GetInt32(reader.GetOrdinal("SongID")),
+                                        Title = reader.GetString(reader.GetOrdinal("Title")),
+                                        Artist = reader.GetString(reader.GetOrdinal("Artist")),
+                                        Performer = HasColumn(reader, "Performer") && !reader.IsDBNull(reader.GetOrdinal("Performer"))
+                                            ? reader.GetString(reader.GetOrdinal("Performer"))
+                                            : null,
+                                        YouTubeVideoUrl = reader.IsDBNull(reader.GetOrdinal("YouTubeVideoUrl")) ? string.Empty : reader.GetString(reader.GetOrdinal("YouTubeVideoUrl")),
+                                        ChannelThumbnailUrl = reader.IsDBNull(reader.GetOrdinal("ChannelThumbnailUrl")) ? string.Empty : reader.GetString(reader.GetOrdinal("ChannelThumbnailUrl")),
+                                        SongUid = reader.IsDBNull(reader.GetOrdinal("SongUid")) ? string.Empty : reader.GetString(reader.GetOrdinal("SongUid")),
+                                        HighAccuracyStatus = HasColumn(reader, "HighAccuracyStatus") && !reader.IsDBNull(reader.GetOrdinal("HighAccuracyStatus"))
+                                            ? reader.GetString(reader.GetOrdinal("HighAccuracyStatus"))
+                                            : null,
+                                        HighAccuracyStatusReason = HasColumn(reader, "HighAccuracyStatusReason") && !reader.IsDBNull(reader.GetOrdinal("HighAccuracyStatusReason"))
+                                            ? reader.GetString(reader.GetOrdinal("HighAccuracyStatusReason"))
+                                            : null
+                                    };
+                                    songs.Add(song);
+                                }
+                            }
+                        }
+
+                        if (canUseHomeSongsCache)
+                        {
+                            _cache.Set(
+                                homeSongsCacheKey,
+                                songs,
+                                new MemoryCacheEntryOptions
+                                {
+                                    AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(2),
+                                    SlidingExpiration = TimeSpan.FromSeconds(45)
+                                });
+                        }
                     }
-                }
             }
             catch (SqlException)
             {

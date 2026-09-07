@@ -1,0 +1,11 @@
+fastapi==0.115.14
+uvicorn[standard]==0.35.0
+pydantic==2.11.7
+faster-whisper==1.2.1
+whisperx==3.8.6
+requests==2.32.5
+pykakasi==2.3.0
+yt-dlp
+torch==2.8.0
+torchaudio==2.8.0
+demucs==4.0.1

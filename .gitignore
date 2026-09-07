@@ -41,3 +41,9 @@ var/
 *.flac
 *.srt
 *.vtt
+
+# Kuromoji is restored by npm ci; the old unconfigured gitlink is unused.
+/LearnMore/wwwroot/js/dict/kuromoji.js/
+/LearnMore/Properties/PublishProfiles/*.pubxml.user
+**/.venv/
+**/.pytest_cache/

@@ -258,8 +258,8 @@ namespace LearnMore.Services
 
             return (overrideIndex, numericIndex) switch
             {
-                (< 0, < 0) => -1,
-                (< 0, _) => numericIndex,
+                ( < 0, < 0) => -1,
+                ( < 0, _) => numericIndex,
                 (_, < 0) => overrideIndex,
                 _ => Math.Min(overrideIndex, numericIndex)
             };

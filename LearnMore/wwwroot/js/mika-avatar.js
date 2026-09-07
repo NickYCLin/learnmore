@@ -11,13 +11,25 @@
     const input = panel.querySelector('[data-mika-avatar-input]');
     const live2dFrame = panel.querySelector('[data-mika-avatar-live2d]');
     const avatarSwitcher = panel.querySelector('[data-mika-avatar-switcher]');
+    const avatarDisplayNameEl = panel.querySelector('[data-mika-avatar-display-name]');
     let avatarChoiceButtons = Array.from(panel.querySelectorAll('[data-mika-avatar-choice]'));
     const wsUrl = panel.dataset.avatarWsUrl;
     const avatarBaseUrl = (panel.dataset.avatarBaseUrl || 'https://ycspace.myvnc.com/mika-avatar').replace(/\/$/, '');
+    const avatarEmbedConfigUrl = `${avatarBaseUrl}/api/integration/learnmore/embed-config`;
     const avatarStorageKey = 'learnmore:mika-avatar-id';
     const avatarPreferredStorageKey = 'learnmore:mika-avatar-preferred-id';
+    const fallbackSupportedAvatarIds = ['mao_pro'];
+    const learnMoreBlockedAvatarIds = new Set([
+        'mika_live2d',
+        'mika_stretchy_test',
+        'mika_formal_2d',
+        'mika_vrm',
+        'miara_pro',
+        'kei_vowels_pro',
+        'ren_foster'
+    ]);
     const fallbackAvatarConfigs = {
-        mao_pro: { id: 'mao_pro', runtime: 'live2d', displayName: 'Mao Pro', switchLabel: '2D' }
+        mao_pro: { id: 'mao_pro', runtime: 'live2d', displayName: 'mao_pro', switchLabel: 'mao_pro' }
     };
     let avatarConfigs = { ...fallbackAvatarConfigs };
     let preferredAvatarId = 'mao_pro';
@@ -30,8 +42,10 @@
     })();
     const live2dStatusTimeoutMs = 10000;
     const vrmStatusTimeoutMs = 45000;
+    let learnMoreSupportedAvatarIds = new Set(fallbackSupportedAvatarIds);
 
     let socket = null;
+    let avatarEmbedConfig = null;
     let clientUid = '';
     let currentState = 'idle';
     let lastLyricKey = '';
@@ -126,6 +140,18 @@
         }, timeoutMs);
     }
 
+    function isLearnMoreSupportedAvatarId(avatarId) {
+        const id = String(avatarId || '').trim();
+        return Boolean(id) && learnMoreSupportedAvatarIds.has(id) && !learnMoreBlockedAvatarIds.has(id);
+    }
+
+    function setLearnMoreSupportedAvatarIds(avatarIds) {
+        const nextIds = Array.isArray(avatarIds)
+            ? avatarIds.map(id => String(id || '').trim()).filter(Boolean)
+            : [];
+        learnMoreSupportedAvatarIds = new Set([...fallbackSupportedAvatarIds, ...nextIds]);
+    }
+
     function getStoredAvatarId() {
         try {
             const stored = window.localStorage?.getItem(avatarStorageKey) || '';
@@ -148,7 +174,7 @@
     function normalizeAvatarConfig(avatar) {
         const id = String(avatar?.id || '').trim();
         const runtime = String(avatar?.runtime || '').trim().toLowerCase();
-        if (!id || !['live2d', 'vrm'].includes(runtime) || avatar?.available !== true) {
+        if (!id || !['live2d', 'vrm', 'image2d'].includes(runtime) || avatar?.available !== true) {
             return null;
         }
 
@@ -161,10 +187,7 @@
     }
 
     function getAvatarSwitchLabel(id, runtime, displayName) {
-        if (id === 'mao_pro') {
-            return '2D';
-        }
-        return String(displayName || (runtime === 'vrm' ? '3D' : '2D')).trim();
+        return String(displayName || id || runtime).trim();
     }
 
     function bindAvatarChoiceButtons() {
@@ -195,6 +218,14 @@
     }
 
     async function loadAvatarCatalog() {
+        try {
+            avatarEmbedConfig = await loadLearnMoreEmbedConfig();
+        } catch (error) {
+            avatarEmbedConfig = null;
+            panel.dataset.avatarEmbedConfigStatus = 'error';
+            panel.dataset.avatarEmbedConfigError = String(error?.message || error || '').slice(0, 180);
+        }
+
         const integrationResponse = await fetch(`${avatarBaseUrl}/api/integration/learnmore`, {
             cache: 'no-store',
             mode: 'cors'
@@ -204,12 +235,19 @@
         }
 
         const integration = await integrationResponse.json();
+        if (!avatarEmbedConfig && integration?.learnMoreEmbedConfigUrl) {
+            panel.dataset.avatarEmbedConfigStatus = 'fallback';
+            panel.dataset.avatarEmbedConfigUrl = String(integration.learnMoreEmbedConfigUrl || '');
+        }
+        setLearnMoreSupportedAvatarIds(integration?.availableAvatarIds);
         const allowedAvatarIds = new Set(
             (Array.isArray(integration?.availableAvatarIds) ? integration.availableAvatarIds : [])
                 .map(id => String(id || '').trim())
-                .filter(Boolean)
+                .filter(id => Boolean(id) && isLearnMoreSupportedAvatarId(id))
         );
-        const nextPreferredAvatarId = String(integration?.preferredAvatarId || integration?.defaultAvatarId || 'mao_pro');
+        const nextPreferredAvatarId = String(
+            avatarEmbedConfig?.avatarId || integration?.preferredAvatarId || integration?.defaultAvatarId || 'mao_pro'
+        );
 
         const response = await fetch(`${avatarBaseUrl}/api/avatars`, {
             cache: 'no-store',
@@ -235,7 +273,7 @@
         });
 
         const previewAvatar = buildFormalExternalPreviewAvatar(integration);
-        if (previewAvatar) {
+        if (previewAvatar && isLearnMoreSupportedAvatarId(previewAvatar.id)) {
             dynamicConfigs[previewAvatar.id] = previewAvatar;
             const existingIndex = dynamicAvatars.findIndex(avatar => avatar.id === previewAvatar.id);
             if (existingIndex >= 0) {
@@ -244,6 +282,7 @@
                 dynamicAvatars.push(previewAvatar);
             }
         }
+        applyEmbedConfigToAvatarConfigs(dynamicConfigs);
 
         if (dynamicAvatars.length === 0) {
             return;
@@ -262,12 +301,75 @@
         panel.dataset.avatarCatalogStatus = 'ready';
         panel.dataset.avatarCatalogCount = String(dynamicAvatars.length);
         panel.dataset.avatarPreferredId = preferredAvatarId;
-        panel.dataset.avatarPreferredRuntime = String(avatarConfigs[preferredAvatarId]?.runtime || integration?.preferredRuntime || '');
-        panel.dataset.avatarFormalPreviewAvailable = previewAvatar ? 'true' : 'false';
+        panel.dataset.avatarPreferredRuntime = String(
+            avatarConfigs[preferredAvatarId]?.runtime || avatarEmbedConfig?.runtime || integration?.preferredRuntime || ''
+        );
+        panel.dataset.avatarFormalPreviewAvailable = 'false';
+    }
+
+    async function loadLearnMoreEmbedConfig() {
+        const response = await fetch(avatarEmbedConfigUrl, {
+            cache: 'no-store',
+            mode: 'cors'
+        });
+        if (!response.ok) {
+            throw new Error(`Mika embed-config HTTP ${response.status}`);
+        }
+
+        const config = normalizeLearnMoreEmbedConfig(await response.json());
+        panel.dataset.avatarEmbedConfigStatus = 'ready';
+        panel.dataset.avatarEmbedConfigUrl = avatarEmbedConfigUrl;
+        panel.dataset.avatarEmbedConfigAvatarId = config.avatarId;
+        panel.dataset.avatarEmbedConfigRuntime = config.runtime;
+        panel.dataset.avatarEmbedConfigSrc = config.embedSrc;
+        panel.dataset.avatarDefaultConnect = config.ui.defaultConnectToMika ? 'true' : 'false';
+        panel.dataset.avatarShowConnectionStatus = config.ui.showConnectionStatus ? 'true' : 'false';
+        panel.dataset.avatarShowAskMika = config.ui.showAskMika ? 'true' : 'false';
+        panel.dataset.avatarCanSwitchToLive2d = config.readiness.canSwitchToLive2D ? 'true' : 'false';
+        return config;
+    }
+
+    function normalizeLearnMoreEmbedConfig(config) {
+        const avatarId = String(config?.avatarId || '').trim();
+        const runtime = String(config?.runtime || '').trim().toLowerCase();
+        const embedSrc = String(config?.embedSrc || '').trim();
+        if (!avatarId || !['live2d', 'vrm', 'image2d'].includes(runtime) || !embedSrc) {
+            throw new Error('Mika embed-config is incomplete');
+        }
+
+        return {
+            avatarId,
+            runtime,
+            displayName: String(config?.displayName || avatarId).trim(),
+            embedSrc,
+            ui: {
+                defaultConnectToMika: config?.ui?.defaultConnectToMika === true,
+                showConnectionStatus: config?.ui?.showConnectionStatus === true,
+                showAskMika: config?.ui?.showAskMika === true
+            },
+            readiness: {
+                canSwitchToLive2D: config?.readiness?.canSwitchToLive2D === true
+            }
+        };
+    }
+
+    function applyEmbedConfigToAvatarConfigs(configs) {
+        if (!avatarEmbedConfig || !configs[avatarEmbedConfig.avatarId]) {
+            return;
+        }
+
+        const existing = configs[avatarEmbedConfig.avatarId];
+        if (existing.runtime !== avatarEmbedConfig.runtime) {
+            return;
+        }
+
+        existing.embedUrl = avatarEmbedConfig.embedSrc;
+        existing.displayName = avatarEmbedConfig.displayName || existing.displayName;
+        existing.switchLabel = existing.displayName;
     }
 
     function buildFormalExternalPreviewAvatar(integration) {
-        if (integration?.formalMikaExternalPreviewAvailable !== true) {
+        if (integration?.formalMikaExternalPreviewPreferred !== true) {
             return null;
         }
 
@@ -281,8 +383,8 @@
         return {
             id,
             runtime,
-            displayName: 'Mika Formal VRM',
-            switchLabel: '3D',
+            displayName: String(integration.formalMikaDisplayName || 'Mika').trim(),
+            switchLabel: String(integration.formalMikaDisplayName || 'Mika').trim(),
             embedUrl,
             externalPreview: true
         };
@@ -318,11 +420,17 @@
 
         panel.dataset.avatarId = config.id;
         panel.dataset.avatarRuntime = config.runtime;
+        panel.dataset.avatarDisplayName = config.displayName || config.id;
         panel.dataset.live2dRuntime = config.runtime;
         panel.dataset.live2dState = 'loading';
         panel.dataset.live2dError = '';
         panel.dataset.live2dModelLoaded = 'false';
         updateAvatarChoiceButtons(config.id);
+        if (avatarDisplayNameEl) {
+            avatarDisplayNameEl.textContent = config.displayName || config.id;
+        }
+        songDanceProfile = null;
+        songDanceProfileContextKey = '';
         songProfileSentKey = '';
 
         const embedUrl = buildAvatarEmbedUrl(config.id);
@@ -870,11 +978,24 @@
 
     function getSongContextKey(context) {
         return [
+            panel.dataset.avatarId || '',
+            panel.dataset.avatarRuntime || '',
             context?.songUid || '',
             context?.title || '',
             context?.artist || '',
             context?.performer || ''
         ].map(value => String(value)).join('\u001f');
+    }
+
+    const choreographySupportedLive2dAvatarIds = new Set([
+        'mao_pro',
+        'mika_live2d'
+    ]);
+
+    function shouldUseSongChoreographyForActiveAvatar() {
+        const avatarId = String(panel.dataset.avatarId || '');
+        const runtime = String(panel.dataset.avatarRuntime || '').toLowerCase();
+        return runtime === 'live2d' && choreographySupportedLive2dAvatarIds.has(avatarId);
     }
 
     function estimateLyricDensity() {
@@ -1006,7 +1127,10 @@
         const artist = String(context.artist || context.performer || '');
         const label = `${title} ${artist}`.toLowerCase();
         const density = estimateLyricDensity();
-        const choreography = findChoreographedSong(context, title, artist);
+        const choreographyEnabled = shouldUseSongChoreographyForActiveAvatar();
+        const choreography = choreographyEnabled
+            ? findChoreographedSong(context, title, artist)
+            : null;
         const tempo = density > 0.72 || /fast|疾走|dance|踊|party/.test(label)
             ? 'fast'
             : density < 0.28 || /ballad|バラード|slow|piano/.test(label)
@@ -1025,7 +1149,10 @@
             energy: choreography?.energy || 1,
             groove: choreography?.groove || 1,
             motionBias: choreography?.motionBias || 'native',
-            lyricDensity: density
+            lyricDensity: density,
+            avatarId: panel.dataset.avatarId || '',
+            mouthOnly: !Boolean(choreography),
+            choreographyEnabled
         };
         songDanceProfileContextKey = contextKey;
         rhythmState.density = density;
@@ -1361,6 +1488,22 @@
         }
     }
 
+    function applyMouthStatus(data) {
+        panel.dataset.live2dMouthOpen = Number.isFinite(Number(data.mouth?.open))
+            ? String(data.mouth.open)
+            : '';
+        panel.dataset.live2dMouthTargetOpen = Number.isFinite(Number(data.mouth?.targetOpen))
+            ? String(data.mouth.targetOpen)
+            : '';
+        panel.dataset.live2dMouthPlaying = data.mouth?.playing ? 'true' : 'false';
+        panel.dataset.live2dMouthVowelA = Number.isFinite(Number(data.mouth?.vowels?.a)) ? String(data.mouth.vowels.a) : '';
+        panel.dataset.live2dMouthVowelI = Number.isFinite(Number(data.mouth?.vowels?.i)) ? String(data.mouth.vowels.i) : '';
+        panel.dataset.live2dMouthVowelU = Number.isFinite(Number(data.mouth?.vowels?.u)) ? String(data.mouth.vowels.u) : '';
+        panel.dataset.live2dMouthVowelE = Number.isFinite(Number(data.mouth?.vowels?.e)) ? String(data.mouth.vowels.e) : '';
+        panel.dataset.live2dMouthVowelO = Number.isFinite(Number(data.mouth?.vowels?.o)) ? String(data.mouth.vowels.o) : '';
+        panel.dataset.live2dMouthShape = data.mouth?.shape || '';
+    }
+
     function startBeatLoop() {
         if (beatTimer) {
             return;
@@ -1500,6 +1643,18 @@
             if (data.status) {
                 panel.dataset.live2dState = data.status;
             }
+            panel.dataset.live2dVersion = data.version || '';
+            panel.dataset.live2dFraming = data.framing || panel.dataset.avatarFraming || '';
+            panel.dataset.live2dModelLoaded = data.modelLoaded || data.modelReady ? 'true' : 'false';
+            panel.dataset.live2dExternalPreview = data.externalPreview ? 'true' : 'false';
+            panel.dataset.live2dError = data.status === 'error' ? (data.message || 'unknown') : '';
+            panel.dataset.live2dMusicPlaying = data.musicPlaying ? 'true' : 'false';
+            panel.dataset.live2dSongTime = Number.isFinite(Number(data.songTime)) ? String(data.songTime) : '';
+            applyMouthStatus(data);
+            if (data.status === 'ready') {
+                clearLive2dStatusTimer();
+                sendLive2dSongProfile(false);
+            }
             return;
         }
 
@@ -1572,6 +1727,7 @@
             : '';
         panel.dataset.live2dCurrentNativeMotion = data.choreography?.currentNativeMotion || '';
         panel.dataset.live2dNativeMotionError = data.choreography?.nativeMotionError || '';
+        applyMouthStatus(data);
         if (data.status === 'ready' || data.status === 'stub') {
             const expectedProfile = getSongDanceProfile();
             const reportedProfile = data.songProfile || {};
@@ -1663,7 +1819,18 @@
                     nativeMotionSwitches: panel.dataset.live2dNativeMotionSwitches || '',
                     nativeMotionIntervalMs: panel.dataset.live2dNativeMotionIntervalMs || '',
                     currentNativeMotion: panel.dataset.live2dCurrentNativeMotion || '',
-                    nativeMotionError: panel.dataset.live2dNativeMotionError || ''
+                    nativeMotionError: panel.dataset.live2dNativeMotionError || '',
+                    mouthOpen: panel.dataset.live2dMouthOpen || '',
+                    mouthTargetOpen: panel.dataset.live2dMouthTargetOpen || '',
+                    mouthPlaying: panel.dataset.live2dMouthPlaying || '',
+                    mouthVowels: {
+                        a: panel.dataset.live2dMouthVowelA || '',
+                        i: panel.dataset.live2dMouthVowelI || '',
+                        u: panel.dataset.live2dMouthVowelU || '',
+                        e: panel.dataset.live2dMouthVowelE || '',
+                        o: panel.dataset.live2dMouthVowelO || ''
+                    },
+                    mouthShape: panel.dataset.live2dMouthShape || ''
                 }
             };
         }

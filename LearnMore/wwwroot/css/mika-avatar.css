@@ -91,8 +91,10 @@
 }
 
 .mika-avatar-switcher button {
-    width: 34px;
+    min-width: 52px;
+    width: auto;
     height: 28px;
+    padding: 0 8px;
     border: 0;
     border-radius: 7px;
     background: transparent;
@@ -101,6 +103,7 @@
     font-weight: 800;
     line-height: 1;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .mika-avatar-switcher button[data-active="true"] {
@@ -265,5 +268,17 @@
         border-radius: 0;
         background: transparent;
         box-shadow: none;
+    }
+}
+
+@media (min-width: 1200px) {
+    .lyrics-avatar-rail .mika-avatar-stage {
+        border: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 50% 18%, rgba(255, 183, 77, 0.22), transparent 34%),
+            radial-gradient(circle at 50% 76%, rgba(99, 102, 241, 0.10), transparent 42%),
+            linear-gradient(180deg, rgba(255, 247, 237, 0.72), rgba(232, 247, 255, 0.46));
+        box-shadow: var(--shadow-md);
     }
 }
