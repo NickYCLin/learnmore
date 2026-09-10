@@ -26,6 +26,18 @@ jobs:
       - name: 選擇 Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
       - run: npm test
+      - name: 安裝 WebKit 測試瀏覽器
+        run: npx playwright install webkit
+      - name: 驗證登入與收藏畫面
+        run: npm run test:ui
+      - name: 保留失敗的畫面測試紀錄
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-ui-test-results
+          path: mobile/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - run: npm run ios:sync
       - name: 編譯 iOS 模擬器版本
         run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build

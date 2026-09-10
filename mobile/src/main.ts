@@ -17,24 +17,54 @@ const backend = 'https://magicplus-design.serveirc.com/LearnMore';
 let token = ''; // 憑證只留在記憶體，避免寫入 localStorage 或前端設定。
 let pendingLogin: { state: string; verifier: string } | null = null;
 let page = 1, favorites = false, query = '', listingSerial = 0, detailSerial = 0;
+let catalogNeedsReload = false;
 let detail: Detail | null = null, player: Player | null = null, selected = -1, loop = false;
 let youtubePromise: Promise<void> | null = null;
 
 function notice(text: string) { $('notice').textContent = text; }
-function signOut() { token = ''; $('account').textContent = '登入'; }
+class SessionChangedError extends Error {}
+function reportError(error: unknown) {
+  if (!(error instanceof SessionChangedError)) notice(errorMessage(error));
+}
+function signOut() {
+  token = ''; pendingLogin = null;
+  $('account').textContent = '登入';
+  $<HTMLDialogElement>('group-dialog').close();
+  $('groups').replaceChildren();
+  $<HTMLFormElement>('new-group').reset();
+  favorites = false;
+  $('all').setAttribute('aria-pressed', 'true');
+  $('favorites').setAttribute('aria-pressed', 'false');
+  // 清除私人清單，也讓尚未完成的舊清單請求失效。
+  listingSerial++;
+  $('songs').replaceChildren(); $('more').hidden = true; $('retry').hidden = true;
+  catalogNeedsReload = true;
+  if ($('practice').hidden) void loadSongs();
+}
 async function api<T>(path: string, method = 'GET', data?: unknown): Promise<T> {
+  const requestToken = token;
   const headers: Record<string,string> = { Accept: 'application/json' };
   if (data !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (requestToken) headers.Authorization = `Bearer ${requestToken}`;
   let status: number, result: unknown;
-  if (native) {
-    const response = await CapacitorHttp.request({ url: `${backend}/api/mobile/v1/${path}`, method, headers, data, connectTimeout: 15000, readTimeout: 20000 });
-    status = response.status; result = response.data;
-  } else {
-    const response = await fetch(`/backend/api/mobile/v1/${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(20000) });
-    status = response.status; result = response.status === 204 ? null : await response.json().catch(() => null);
+  try {
+    if (native) {
+      const response = await CapacitorHttp.request({ url: `${backend}/api/mobile/v1/${path}`, method, headers, data, connectTimeout: 15000, readTimeout: 20000 });
+      status = response.status; result = response.data;
+    } else {
+      const response = await fetch(`/backend/api/mobile/v1/${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(20000) });
+      status = response.status; result = response.status === 204 ? null : await response.json().catch(() => null);
+    }
+  } catch (error) {
+    if (requestToken && requestToken !== token) throw new SessionChangedError();
+    throw error;
   }
-  if (status === 401) { signOut(); throw new Error('登入已到期，請重新登入。'); }
+  // 舊工作階段的成功或失敗回應，都不能更新目前帳號的畫面。
+  if (requestToken && requestToken !== token) throw new SessionChangedError();
+  if (status === 401) {
+    if (requestToken) signOut();
+    throw new Error('登入已到期，請重新登入。');
+  }
   if (status < 200 || status >= 300) throw new Error(status === 429 ? '操作較頻繁，請稍後再試。' : '暫時無法取得資料，請稍後重試。');
   return result as T;
 }
@@ -56,9 +86,10 @@ async function loadSongs(append = false) {
   try {
     const songs = await api<Song[]>(`songs?q=${encodeURIComponent(query)}&page=${page}&favorites=${favorites}`);
     if (serial !== listingSerial) return;
+    catalogNeedsReload = false;
     $('songs').append(...songs.map(card)); $('more').hidden = songs.length < 30;
     notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
-  } catch (error) { if (serial === listingSerial) { notice(errorMessage(error)); $('retry').hidden = false; if (append) page--; } }
+  } catch (error) { if (serial === listingSerial && !(error instanceof SessionChangedError)) { reportError(error); $('retry').hidden = false; if (append) page--; } }
 }
 
 function errorMessage(error: unknown) { return error instanceof Error && !/fetch|network|timeout/i.test(error.message) ? error.message : '目前無法連線，請確認網路後重試。'; }
@@ -135,7 +166,7 @@ async function openSong(uid: string) {
       events: { onError: () => { $('playback-status').textContent = '影片暫時無法播放，可能是嵌入限制或連線問題。'; } }
     });
     window.scrollTo(0, 0);
-  } catch (error) { if (serial === detailSerial) notice(errorMessage(error)); }
+  } catch (error) { if (serial === detailSerial) reportError(error); }
 }
 
 setInterval(() => {
@@ -172,7 +203,7 @@ if (native) {
       token = result.token; $('account').textContent = '登出'; notice(`已登入，${result.user.name}`);
       await Browser.close().catch(() => {});
       if (favorites) await loadSongs();
-    } catch (error) { notice(errorMessage(error)); }
+    } catch (error) { reportError(error); }
   });
   void App.addListener('appStateChange', ({ isActive }) => { if (!isActive) player?.pauseVideo(); });
 }
@@ -183,18 +214,19 @@ async function showGroups() {
   try {
     const uid = detail.song.songUid;
     const groups = await api<Group[]>(`groups?songUid=${encodeURIComponent(uid)}`);
+    if (detail?.song.songUid !== uid) return;
     $('groups').replaceChildren(...groups.map(group => {
       const button = document.createElement('button'); button.textContent = group.name; button.setAttribute('aria-pressed', String(group.included));
       button.onclick = async () => {
         button.disabled = true;
         try { await api(`groups/${group.id}/songs/${encodeURIComponent(uid)}`, 'PUT', { included: !group.included }); group.included = !group.included; button.setAttribute('aria-pressed', String(group.included)); }
-        catch (error) { notice(errorMessage(error)); ($('group-dialog') as HTMLDialogElement).close(); }
+        catch (error) { if (!(error instanceof SessionChangedError)) { reportError(error); $<HTMLDialogElement>('group-dialog').close(); } }
         finally { button.disabled = false; }
       }; return button;
     }));
     if (!groups.length) $('groups').textContent = '先建立一個群組，就能收藏這首歌。';
     if (!$<HTMLDialogElement>('group-dialog').open) $<HTMLDialogElement>('group-dialog').showModal();
-  } catch (error) { notice(errorMessage(error)); }
+  } catch (error) { reportError(error); }
 }
 
 $('search').onsubmit = event => { event.preventDefault(); query = $<HTMLInputElement>('query').value.trim(); void loadSongs(); };
@@ -202,12 +234,12 @@ $('all').onclick = () => { favorites = false; $('all').setAttribute('aria-presse
 $('favorites').onclick = () => { if (!token) { void login().catch(error => notice(errorMessage(error))); return; } favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); };
 $('more').onclick = () => { page++; void loadSongs(true); };
 $('retry').onclick = () => void loadSongs();
-$('back').onclick = () => { detailSerial++; player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); if (favorites) void loadSongs(); };
+$('back').onclick = () => { detailSerial++; player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); if (favorites || catalogNeedsReload) void loadSongs(); };
 $('loop').onclick = () => { loop = !loop; if (loop && selected < 0) selected = Math.max(0, activeLineIndex(detail?.lyrics || [], player?.getCurrentTime() || 0)); $('loop').textContent = `單句重複：${loop ? '開' : '關'}`; $('loop').setAttribute('aria-pressed',String(loop)); };
 $('roman').onclick = () => { const hidden = $('lyrics').classList.toggle('hide-roman'); $('roman').textContent = `羅馬拼音：${hidden ? '關' : '開'}`; $('roman').setAttribute('aria-pressed',String(!hidden)); };
 $('collect').onclick = () => void showGroups();
 $('close-groups').onclick = () => $<HTMLDialogElement>('group-dialog').close();
-$('new-group').onsubmit = async event => { event.preventDefault(); try { await api('groups','POST',{ name: $<HTMLInputElement>('group-name').value }); $<HTMLInputElement>('group-name').value = ''; await showGroups(); } catch (error) { notice(errorMessage(error)); $<HTMLDialogElement>('group-dialog').close(); } };
-$('account').onclick = async () => { try { if (!token) { await login(); return; } await api('session','DELETE'); signOut(); favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); if ($('practice').hidden) await loadSongs(); } catch (error) { notice(errorMessage(error)); } };
+$('new-group').onsubmit = async event => { event.preventDefault(); try { await api('groups','POST',{ name: $<HTMLInputElement>('group-name').value }); $<HTMLInputElement>('group-name').value = ''; await showGroups(); } catch (error) { if (!(error instanceof SessionChangedError)) { reportError(error); $<HTMLDialogElement>('group-dialog').close(); } } };
+$('account').onclick = async () => { try { if (!token) { await login(); return; } await api('session','DELETE'); signOut(); } catch (error) { reportError(error); } };
 window.addEventListener('offline', () => notice('目前沒有網路連線，恢復連線後可以重新載入歌曲。'));
 void loadSongs();

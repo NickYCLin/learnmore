@@ -20,6 +20,15 @@ npm run ios:sync
 npm run ios:open
 ```
 
+登入與收藏的畫面回歸測試使用 WebKit，首次執行先安裝測試瀏覽器：
+
+```sh
+npx playwright install webkit
+npm run test:ui
+```
+
+測試會操作實際前端，使用原創例句、模擬 API 與原生 bridge 替身；不會連正式帳號。測試設定獨立於正式 Vite 建置。最新結果與待辦見 [驗證紀錄](VALIDATION.md)。
+
 Xcode 選擇開發團隊、確認 Bundle ID `tw.learnmore.app` 的可用性，再選擇 iPhone 執行。正式簽章、Apple 憑證與 provisioning profile 不放進 Git。若變更 Bundle ID，也要同步後端 `mobile-player.js` 的 `widget_referrer`。
 
 前端預覽：`npm run dev`。Vite 將 `/backend` 代理到既有站台的 `/LearnMore`；原生 App 使用 Capacitor 原生 HTTP 呼叫正式 API，不需開放任意 CORS。預覽的登入功能僅在 iOS 提供，前端沒有測試帳密或繞過驗證的入口。
