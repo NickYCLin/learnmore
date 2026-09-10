@@ -47,3 +47,13 @@ var/
 /LearnMore/Properties/PublishProfiles/*.pubxml.user
 **/.venv/
 **/.pytest_cache/
+/mobile/dist/
+/mobile/ios/App/App/public/
+/mobile/ios/App/Pods/
+/mobile/ios/App/build/
+/mobile/ios/App/App/capacitor.config.json
+/mobile/ios/App/App/config.xml
+**/xcuserdata/
+/.playwright-cli/
+/output/
+/artifacts/

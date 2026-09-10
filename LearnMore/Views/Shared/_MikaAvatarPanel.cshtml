@@ -1,12 +1,14 @@
+@inject Microsoft.Extensions.Configuration.IConfiguration Configuration
 @{
-    var avatarBaseUrl = "https://ycspace.myvnc.com/mika-avatar";
+    var avatarBaseUrl = (Configuration["MikaAvatar:BaseUrl"] ?? "https://ycspace.myvnc.com/mika-avatar").TrimEnd('/');
+    var avatarWsUrl = Configuration["MikaAvatar:WebSocketUrl"] ?? avatarBaseUrl.Replace("https://", "wss://") + "/client-ws";
 }
 
 <aside class="mika-avatar-panel"
        data-mika-avatar-panel
        data-avatar-base-url="@avatarBaseUrl"
        data-avatar-image-url="@($"{avatarBaseUrl}/avatars/mao.png")"
-       data-avatar-ws-url="wss://ycspace.myvnc.com/mika-avatar/client-ws"
+       data-avatar-ws-url="@avatarWsUrl"
        data-avatar-framing="lyrics-rail"
        data-avatar-id="mao_pro"
        data-avatar-runtime="live2d"
@@ -26,6 +28,11 @@
              loading="lazy"
              onerror="this.style.display='none';" />
         <span class="mika-avatar-status" data-mika-avatar-status aria-label="連線狀態"></span>
+        <div class="mika-avatar-unavailable" role="status" aria-live="polite">
+            <p>角色暫時無法載入</p>
+            <span>你可以繼續播放歌曲與練習歌詞。</span>
+            <button type="button" data-mika-avatar-retry>重新載入角色</button>
+        </div>
     </div>
     <div class="mika-avatar-console">
         <div class="mika-avatar-header">

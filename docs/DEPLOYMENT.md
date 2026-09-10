@@ -28,6 +28,14 @@ dotnet publish LearnMore/LearnMore.csproj --configuration Release --no-restore -
 
 兩邊程式相同仍須搭配相同的資料庫、設定、外部服務和媒體檔，才會有相同的上線行為。Git 裡的範本預設關閉音軌分離；需要這項功能時，在正式設定啟用並配置本機或遠端處理服務。
 
+## Mika 角色服務
+
+角色嵌入頁、設定 API 與備援圖片都依賴 Mika 服務。若面板顯示「角色暫時無法載入」，先確認該服務可連線，再按重新載入；網站的歌曲播放仍可使用。
+
+服務遷移時，在伺服器 `appsettings.Local.json` 設定 `MikaAvatar:BaseUrl`（HTTPS、包含服務路徑）與選用的 `MikaAvatar:WebSocketUrl`（WSS）。網站會同步使用對應的 CSP 來源；Mika 端仍需允許 LearnMore 網站的 CORS 與 iframe 嵌入來源。
+
+iOS App 專案、API 路徑、建置方式及驗收範圍見 [mobile/README.md](../mobile/README.md)。
+
 ## 遠端處理服務
 
 `LearnMoreAPI/` 包含 FastAPI 服務、Dockerfile 和測試；使用方式見 [API 說明](../LearnMoreAPI/README.md)。複製 `.env.example` 為 `.env` 後填入服務 token 與工具位置，透過容器環境變數注入。請勿提交 `.env`。

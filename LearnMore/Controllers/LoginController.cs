@@ -157,6 +157,10 @@ END";
                 payload.Name ?? "None",
                 displayPicture);
 
+            var mobileReturnUrl = HttpContext.Session.GetString("MobileLoginReturnUrl");
+            HttpContext.Session.Remove("MobileLoginReturnUrl");
+            if (!string.IsNullOrWhiteSpace(mobileReturnUrl) && Url.IsLocalUrl(mobileReturnUrl))
+                return LocalRedirect(mobileReturnUrl);
             return RedirectToAction("Index", "Home");
         }
 

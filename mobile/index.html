@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://magicplus-design.serveirc.com; frame-src https://www.youtube.com https://magicplus-design.serveirc.com; object-src 'none'; base-uri 'self'" />
+  <title>ビビ學日語</title>
+</head>
+<body>
+  <header><a href="#" class="brand">ビビ學日語 <small>LearnMore</small></a><button id="account">登入</button></header>
+  <main>
+    <section id="library">
+      <div class="intro"><p class="eyebrow">今天想練哪一首？</p><h1>從喜歡的歌，<br>多懂一句日語。</h1><p>跟著歌詞聽、逐句練，慢慢唱出來。</p></div>
+      <form id="search"><label class="sr-only" for="query">搜尋歌曲或歌手</label><input id="query" type="search" maxlength="100" placeholder="搜尋歌曲、歌手或演唱者" /><button>搜尋</button></form>
+      <nav aria-label="歌曲分類"><button id="all" aria-pressed="true">探索歌曲</button><button id="favorites" aria-pressed="false">我的收藏</button></nav>
+      <div id="songs" class="songs"></div><button id="more" hidden>載入更多</button>
+    </section>
+    <section id="practice" hidden>
+      <button id="back">← 返回歌曲</button><h1 id="song-title"></h1><p id="song-artist"></p>
+      <div class="player-wrap"><div id="player"></div></div>
+      <p id="playback-status" role="status"></p>
+      <div class="practice-actions"><button id="collect">加入收藏</button><button id="loop" aria-pressed="false">單句重複：關</button><button id="roman" aria-pressed="true">羅馬拼音：開</button></div>
+      <p class="hint">點歌詞跳到該句，開啟單句重複後可以反覆練習。</p>
+      <div id="lyrics"></div>
+    </section>
+    <p id="notice" role="status" aria-live="polite"></p><button id="retry" hidden>重新載入</button>
+  </main>
+  <dialog id="group-dialog"><h2>收藏到歌曲群組</h2><div id="groups"></div><form id="new-group"><label for="group-name">新增群組</label><input id="group-name" maxlength="50" required placeholder="例如：每天練一首" /><button>建立群組</button></form><button id="close-groups">完成</button></dialog>
+  <footer>每一次跟唱，都是一點進步。</footer>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

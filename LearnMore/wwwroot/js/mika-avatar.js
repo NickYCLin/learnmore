@@ -41,6 +41,7 @@
         }
     })();
     const live2dStatusTimeoutMs = 10000;
+    const avatarRequestTimeoutMs = 6000;
     const vrmStatusTimeoutMs = 45000;
     let learnMoreSupportedAvatarIds = new Set(fallbackSupportedAvatarIds);
 
@@ -92,6 +93,20 @@
     let ttsAnimationFrame = 0;
     let live2dStatusTimer = 0;
     let avatarSwitchSerial = 0;
+
+    async function fetchAvatarResource(url, options) {
+        const controller = new AbortController();
+        const timer = window.setTimeout(() => controller.abort(), avatarRequestTimeoutMs);
+        try {
+            const response = await fetch(url, { ...options, signal: controller.signal });
+            if (!response.ok) {
+                throw new Error(`角色服務 HTTP ${response.status}`);
+            }
+            return await response.json();
+        } finally {
+            window.clearTimeout(timer);
+        }
+    }
 
     function setState(state, message) {
         currentState = state;
@@ -226,15 +241,10 @@
             panel.dataset.avatarEmbedConfigError = String(error?.message || error || '').slice(0, 180);
         }
 
-        const integrationResponse = await fetch(`${avatarBaseUrl}/api/integration/learnmore`, {
+        const integration = await fetchAvatarResource(`${avatarBaseUrl}/api/integration/learnmore`, {
             cache: 'no-store',
             mode: 'cors'
         });
-        if (!integrationResponse.ok) {
-            throw new Error(`Mika integration HTTP ${integrationResponse.status}`);
-        }
-
-        const integration = await integrationResponse.json();
         if (!avatarEmbedConfig && integration?.learnMoreEmbedConfigUrl) {
             panel.dataset.avatarEmbedConfigStatus = 'fallback';
             panel.dataset.avatarEmbedConfigUrl = String(integration.learnMoreEmbedConfigUrl || '');
@@ -249,15 +259,10 @@
             avatarEmbedConfig?.avatarId || integration?.preferredAvatarId || integration?.defaultAvatarId || 'mao_pro'
         );
 
-        const response = await fetch(`${avatarBaseUrl}/api/avatars`, {
+        const catalog = await fetchAvatarResource(`${avatarBaseUrl}/api/avatars`, {
             cache: 'no-store',
             mode: 'cors'
         });
-        if (!response.ok) {
-            throw new Error(`avatar catalog HTTP ${response.status}`);
-        }
-
-        const catalog = await response.json();
         const dynamicConfigs = {};
         const dynamicAvatars = [];
         (Array.isArray(catalog?.avatars) ? catalog.avatars : []).forEach(function (avatar) {
@@ -308,15 +313,11 @@
     }
 
     async function loadLearnMoreEmbedConfig() {
-        const response = await fetch(avatarEmbedConfigUrl, {
+        const payload = await fetchAvatarResource(avatarEmbedConfigUrl, {
             cache: 'no-store',
             mode: 'cors'
         });
-        if (!response.ok) {
-            throw new Error(`Mika embed-config HTTP ${response.status}`);
-        }
-
-        const config = normalizeLearnMoreEmbedConfig(await response.json());
+        const config = normalizeLearnMoreEmbedConfig(payload);
         panel.dataset.avatarEmbedConfigStatus = 'ready';
         panel.dataset.avatarEmbedConfigUrl = avatarEmbedConfigUrl;
         panel.dataset.avatarEmbedConfigAvatarId = config.avatarId;
@@ -434,7 +435,8 @@
         songProfileSentKey = '';
 
         const embedUrl = buildAvatarEmbedUrl(config.id);
-        if (live2dFrame && live2dFrame.src !== embedUrl) {
+        scheduleLive2dStatusTimeout();
+        if (live2dFrame && (options?.reload || live2dFrame.src !== embedUrl)) {
             const switchSerial = ++avatarSwitchSerial;
             live2dFrame.src = 'about:blank';
             window.setTimeout(function () {
@@ -1610,7 +1612,11 @@
 
     live2dFrame?.addEventListener('load', function () {
         songProfileSentKey = '';
-        scheduleLive2dStatusTimeout();
+        // 計時從設定 src 開始；網路逾時不能依賴 iframe 的 load 事件。
+    });
+
+    panel.querySelector('[data-mika-avatar-retry]')?.addEventListener('click', function () {
+        setActiveAvatar(panel.dataset.avatarId, { persist: false, reload: true });
     });
 
     window.addEventListener('message', function (event) {
@@ -1658,7 +1664,9 @@
             return;
         }
 
-        clearLive2dStatusTimer();
+        if (data.status === 'ready' || data.status === 'error' || (isVrmStatus && data.status === 'stub')) {
+            clearLive2dStatusTimer();
+        }
         panel.dataset.live2dRuntime = isVrmStatus ? 'vrm' : 'live2d';
         panel.dataset.live2dState = isVrmStatus && data.status === 'stub' ? 'ready' : (data.status || 'unknown');
         panel.dataset.live2dVersion = data.version || '';
@@ -1837,13 +1845,17 @@
     };
 
     bindAvatarChoiceButtons();
+    setActiveAvatar(getStoredAvatarId(), { persist: false });
     loadAvatarCatalog()
         .catch(function (error) {
             panel.dataset.avatarCatalogStatus = 'error';
             panel.dataset.avatarCatalogError = error.message || String(error);
         })
-        .finally(function () {
-            setActiveAvatar(getStoredAvatarId(), { persist: false });
+        .then(function () {
+            const avatarId = getStoredAvatarId();
+            if (live2dFrame?.src !== buildAvatarEmbedUrl(avatarId)) {
+                setActiveAvatar(avatarId, { persist: false });
+            }
         });
     connect();
     loadChoreographyCatalog();
