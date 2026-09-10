@@ -1,5 +1,7 @@
 # LearnMore iOS 第一版
 
+目前目標是先用 TestFlight 邀請安裝到自己的 iPhone 試用，再逐步增加功能。操作步驟與帳號條件見 [iPhone 個人試用](DEVICE_TESTING.md)，素材查核見 [內容來源與授權](../docs/CONTENT_RIGHTS.md)。App Store 上架暫緩。
+
 使用 Capacitor 包裝本機前端資源，透過 HTTPS 呼叫既有 ASP.NET Core 後端；SQL Server 連線資訊只存在伺服器。
 
 目前包含歌曲搜尋、分頁、YouTube 播放、同步歌詞／注音／羅馬拼音、單句重複，以及登入後的歌曲群組收藏。網站與 App 共用 `Songs`、各歌曲的歌詞表、`SongGroup`、`SongGroupMapping` 和 `Users`。
