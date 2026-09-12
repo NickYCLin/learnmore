@@ -23,13 +23,21 @@
 
 上述測試使用原創例句、模擬 API 和原生 bridge 替身，未驗證真正的 Google 授權、原生回呼、SQL 寫入或 YouTube 播放。測試替身只由獨立的測試 Vite 設定載入；正式建置使用 Capacitor。CI 已加入相同測試，失敗時保留 trace 七天。
 
-## 既有雲端驗證
+## 2026-09-12 雲端驗證與建置成品
 
-基礎 commit `e643ff4` 的 [iOS 模擬器編譯](https://github.com/NickYCLin/learnmore/actions/runs/34437849595)與 [CI](https://github.com/NickYCLin/learnmore/actions/runs/34437849601)皆成功。本次修改的雲端 CI 尚未執行，不能沿用這兩次結果當作本次驗證。
+[PR #2](https://github.com/NickYCLin/learnmore/pull/2) 的程式 commit 為 `14b8021`。以下工作流程使用 GitHub 產生的合併 commit `9deec24`，已確認其檔案內容與 `14b8021` 相同。
+
+- [iOS 工作流程](https://github.com/NickYCLin/learnmore/actions/runs/34686424724)：兩項單元測試、五項 WebKit UI 測試及資源同步通過；Xcode 26.3 的 Release 模擬器編譯成功。
+- [CI](https://github.com/NickYCLin/learnmore/actions/runs/34686424752)：Windows .NET 測試 529 項通過、零跳過；Python／API／腳本工作也通過，後端 publish 成功。
+- [模擬器成品](https://github.com/NickYCLin/learnmore/actions/runs/34686424724/artifacts/10295917057)：Bundle ID 為 `tw.learnmore.app`，版本 1.0／build 1。這是 iOS Simulator 的 `App.app`，不能直接安裝到 iPhone。
+- [Windows 後端部署包](https://github.com/NickYCLin/learnmore/actions/runs/34686424752/artifacts/10295502713)：已確認包含 `LearnMore.dll`、`web.config`、mobile 播放頁腳本與 kuromoji 字典，沒有伺服器本機設定檔。
+
+兩份成品均已下載，SHA-256 與 GitHub 回報相符。GitHub 成品保留至 2026-09-26；本機副本放在不納入 Git 的 `artifacts/ios/` 與 `artifacts/backend/`。
 
 ## 尚待完成
 
-- 2026-09-10 實際查詢正式站 `/LearnMore/api/mobile/v1/status`、`songs`、`groups` 均為 HTTP 404；App 尚無可用的正式 mobile API。
+- 已確認個人 Apple Developer Program 會員有效；`tw.learnmore.app` 尚未註冊，App Store Connect 也尚未建立 LearnMore 紀錄。
+- 2026-09-12 再次查詢正式站 `/LearnMore/api/mobile/v1/status`、`songs`、`groups`，仍均為 HTTP 404；App 尚無可用的正式 mobile API。
 - 本機 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；本機可用 codesigning identity 為零。本次未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
 - 先依 [後端部署說明](README.md#後端部署)更新網站，確認 status 版本為 1、歌曲可讀、未登入的 groups 回傳 401。
 - 再依 [iPhone 個人試用](DEVICE_TESTING.md)設定 Xcode、Team、Bundle ID 及簽章，透過 TestFlight 安裝。
