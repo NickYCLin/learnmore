@@ -34,9 +34,14 @@
 
 兩份成品均已下載，SHA-256 與 GitHub 回報相符。GitHub 成品保留至 2026-09-26；本機副本放在不納入 Git 的 `artifacts/ios/` 與 `artifacts/backend/`。
 
+## 2026-09-12 Apple App 設定
+
+已確認個人 Apple Developer Program 會員有效，選用 `yang chen lin`（Team ID `PV3S28HQN7`）。已註冊 `tw.learnmore.app`，並建立 [App Store Connect 紀錄](https://appstoreconnect.apple.com/apps/6811343218)：名稱「ビビ學日語」、主要語言繁體中文、SKU `learnmore-ios`，iOS 1.0 處於準備提交狀態。
+
+Xcode 專案已設定該 Team，並加入共用 App scheme、Swift 套件鎖定檔，以及 Xcode Cloud 的套件還原與 Capacitor 同步腳本。本機 Swift 套件解析通過；Xcode 可辨識 `tw.learnmore.app` 為該團隊的 iOS 封存目標。首次雲端工作流程尚未完成設定，未上傳 build 或發送邀請。
+
 ## 尚待完成
 
-- 已確認個人 Apple Developer Program 會員有效；`tw.learnmore.app` 尚未註冊，App Store Connect 也尚未建立 LearnMore 紀錄。
 - 2026-09-12 再次查詢正式站 `/LearnMore/api/mobile/v1/status`、`songs`、`groups`，仍均為 HTTP 404；App 尚無可用的正式 mobile API。
 - 本機 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；本機可用 codesigning identity 為零。本次未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
 - 先依 [後端部署說明](README.md#後端部署)更新網站，確認 status 版本為 1、歌曲可讀、未登入的 groups 回傳 401。

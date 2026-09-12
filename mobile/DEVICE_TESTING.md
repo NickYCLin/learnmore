@@ -15,9 +15,29 @@
 
 自己是帳號持有人時，可先走內部測試。要邀請一般外部使用者或用公開邀請連結，需走外部測試流程；第一個供外部測試的 build 需要 TestFlight App Review，不能承諾立即可安裝。建立 TestFlight 測試不等於正式公開上架。
 
-目前尚未建立 App Store Connect App、上傳 build 或發送邀請。Apple 帳號登入與簽章需在使用者自己的 Mac／帳號完成；不要在對話或 Git 中放密碼、私鑰。
+2026-09-12 已在個人 Apple Developer Program 團隊建立 App 紀錄：
+
+| 項目 | 設定 |
+| --- | --- |
+| App 名稱 | ビビ學日語 |
+| Team ID | `PV3S28HQN7`（yang chen lin） |
+| Bundle ID | `tw.learnmore.app` |
+| App Store Connect | [6811343218](https://appstoreconnect.apple.com/apps/6811343218) |
+| 主要語言／SKU | 繁體中文／`learnmore-ios` |
+
+目前尚未上傳 build 或發送邀請。Xcode 專案已選用上述團隊；Apple 帳號登入與簽章仍需在自己的 Mac／帳號完成。
 
 官方步驟：[TestFlight](https://developer.apple.com/testflight/)、[內部測試者](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers/)、[外部測試者](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/)。
+
+## Xcode Cloud 建置
+
+首次設定需從 Xcode 的 Product → Xcode Cloud → Create Workflow 開始，連結 `NickYCLin/learnmore` 儲存庫並選取 App scheme。工作流程使用 Xcode 26 以上，以 Release 封存 iOS App；完成首次設定後，才能在 App Store Connect 管理與啟動工作流程。
+
+`ios/App/ci_scripts/ci_post_clone.sh` 會在雲端安裝 Node.js 24、依 lockfile 還原套件、執行單元測試，再建置前端並同步 Capacitor 資源。這一步會補上 Git 未收錄的 `node_modules` 與網頁資源，供後續原生編譯使用。
+
+此腳本尚待真正的 Xcode Cloud 工作流程驗證。GitHub 的模擬器編譯通過不代表簽章或 TestFlight 上傳完成。
+
+官方說明：[首次設定](https://developer.apple.com/documentation/xcode/configuring-your-first-xcode-cloud-workflow)、[自訂建置腳本](https://developer.apple.com/documentation/xcode/writing-custom-build-scripts)。
 
 ## 下載建置成品
 
