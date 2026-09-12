@@ -19,6 +19,11 @@ LearnMore/wwwroot/uploads/
 !.env.example
 *.pem
 *.pfx
+*.p8
+*.p12
+*.mobileprovision
+*.ipa
+*.xcarchive/
 *.key
 *.cookies
 cookies.txt

@@ -50,6 +50,18 @@ jobs:
           if (Test-Path artifacts/publish/appsettings.Local.json) { throw "發布成品不應包含本機設定" }
           if (!(Test-Path artifacts/publish/wwwroot/js/node_modules/kuromoji/dict/tid_pos.dat.gz)) { throw "發布成品缺少 Kuromoji 字典" }
 
+      - name: 記錄部署版本
+        shell: pwsh
+        run: git rev-parse HEAD | Set-Content artifacts/publish/commit.txt
+
+      - name: 保留網站部署包
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-Backend
+          path: artifacts/publish/
+          if-no-files-found: error
+          retention-days: 14
+
   api-test:
     name: API 與維運腳本檢查
     runs-on: ubuntu-latest

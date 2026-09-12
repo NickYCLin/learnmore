@@ -20,6 +20,8 @@ npm run ios:sync
 npm run ios:open
 ```
 
+要取得已編譯的模擬器 App，可下載 GitHub Actions 的 `LearnMore-iOS-Simulator` 成品；網站部署包為 `LearnMore-Backend`。下載與安裝步驟見 [iPhone 個人試用](DEVICE_TESTING.md#下載建置成品)。
+
 登入與收藏的畫面回歸測試使用 WebKit，首次執行先安裝測試瀏覽器：
 
 ```sh
@@ -45,6 +47,8 @@ Xcode 選擇開發團隊、確認 Bundle ID `tw.learnmore.app` 的可用性，�
 - 未登入呼叫 `GET /LearnMore/api/mobile/v1/groups` 回傳 401。
 
 不新增資料表，不將資料庫埠開放給 App。私有資料 API 只接受後端簽發的 Bearer 工作階段，不接受 App 指定使用者 ID。
+
+部署後執行 `npm run check:backend`，會檢查版本、歌曲清單、單曲與歌詞格式，以及訪客存取收藏是否回傳 401。驗證其他環境時可使用 `npm run check:backend -- --base-url https://網站/LearnMore`。這不會更改 App 內設定的伺服器地址，也不會登入或修改資料。
 
 ## 登入與收藏
 

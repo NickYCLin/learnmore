@@ -26,6 +26,8 @@ dotnet publish LearnMore/LearnMore.csproj --configuration Release --no-restore -
 
 將 `artifacts/publish` 作為部署來源。不要使用歷史提交中附帶的 `publish` 成品。Kuromoji 字典隨 npm 套件還原，不需要初始化舊的 `dict/kuromoji.js` gitlink。
 
+GitHub CI 也會保留 `LearnMore-Backend` 成品 14 天，可從成功的 run 下載；內含 `commit.txt` 供版本核對。部署時沿用上述備份與保留設定的步驟。更新後可在 `mobile` 執行 `npm run check:backend` 驗證 App 所需 API。
+
 兩邊程式相同仍須搭配相同的資料庫、設定、外部服務和媒體檔，才會有相同的上線行為。Git 裡的範本預設關閉音軌分離；需要這項功能時，在正式設定啟用並配置本機或遠端處理服務。
 
 ## Mika 角色服務

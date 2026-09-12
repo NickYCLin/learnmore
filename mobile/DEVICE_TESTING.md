@@ -19,6 +19,39 @@
 
 官方步驟：[TestFlight](https://developer.apple.com/testflight/)、[內部測試者](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers/)、[外部測試者](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/)。
 
+## 下載建置成品
+
+GitHub Actions 在 PR、main 更新或手動執行後保留以下成品 14 天。請核對 run 的 commit 與各 job 結果，確認下載的是要測試的版本。
+
+| 成品 | 用途 |
+| --- | --- |
+| `LearnMore-iOS-Simulator` | 內含 `LearnMore-simulator.zip`、commit 與 Xcode 版本，可安裝在相容的 iOS Simulator；無法直接安裝到 iPhone |
+| `LearnMore-Backend` | 已通過 .NET 測試與發布檢查的網站檔案，包含 mobile API；不含正式設定、資料庫或上傳內容 |
+
+在安裝了相容 Xcode／iOS Simulator 的 Mac 上，解開兩層 zip 取得 `App.app`，啟動模擬器後可把 `App.app` 拖進模擬器視窗，或執行：
+
+```sh
+xcrun simctl install booted /完整路徑/App.app
+xcrun simctl launch booted tw.learnmore.app
+```
+
+模擬器 App 仍連接正式 mobile API。若服務未部署，清單會顯示連線錯誤；不會自動切換成測試資料。
+
+部署後端成品前，按 [部署文件](../docs/DEPLOYMENT.md)備份並保留站台原設定、媒體與 Data Protection 金鑰。部署完成後，在 `mobile` 執行 `npm run check:backend`，通過後再測試手機登入與收藏。
+
+## 用指令建立 TestFlight 封存
+
+先安裝 Xcode 26 以上，在 Xcode 登入 Apple 開發者帳號，確認 Team 與 Bundle ID 可用。以下會建立已簽章的 archive，並視需要讓 Xcode 更新 provisioning；上傳仍由 Xcode Organizer 執行。
+
+```sh
+cd mobile
+npm ci
+npm run check:backend
+LEARNMORE_APPLE_TEAM_ID=你的十碼TeamID LEARNMORE_BUILD_NUMBER=2 npm run ios:archive
+```
+
+每次上傳選一個比前次新的正整數 build number。封存位於 `artifacts/ios/LearnMore-<build number>.xcarchive`；腳本不會覆蓋同名封存。Team ID 是公開識別碼，簽章憑證由 Xcode 管理。
+
 ## 用 Mac 直接安裝的替代方式
 
 需要可執行 Xcode 26 的 Mac、Node.js 22 以上、Apple 帳號，以及支援目前專案最低版本 iOS 15 的 iPhone。若手機系統比 Xcode 支援版本更新，需先更新 Xcode。
