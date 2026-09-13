@@ -1,15 +1,29 @@
 using System.Data;
 using System.Data.SqlClient;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace LearnMore.Services;
 
 public sealed class MobileLibraryService(IConfiguration configuration)
 {
-    public record Song(string SongUid, string Title, string Artist, string Performer, string? VideoId);
-    public record Line(int Id, double Time, string Japanese, string Ruby, string Roman, string Chinese);
-    public record Detail(Song Song, IReadOnlyList<Line> Lyrics);
+    public record Song(
+        [property: JsonPropertyName("songUid")] string SongUid,
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("artist")] string Artist,
+        [property: JsonPropertyName("performer")] string Performer,
+        [property: JsonPropertyName("videoId")] string? VideoId);
+    public record Line(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("time")] double Time,
+        [property: JsonPropertyName("japanese")] string Japanese,
+        [property: JsonPropertyName("ruby")] string Ruby,
+        [property: JsonPropertyName("roman")] string Roman,
+        [property: JsonPropertyName("chinese")] string Chinese);
+    public record Detail(
+        [property: JsonPropertyName("song")] Song Song,
+        [property: JsonPropertyName("lyrics")] IReadOnlyList<Line> Lyrics);
     public static bool ValidSongUid(string? uid) => uid is not null && Regex.IsMatch(uid, "^[A-Za-z0-9_-]{1,80}$");
     private SqlConnection Connection() => new(configuration.GetConnectionString("DefaultConnection"));
 
