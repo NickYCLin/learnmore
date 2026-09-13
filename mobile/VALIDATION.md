@@ -40,9 +40,19 @@
 
 Xcode 專案已設定該 Team，並加入共用 App scheme、Swift 套件鎖定檔，以及 Xcode Cloud 的套件還原與 Capacitor 同步腳本。本機 Swift 套件解析通過；Xcode 可辨識 `tw.learnmore.app` 為該團隊的 iOS 封存目標。首次雲端工作流程尚未完成設定，未上傳 build 或發送邀請。
 
+## 2026-09-13 API 欄位與部署檢查
+
+`3088612` 修正 App API 的 JSON 欄位名稱。網站的 JSON 設定會保留 C# 原始大小寫，原本回傳 `Song`、`Lyrics`、`Id`，與 App 讀取的 `song`、`lyrics`、`id` 不符；現在明確指定歌曲、歌詞及登入使用者的欄位名稱。
+
+- 新增兩項 JSON 回歸測試，先在舊實作確認失敗；修正後含登入工作階段測試共 8 項通過。
+- 本機 HTTP 檢查確認 status 回傳 200，訪客的 groups 與收藏歌曲回傳 401；省略、空字串及空白搜尋參數均正常。使用獨立設定，未連正式資料庫。
+- [Windows CI](https://github.com/NickYCLin/learnmore/actions/runs/34760429987)：531 項測試通過、零跳過，後端 publish 成功。[iOS 流程](https://github.com/NickYCLin/learnmore/actions/runs/34760429920)也已通過。
+
+Windows 站台已完成備份。部署檢查曾因 PowerShell 5.1 將歌曲陣列多包一層，誤把多首歌的 ID 合併後查詢，收到 400 而自動還原。已確認還原後所有網站檔案與設定符合備份，首頁回傳 200；新版尚未完成正式部署，不能視為 App API 驗收通過。
+
 ## 尚待完成
 
-- 2026-09-12 再次查詢正式站 `/LearnMore/api/mobile/v1/status`、`songs`、`groups`，仍均為 HTTP 404；App 尚無可用的正式 mobile API。
+- 2026-09-13 還原後，正式站 `/LearnMore/api/mobile/v1/status` 仍為 HTTP 404；須修正 PowerShell 驗收的陣列解析，再部署包含 JSON 欄位修正的新成品。
 - 本機 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；本機可用 codesigning identity 為零。本次未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
 - 先依 [後端部署說明](README.md#後端部署)更新網站，確認 status 版本為 1、歌曲可讀、未登入的 groups 回傳 401。
 - 再依 [iPhone 個人試用](DEVICE_TESTING.md)設定 Xcode、Team、Bundle ID 及簽章，透過 TestFlight 安裝。
