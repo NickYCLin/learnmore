@@ -69,6 +69,14 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: 保留已驗證的部署檢查腳本
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-Deployment-Tools
+          path: scripts/verify_learnmore_mobile_backend.ps1
+          if-no-files-found: error
+          retention-days: 14
+
   api-test:
     name: API 與維運腳本檢查
     runs-on: ubuntu-latest

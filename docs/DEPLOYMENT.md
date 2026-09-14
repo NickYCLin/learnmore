@@ -30,6 +30,8 @@ GitHub CI 也會保留 `LearnMore-Backend` 成品 14 天，可從成功的 run �
 
 Windows 主機沒有 Node.js 時，可使用下列唯讀驗收，支援 Windows PowerShell 5.1：
 
+成功的 Windows CI 另提供 `LearnMore-Deployment-Tools` 成品，內含已通過回歸測試的驗收腳本。可下載到站台之外的維運目錄執行，不必放入網站發布目錄。
+
 ```powershell
 powershell.exe -NoProfile -File scripts/verify_learnmore_mobile_backend.ps1
 ```
