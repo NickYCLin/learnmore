@@ -50,9 +50,21 @@ Xcode 專案已設定該 Team，並加入共用 App scheme、Swift 套件鎖定�
 
 Windows 站台已完成備份。部署檢查曾因 PowerShell 5.1 將歌曲陣列多包一層，誤把多首歌的 ID 合併後查詢，收到 400 而自動還原。已確認還原後所有網站檔案與設定符合備份，首頁回傳 200；新版尚未完成正式部署，不能視為 App API 驗收通過。
 
+## 2026-09-14 驗收腳本與成品傳輸
+
+新增 `scripts/verify_learnmore_mobile_backend.ps1`，直接接收 JSON 解析結果，避免 PowerShell 5.1 將多首歌曲的 ID 合併。驗收也會檢查欄位大小寫、歌曲與歌詞格式、群組及收藏的訪客權限；HTTP、重新導向或連線失敗會保留 API 路徑。
+
+- 本機 PowerShell 7.4.14 的 15 項 HTTP 回歸測試通過。
+- [Windows CI](https://github.com/NickYCLin/learnmore/actions/runs/34809254951)通過，包含真正的 Windows PowerShell 5.1 回歸測試、.NET 測試及後端發布；[iOS 流程](https://github.com/NickYCLin/learnmore/actions/runs/34809255027)也通過。程式 commit 為 `7b861d5`。
+- `3088612` 的後端成品已下載至本機 `artifacts/backend/LearnMore-Backend-3088612.zip`，並傳至 Windows 的 `C:\Users\magicplus\backend-3088612.zip`。兩端 SHA-256 均為 `96be9d43f9790dd692a295fa5b737512c2584564d53b8e91987bebf937466d84`，符合 GitHub artifact `10318573496`。包內 commit 為 `1b7359f0c389527a6220e62810d2ef1ec006c8d5`，已比對後端原始碼與 `3088612` 相同。
+- 透過既有 DesignWeb 遠端主控台確認主機為 `WIN-6V3VA6LOJAS`，舊部署結果仍為 `RolledBack`，當時不存在 `app_offline.htm`。本次未啟動 Prepare 或 Deploy。
+
+後續瀏覽器控制連線中斷，原分頁重新連線與新分頁復原皆未成功。新版備份腳本僅在本機準備並通過語法檢查；Windows 可能留有未送完的文字替換指令，接續前應先取消該行並確認提示字元。尚未建立新版備份或部署計畫，也尚未把新驗收腳本接入正式部署程序。最後外部查核首頁為 HTTP 200，mobile status、songs、groups 仍為 HTTP 404。
+
 ## 尚待完成
 
-- 2026-09-13 還原後，正式站 `/LearnMore/api/mobile/v1/status` 仍為 HTTP 404；須修正 PowerShell 驗收的陣列解析，再部署包含 JSON 欄位修正的新成品。
+- 恢復 Windows 遠端控制後，以新的目錄備份目前站台，保留舊備份與設定，將已通過測試的 PowerShell 驗收接入還原流程，再部署已傳入的成品。
+- 2026-09-14 正式 mobile API 仍為 HTTP 404；部署與正式 API 驗收尚未完成。
 - 本機 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；本機可用 codesigning identity 為零。本次未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
 - 先依 [後端部署說明](README.md#後端部署)更新網站，確認 status 版本為 1、歌曲可讀、未登入的 groups 回傳 401。
 - 再依 [iPhone 個人試用](DEVICE_TESTING.md)設定 Xcode、Team、Bundle ID 及簽章，透過 TestFlight 安裝。
