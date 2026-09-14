@@ -15,8 +15,9 @@ function Request([string]$Path, [int]$ExpectedStatus = 200) {
     try {
         $response = Invoke-WebRequest ($base + '/' + $Path) -UseBasicParsing -MaximumRedirection 0 -TimeoutSec $TimeoutSeconds -Headers @{ Accept = 'application/json' }
     } catch {
-        if ($null -ne $_.Exception.Response) {
-            $actual = [int]$_.Exception.Response.StatusCode
+        $responseProperty = $_.Exception.PSObject.Properties['Response']
+        if ($null -ne $responseProperty -and $null -ne $responseProperty.Value) {
+            $actual = [int]$responseProperty.Value.StatusCode
             if ($actual -eq $ExpectedStatus) { return }
             throw ($Path + ': HTTP ' + $actual + ', expected ' + $ExpectedStatus)
         }
