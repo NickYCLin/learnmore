@@ -72,8 +72,18 @@ Windows 站台已完成備份。部署檢查曾因 PowerShell 5.1 將歌曲陣�
 - 本機獨立執行 `mobile/scripts/check-backend.mjs` 通過：status、songs、單曲均為 200，groups 為 401；另外確認首頁為 200，`songs?favorites=true` 為 401。這些檢查未登入或修改資料。
 - [最新 CI](https://github.com/NickYCLin/learnmore/actions/runs/34811689445)與 [iOS 流程](https://github.com/NickYCLin/learnmore/actions/runs/34811689437)均通過，commit 為 `ee6dfe0`。Windows 驗收工具成品已下載至伺服器並核對雜湊。
 
+## 2026-09-14 16:12 TestFlight 上傳完成
+
+已完成 Xcode 登入與 GitHub 儲存庫連結，建立 `LearnMore TestFlight` 工作流程。雲端使用 Xcode 26.3（17C529）、macOS 26.3，建置分支為 `codex/mobile-testflight-followup`。
+
+- [Xcode Cloud build 4](https://appstoreconnect.apple.com/teams/06bfbb3b-fbcb-4682-aa62-454c3473aeb4/apps/6811343218/ci/builds/a4b54f78-fd67-46ef-b2ef-5975a869232f) 使用 `468c68775187647b20b330a7b481787405358f4b`，套件還原、前端單元測試、Capacitor 同步、iOS archive 與 App Store 格式匯出成功。
+- 工作流程整體仍顯示失敗：Ad Hoc／Development 匯出需要登記實體裝置，團隊目前沒有裝置，無法產生這兩種 provisioning profile。封存、App Store 成品和診斷紀錄已下載保存。
+- 從本機以明確 Team ID `PV3S28HQN7`、自動簽署及 `testFlightInternalTestingOnly` 上傳雲端封存；16:12:04 顯示 `Upload succeeded`，指令結果為 `EXPORT SUCCEEDED`。僅供內部 TestFlight，未提交 App Store 審查。
+- App Store Connect 已顯示版本 1.0（build 1），上傳狀態「完成」。出口合規資訊已依本版僅使用系統 HTTPS／Web Crypto 的實作填妥，版本狀態為「準備測試」。
+- 已建立「LearnMore 個人測試」內部群組，包含 1 位帳號持有人與 1 個建置版本；已確認測試者狀態為「已邀請」。群組啟用自動分發，這次上傳的 1.0（1）已加入。
+
 ## 尚待完成
 
-- 本機仍為 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；可用 codesigning identity 為零。首次 Xcode Cloud 工作流程尚未完成設定，未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
-- 依 [iPhone 個人試用](DEVICE_TESTING.md)完成 Xcode、Team、Bundle ID 及簽章設定，建置後透過 TestFlight 安裝。後端部署與公開 API 驗收已完成。
+- 帳號持有人在 iPhone 開啟 TestFlight 邀請並安裝 1.0（1）；目前尚未確認接受邀請或真機安裝。
+- 後續可為 Xcode Cloud 配置內部測試散布動作；此次已透過 Mac 上傳並配置群組，雲端的開發用匯出警告仍保留。
 - 使用測試帳號在真機驗證登入返回與取消、重新開啟 App、收藏與網站同步、播放和背景暫停。這些項目保持未完成。

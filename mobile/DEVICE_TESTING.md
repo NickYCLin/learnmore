@@ -1,6 +1,6 @@
 # iPhone 個人試用
 
-目前先透過 TestFlight 邀請安裝到自己的手機，不發布 App Store。此專案已有 iOS 容器與本機前端；2026-09-14 正式後端部署與 API 驗收已完成，簽章、TestFlight 上傳及真機驗證仍待完成，詳見 [驗證紀錄](VALIDATION.md)。
+目前先透過 TestFlight 邀請安裝到自己的手機，不發布 App Store。此專案已有 iOS 容器與本機前端；2026-09-14 正式後端部署與 API 驗收已完成，2026-09-14 TestFlight 內部版本已上傳並發送邀請，真機驗證仍待完成，詳見 [驗證紀錄](VALIDATION.md)。
 
 ## TestFlight 邀請安裝，不需要傳輸線
 
@@ -25,13 +25,13 @@
 | App Store Connect | [6811343218](https://appstoreconnect.apple.com/apps/6811343218) |
 | 主要語言／SKU | 繁體中文／`learnmore-ios` |
 
-目前尚未上傳 build 或發送邀請。Xcode 專案已選用上述團隊；Apple 帳號登入與簽章仍需在自己的 Mac／帳號完成。
+2026-09-14 已登入 Xcode、完成 Xcode Cloud 儲存庫連結，並將 1.0（build 1）上傳至 TestFlight 內部測試；「LearnMore 個人測試」群組已加入帳號持有人並發送邀請，請在 iPhone 開啟邀請安裝。
 
 官方步驟：[TestFlight](https://developer.apple.com/testflight/)、[內部測試者](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers/)、[外部測試者](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers/)。
 
 ## Xcode Cloud 建置
 
-首次設定需從 Xcode 的 Product → Xcode Cloud → Create Workflow 開始，連結 `NickYCLin/learnmore` 儲存庫並選取 App scheme。工作流程使用 Xcode 26 以上，以 Release 封存 iOS App；完成首次設定後，才能在 App Store Connect 管理與啟動工作流程。
+Xcode 16.4 的首次設定入口為 Integrate → Create Workflow…，連結 `NickYCLin/learnmore` 儲存庫並選取 App scheme。工作流程使用 Xcode 26 以上，以 Release 封存 iOS App；完成首次設定後，才能在 App Store Connect 管理與啟動工作流程。
 
 Apple 的 Xcode Cloud 設定入口支援 Xcode 15 以上，因此現有 Xcode 16.4 可用來開始首次設定；實際雲端封存仍選 Xcode 26 以上。雲端建置不依賴這台 Mac 的本機簽章私鑰，仍需由開發者帳號完成團隊及儲存庫連結。參考 [Xcode Cloud 入門條件](https://developer.apple.com/xcode-cloud/get-started/)。
 
@@ -52,7 +52,7 @@ Apple 的 Xcode Cloud 設定入口支援 Xcode 15 以上，因此現有 Xcode 16
 
 `ios/App/ci_scripts/ci_post_clone.sh` 會在雲端安裝 Node.js 24、依 lockfile 還原套件、執行單元測試，再建置前端並同步 Capacitor 資源。這一步會補上 Git 未收錄的 `node_modules` 與網頁資源，供後續原生編譯使用。
 
-此腳本尚待真正的 Xcode Cloud 工作流程驗證。GitHub 的模擬器編譯通過不代表簽章或 TestFlight 上傳完成。
+2026-09-14 已由 Xcode Cloud build 4 驗證套件還原、單元測試、前端同步及 iOS 封存。Ad Hoc／Development 匯出因團隊未登記裝置而失敗，App Store 匯出成功；取回封存後，已從登入 Apple 帳號的 Mac 上傳 TestFlight。雲端工作流程目前仍需另設內部測試群組與散布後續動作。
 
 官方說明：[首次設定](https://developer.apple.com/documentation/xcode/configuring-your-first-xcode-cloud-workflow)、[自訂建置腳本](https://developer.apple.com/documentation/xcode/writing-custom-build-scripts)。
 
