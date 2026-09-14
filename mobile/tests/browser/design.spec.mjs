@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { website, respondWebsite } from './website-fixture.mjs';
 
 const songs = [
   { songUid: 'one', title: '夜に駆ける', artist: 'YOASOBI', performer: '', videoId: 'x8VYWazR5mE' },
@@ -12,6 +13,7 @@ const lines = [
 ];
 
 test('手機首頁、練習與收藏視窗在窄螢幕保持完整操作', async ({ page }) => {
+  await page.route(website + '?**', route => respondWebsite(route, songs));
   await page.route('**/api/mobile/v1/**', async route => {
     const url = new URL(route.request().url());
     const data = url.pathname.endsWith('/session') ? { token: 'design', user: { name: '練習者' } }

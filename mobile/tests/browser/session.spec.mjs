@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { website, respondWebsite } from './website-fixture.mjs';
 
 const api = 'https://magicplus-design.serveirc.com/LearnMore/api/mobile/v1/';
 const song = { songUid: 'original', title: '原創練習例句', artist: '測試資料', performer: '', videoId: null };
@@ -11,6 +12,7 @@ async function respond(route, data, status = 200) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route(website + '?**', route => respondWebsite(route, [song]));
   await page.route(`${api}**`, async route => {
     const request = route.request();
     const url = new URL(request.url());

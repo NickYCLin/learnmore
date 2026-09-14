@@ -1,10 +1,11 @@
 export const Capacitor = { isNativePlatform: () => true };
 export const CapacitorHttp = {
-  async request({ url, method, headers, data }) {
+  async get(options) { return this.request({ ...options, method: 'GET' }); },
+  async request({ url, method, headers, data, responseType }) {
     const response = await fetch(url, {
       method, headers, body: data === undefined ? undefined : JSON.stringify(data),
     });
-    return { status: response.status, data: response.status === 204 ? null : await response.json() };
+    return { status: response.status, data: response.status === 204 ? null : responseType === 'text' ? await response.text() : await response.json() };
   },
 };
 

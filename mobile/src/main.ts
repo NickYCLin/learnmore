@@ -4,6 +4,7 @@ import { Browser } from '@capacitor/browser';
 import DOMPurify from 'dompurify';
 import { activeLineIndex, loopEnd } from './practice.mjs';
 import './style.css';
+import { parseWebsiteCatalog } from './website-catalog';
 
 type Song = { songUid: string; title: string; artist: string; performer: string; videoId: string | null };
 type Line = { id: number; time: number; japanese: string; ruby: string; roman: string; chinese: string };
@@ -82,6 +83,22 @@ function card(song: Song) {
   button.append(art, title, artist); button.onclick = () => void openSong(song.songUid); return button;
 }
 
+async function loadWebsiteCatalog() {
+  const requestedPage = page;
+  const path = `/?type=all&page=${requestedPage}`;
+  let html: string;
+  if (native) {
+    const response = await CapacitorHttp.get({ url: backend + path, headers: { Accept: 'text/html' }, responseType: 'text', connectTimeout: 15000, readTimeout: 20000 });
+    if (response.status !== 200 || typeof response.data !== 'string') throw new Error('暫時無法讀取網站歌曲清單，請稍後重新載入。');
+    html = response.data;
+  } else {
+    const response = await fetch('/backend' + path, { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) throw new Error('暫時無法讀取網站歌曲清單，請稍後重新載入。');
+    html = await response.text();
+  }
+  return parseWebsiteCatalog(html, requestedPage);
+}
+
 async function loadSongs(append = false) {
   const serial = ++listingSerial;
   $('catalog-title').textContent = query ? '搜尋結果' : favorites ? '我的收藏' : '探索歌曲';
@@ -90,10 +107,11 @@ async function loadSongs(append = false) {
   notice('載入歌曲中…'); $('retry').hidden = true; $('more').hidden = true;
   if (!append) { page = 1; $('songs').replaceChildren(); }
   try {
-    const songs = await api<Song[]>(`songs?q=${encodeURIComponent(query)}&page=${page}&favorites=${favorites}`);
+    const catalog = !query && !favorites ? await loadWebsiteCatalog() : null;
+    const songs = catalog?.songs ?? await api<Song[]>(`songs?q=${encodeURIComponent(query)}&page=${page}&favorites=${favorites}`);
     if (serial !== listingSerial) return;
     catalogNeedsReload = false;
-    $('songs').append(...songs.map(card)); $('more').hidden = songs.length < 30;
+    $('songs').append(...songs.map(card)); $('more').hidden = catalog ? !catalog.hasMore : songs.length < 30;
     notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
   } catch (error) { if (serial === listingSerial && !(error instanceof SessionChangedError)) { reportError(error); $('retry').hidden = false; if (append) page--; } }
   finally { if (serial === listingSerial) $('songs').setAttribute('aria-busy', 'false'); }

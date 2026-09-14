@@ -97,3 +97,20 @@ Windows 站台已完成備份。部署檢查曾因 PowerShell 5.1 將歌曲陣�
 - 已執行 Capacitor iOS 同步；這次改版尚未上傳 TestFlight。
 - `artifacts/ios/redesign-*.png` 為測試資料截圖，播放器使用測試替身，
   不代表已驗證真機 YouTube 播放。
+
+## TestFlight 1.0（2）已可測試（2026-09-14）
+
+- 程式 `4bea316`，Xcode Cloud Build 6，Xcode 26.3；封存內已確認為新版首頁與 CSS，build number 為 2。
+- 16:55 Apple 回報 Upload succeeded / EXPORT SUCCEEDED，17:01 App Store Connect 顯示 build 2「正在測試」，群組為「LearnMore 個人測試」。
+- 本次加入 `ITSAppUsesNonExemptEncryption=false`，沿用先前已確認只使用作業系統加密的申報。
+- GitHub CI `34824504389` 和 iOS `34824504229` 均通過。
+- 歌曲熱門排序的後端修正尚待部署；上傳 App 不會自動更新正式 API。
+
+後端部署阻礙：既有 noVNC 畫面可讀取，但 CUA 連線持續回報 Debugger unattached／逾時；AppleScript 輸入則遺失或改寫字元，連無害的 echo 與編碼命令都不能穩定送達。未執行本次 Prepare／Deploy，最後遠端畫面已回到 PowerShell 提示字元。正式 API 尚維持原版本。
+
+## 網站歌曲排序同步（build 3）
+
+- 公開首頁直接讀取正式網站 `?type=all&page=N` 的卡片資料，依網頁順序呈現，沿用網站分頁。搜尋與收藏仍使用 mobile API。
+- 只解析清理後的資料屬性，不執行網站腳本或插入其 HTML；讀取失敗提示重試，不退回舊 API 排序。
+- 正式建置、8 項 WebKit 介面測試通過。另讀取正式網站前兩頁，核對手機全部 144 首歌曲順序相同，前五首為 Lemon、打上花火、アイドル、Pretender、白日。
+- 此修改讓 App 不必等待前述後端排序修正部署。背景播放尚未實作：目前 YouTube 嵌入播放器不提供此模式，仍待確認獨立音源或外部播放器方案。
