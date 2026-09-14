@@ -35,6 +35,13 @@ jobs:
       - name: 還原日文處理套件
         run: npm ci --prefix LearnMore/wwwroot/js
 
+      - name: 驗證 Windows PowerShell 部署檢查
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw "此測試須使用 Windows PowerShell 5.1" }
+          node scripts/verify_learnmore_mobile_backend.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: 還原套件
         run: dotnet restore LearnMore.sln
 
