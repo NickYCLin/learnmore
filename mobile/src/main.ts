@@ -71,16 +71,22 @@ async function api<T>(path: string, method = 'GET', data?: unknown): Promise<T> 
 
 function card(song: Song) {
   const button = document.createElement('button'); button.className = 'song-card';
+  const art = document.createElement('span'); art.className = 'song-art';
+  const placeholder = document.createElement('span'); placeholder.className = 'art-placeholder'; placeholder.textContent = '♫'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
   if (song.videoId && /^[A-Za-z0-9_-]{11}$/.test(song.videoId)) {
-    const image = document.createElement('img'); image.src = `https://i.ytimg.com/vi/${song.videoId}/mqdefault.jpg`; image.alt = ''; image.loading = 'lazy'; button.append(image);
+    const image = document.createElement('img'); image.src = `https://i.ytimg.com/vi/${song.videoId}/mqdefault.jpg`; image.alt = ''; image.loading = 'lazy'; image.onerror = () => image.remove(); art.append(image);
   }
+  const play = document.createElement('span'); play.className = 'play-badge'; play.textContent = '▶'; play.setAttribute('aria-hidden', 'true'); art.append(play);
   const title = document.createElement('strong'); title.textContent = song.title;
-  const artist = document.createElement('span'); artist.textContent = song.performer || song.artist;
-  button.append(title, artist); button.onclick = () => void openSong(song.songUid); return button;
+  const artist = document.createElement('span'); artist.className = 'song-artist'; artist.textContent = song.performer || song.artist;
+  button.append(art, title, artist); button.onclick = () => void openSong(song.songUid); return button;
 }
 
 async function loadSongs(append = false) {
   const serial = ++listingSerial;
+  $('catalog-title').textContent = query ? '搜尋結果' : favorites ? '我的收藏' : '探索歌曲';
+  $('catalog-eyebrow').textContent = favorites ? 'YOUR PERSONAL COLLECTION' : 'YOUR DAILY PLAYLIST';
+  $('songs').setAttribute('aria-busy', 'true');
   notice('載入歌曲中…'); $('retry').hidden = true; $('more').hidden = true;
   if (!append) { page = 1; $('songs').replaceChildren(); }
   try {
@@ -90,6 +96,7 @@ async function loadSongs(append = false) {
     $('songs').append(...songs.map(card)); $('more').hidden = songs.length < 30;
     notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
   } catch (error) { if (serial === listingSerial && !(error instanceof SessionChangedError)) { reportError(error); $('retry').hidden = false; if (append) page--; } }
+  finally { if (serial === listingSerial) $('songs').setAttribute('aria-busy', 'false'); }
 }
 
 function errorMessage(error: unknown) { return error instanceof Error && !/fetch|network|timeout/i.test(error.message) ? error.message : '目前無法連線，請確認網路後重試。'; }
@@ -230,11 +237,13 @@ async function showGroups() {
 }
 
 $('search').onsubmit = event => { event.preventDefault(); query = $<HTMLInputElement>('query').value.trim(); void loadSongs(); };
-$('all').onclick = () => { favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); void loadSongs(); };
-$('favorites').onclick = () => { if (!token) { void login().catch(error => notice(errorMessage(error))); return; } favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); };
+function returnToLibrary() { detailSerial++; player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); window.scrollTo(0, 0); }
+$('home').onclick = event => { event.preventDefault(); returnToLibrary(); if (favorites || catalogNeedsReload) void loadSongs(); };
+$('all').onclick = () => { returnToLibrary(); favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); void loadSongs(); };
+$('favorites').onclick = () => { if (!token) { void login().catch(error => notice(errorMessage(error))); return; } returnToLibrary(); favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); };
 $('more').onclick = () => { page++; void loadSongs(true); };
 $('retry').onclick = () => void loadSongs();
-$('back').onclick = () => { detailSerial++; player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); if (favorites || catalogNeedsReload) void loadSongs(); };
+$('back').onclick = () => { returnToLibrary(); if (favorites || catalogNeedsReload) void loadSongs(); };
 $('loop').onclick = () => { loop = !loop; if (loop && selected < 0) selected = Math.max(0, activeLineIndex(detail?.lyrics || [], player?.getCurrentTime() || 0)); $('loop').textContent = `單句重複：${loop ? '開' : '關'}`; $('loop').setAttribute('aria-pressed',String(loop)); };
 $('roman').onclick = () => { const hidden = $('lyrics').classList.toggle('hide-roman'); $('roman').textContent = `羅馬拼音：${hidden ? '關' : '開'}`; $('roman').setAttribute('aria-pressed',String(!hidden)); };
 $('collect').onclick = () => void showGroups();
