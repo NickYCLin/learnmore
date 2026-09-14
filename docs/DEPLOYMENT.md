@@ -26,6 +26,21 @@ dotnet publish LearnMore/LearnMore.csproj --configuration Release --no-restore -
 
 將 `artifacts/publish` 作為部署來源。不要使用歷史提交中附帶的 `publish` 成品。Kuromoji 字典隨 npm 套件還原，不需要初始化舊的 `dict/kuromoji.js` gitlink。
 
+GitHub CI 也會保留 `LearnMore-Backend` 成品 14 天，可從成功的 run 下載；內含 `commit.txt` 供版本核對。部署時沿用上述備份與保留設定的步驟。更新後可在 `mobile` 執行 `npm run check:backend` 驗證 App 所需 API。
+
+Windows 主機沒有 Node.js 時，可使用下列唯讀驗收，支援 Windows PowerShell 5.1：
+
+成功的 Windows CI 另提供 `LearnMore-Deployment-Tools` 成品，內含已通過回歸測試的驗收腳本。可下載到站台之外的維運目錄執行，不必放入網站發布目錄。
+
+```powershell
+powershell.exe -NoProfile -File scripts/verify_learnmore_mobile_backend.ps1
+```
+
+可用 `-BaseUrl https://網站/LearnMore` 指定站台，`-TimeoutSeconds 15` 設定每次請求時限。
+腳本檢查歌曲、歌詞欄位的大小寫，以及訪客存取群組與收藏歌曲是否回傳 401；失敗時拋出含 API 路徑的錯誤。
+部署流程若呼叫此腳本，須把失敗接回原本的還原處理，並保留足夠的還原時間。
+PowerShell 5.1 的 `ConvertFrom-Json` 結果要先直接賦值，再取第一首歌；在管線外包 `@(...)` 會多包一層陣列，造成歌曲 ID 合併。
+
 兩邊程式相同仍須搭配相同的資料庫、設定、外部服務和媒體檔，才會有相同的上線行為。Git 裡的範本預設關閉音軌分離；需要這項功能時，在正式設定啟用並配置本機或遠端處理服務。
 
 ## Mika 角色服務

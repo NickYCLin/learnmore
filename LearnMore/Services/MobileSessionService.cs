@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
@@ -10,7 +11,9 @@ namespace LearnMore.Services;
 public sealed class MobileSessionService(IMemoryCache cache)
 {
     private readonly object gate = new();
-    public record User(int Id, string Name);
+    public record User(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("name")] string Name);
     private record Grant(User User, string Challenge);
     public static bool ValidChallenge(string? value) => value is not null && Regex.IsMatch(value, "^[A-Za-z0-9_-]{43}$");
     public static bool ValidState(string? value) => value is not null && Regex.IsMatch(value, "^[A-Za-z0-9_-]{32,128}$");

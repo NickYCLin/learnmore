@@ -1,15 +1,29 @@
 using System.Data;
 using System.Data.SqlClient;
 using System.Globalization;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace LearnMore.Services;
 
 public sealed class MobileLibraryService(IConfiguration configuration)
 {
-    public record Song(string SongUid, string Title, string Artist, string Performer, string? VideoId);
-    public record Line(int Id, double Time, string Japanese, string Ruby, string Roman, string Chinese);
-    public record Detail(Song Song, IReadOnlyList<Line> Lyrics);
+    public record Song(
+        [property: JsonPropertyName("songUid")] string SongUid,
+        [property: JsonPropertyName("title")] string Title,
+        [property: JsonPropertyName("artist")] string Artist,
+        [property: JsonPropertyName("performer")] string Performer,
+        [property: JsonPropertyName("videoId")] string? VideoId);
+    public record Line(
+        [property: JsonPropertyName("id")] int Id,
+        [property: JsonPropertyName("time")] double Time,
+        [property: JsonPropertyName("japanese")] string Japanese,
+        [property: JsonPropertyName("ruby")] string Ruby,
+        [property: JsonPropertyName("roman")] string Roman,
+        [property: JsonPropertyName("chinese")] string Chinese);
+    public record Detail(
+        [property: JsonPropertyName("song")] Song Song,
+        [property: JsonPropertyName("lyrics")] IReadOnlyList<Line> Lyrics);
     public static bool ValidSongUid(string? uid) => uid is not null && Regex.IsMatch(uid, "^[A-Za-z0-9_-]{1,80}$");
     private SqlConnection Connection() => new(configuration.GetConnectionString("DefaultConnection"));
 
@@ -17,14 +31,20 @@ public sealed class MobileLibraryService(IConfiguration configuration)
     {
         await using var connection = Connection();
         await connection.OpenAsync(ct);
-        const string sql = """
+        // 公開首頁沿用網頁的熱門歌曲來源與排序；搜尋與收藏保留原有順序。
+        var useHomeOrder = string.IsNullOrEmpty(query) && !userId.HasValue;
+        var source = useHomeOrder
+            ? "V_SongsData V INNER JOIN Songs S ON S.SongUid = V.SongUid"
+            : "Songs S";
+        var order = useHomeOrder ? "V.ViewCount DESC, S.SongID DESC" : "S.SongID DESC";
+        var sql = $"""
             SELECT S.SongUid, S.Title, S.Artist, S.Performer, S.YouTubeVideoUrl
-            FROM Songs S
+            FROM {source}
             WHERE (@Query = '' OR S.Title LIKE @Pattern ESCAPE '\' OR S.Artist LIKE @Pattern ESCAPE '\' OR S.Performer LIKE @Pattern ESCAPE '\')
               AND (@UserId IS NULL OR EXISTS (
                 SELECT 1 FROM SongGroupMapping M JOIN SongGroup G ON G.GroupId = M.GroupId
                 WHERE M.SongUid = S.SongUid AND G.UserId = @UserId))
-            ORDER BY S.SongID DESC OFFSET @Offset ROWS FETCH NEXT 30 ROWS ONLY
+            ORDER BY {order} OFFSET @Offset ROWS FETCH NEXT 30 ROWS ONLY
             """;
         await using var command = new SqlCommand(sql, connection);
         command.Parameters.Add("@Query", SqlDbType.NVarChar, 100).Value = query;
