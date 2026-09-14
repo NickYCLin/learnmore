@@ -61,11 +61,19 @@ Windows 站台已完成備份。部署檢查曾因 PowerShell 5.1 將歌曲陣�
 
 後續瀏覽器控制連線中斷，原分頁重新連線與新分頁復原皆未成功。新版備份腳本僅在本機準備並通過語法檢查；Windows 可能留有未送完的文字替換指令，接續前應先取消該行並確認提示字元。尚未建立新版備份或部署計畫，也尚未把新驗收腳本接入正式部署程序。最後外部查核首頁為 HTTP 200，mobile status、songs、groups 仍為 HTTP 404。
 
+## 2026-09-14 14:22 正式部署完成
+
+後續已恢復 Windows 遠端控制，完成新版備份、差異準備、部署與正式 API 驗收。此節取代上方傳輸階段的未部署狀態。
+
+- 新備份目錄為 `C:\Users\magicplus\LM-260914-3088612`，保存 2,090 個部署檔案的計畫與 5 份設定檔；舊備份保留。計畫 SHA-256 為 `3fe8450c2113515be0cbf2df0014f05826ddc668dc4eda7ac5f0c56aff827fa0`。
+- 部署前檢查通過，更新 469 個差異檔案，其中 445 個有原檔備份。新版部署流程接入已通過 Windows PowerShell 5.1 測試的驗收腳本，並保留失敗還原機制。
+- `result.json` 記錄 `Deployed`，完成時間為 `2026-09-14T06:22:58Z`，部署 commit 為 `1b7359f0c389527a6220e62810d2ef1ec006c8d5`。檔案與設定驗證通過，`app_offline.htm` 已移除。
+- Windows 驗收通過：30 首歌曲、單曲與歌詞格式、status 版本 1，以及私人群組和收藏的訪客權限。
+- 本機獨立執行 `mobile/scripts/check-backend.mjs` 通過：status、songs、單曲均為 200，groups 為 401；另外確認首頁為 200，`songs?favorites=true` 為 401。這些檢查未登入或修改資料。
+- [最新 CI](https://github.com/NickYCLin/learnmore/actions/runs/34811689445)與 [iOS 流程](https://github.com/NickYCLin/learnmore/actions/runs/34811689437)均通過，commit 為 `ee6dfe0`。Windows 驗收工具成品已下載至伺服器並核對雜湊。
+
 ## 尚待完成
 
-- 恢復 Windows 遠端控制後，以新的目錄備份目前站台，保留舊備份與設定，將已通過測試的 PowerShell 驗收接入還原流程，再部署已傳入的成品。
-- 2026-09-14 正式 mobile API 仍為 HTTP 404；部署與正式 API 驗收尚未完成。
-- 本機 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；本機可用 codesigning identity 為零。本次未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
-- 先依 [後端部署說明](README.md#後端部署)更新網站，確認 status 版本為 1、歌曲可讀、未登入的 groups 回傳 401。
-- 再依 [iPhone 個人試用](DEVICE_TESTING.md)設定 Xcode、Team、Bundle ID 及簽章，透過 TestFlight 安裝。
+- 本機仍為 Xcode 16.4，未達本專案記載的 Xcode 26 建置要求；可用 codesigning identity 為零。首次 Xcode Cloud 工作流程尚未完成設定，未產生已簽章 archive、上傳 build 或發送 TestFlight 邀請。
+- 依 [iPhone 個人試用](DEVICE_TESTING.md)完成 Xcode、Team、Bundle ID 及簽章設定，建置後透過 TestFlight 安裝。後端部署與公開 API 驗收已完成。
 - 使用測試帳號在真機驗證登入返回與取消、重新開啟 App、收藏與網站同步、播放和背景暫停。這些項目保持未完成。
