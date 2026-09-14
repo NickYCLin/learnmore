@@ -1,6 +1,6 @@
 # iPhone 個人試用
 
-目前先透過 TestFlight 邀請安裝到自己的手機，不發布 App Store。此專案已有 iOS 容器與本機前端，但還沒有完成簽章安裝及真實後端驗收。
+目前先透過 TestFlight 邀請安裝到自己的手機，不發布 App Store。此專案已有 iOS 容器與本機前端；2026-09-14 正式後端部署與 API 驗收已完成，簽章、TestFlight 上傳及真機驗證仍待完成，詳見 [驗證紀錄](VALIDATION.md)。
 
 ## TestFlight 邀請安裝，不需要傳輸線
 
@@ -32,6 +32,23 @@
 ## Xcode Cloud 建置
 
 首次設定需從 Xcode 的 Product → Xcode Cloud → Create Workflow 開始，連結 `NickYCLin/learnmore` 儲存庫並選取 App scheme。工作流程使用 Xcode 26 以上，以 Release 封存 iOS App；完成首次設定後，才能在 App Store Connect 管理與啟動工作流程。
+
+Apple 的 Xcode Cloud 設定入口支援 Xcode 15 以上，因此現有 Xcode 16.4 可用來開始首次設定；實際雲端封存仍選 Xcode 26 以上。雲端建置不依賴這台 Mac 的本機簽章私鑰，仍需由開發者帳號完成團隊及儲存庫連結。參考 [Xcode Cloud 入門條件](https://developer.apple.com/xcode-cloud/get-started/)。
+
+本次試用工作流程使用以下設定：
+
+| 項目 | 值 |
+| --- | --- |
+| 專案 | `mobile/ios/App/App.xcodeproj` |
+| Scheme／產品 | `App`／`ビビ學日語`（`tw.learnmore.app`） |
+| 團隊 | `yang chen lin`，`PV3S28HQN7` |
+| 儲存庫 | `NickYCLin/learnmore` |
+| 首次建置分支 | `codex/mobile-testflight-followup` |
+| 雲端 Xcode | 優先選已通過本專案 CI 的 26.3，或相容的 26 以上正式版本 |
+| 動作 | Archive、iOS、Release，選擇 TestFlight 散布 |
+
+首次只建立封存動作；共用 scheme 尚未設定原生 XCTest target，前端單元測試由 `ci_post_clone.sh` 執行。建置成功後，在 App Store Connect 確認 build 已處理完成，再設定自己的內部測試群組。GitHub 或 Apple 的帳號授權必須在其正式介面完成，勿把密碼或私鑰寫入專案。
+
 
 `ios/App/ci_scripts/ci_post_clone.sh` 會在雲端安裝 Node.js 24、依 lockfile 還原套件、執行單元測試，再建置前端並同步 Capacitor 資源。這一步會補上 Git 未收錄的 `node_modules` 與網頁資源，供後續原生編譯使用。
 
