@@ -62,11 +62,14 @@ public sealed class AudioStemPublicationGuardTests
             () => Task.FromResult(true), () => throw new IOException("disk unavailable")));
     }
 
-    [Fact]
-    public void SqlLockAndBothProcessorsKeepPublicationInsideRegistration()
+    [Theory]
+    [InlineData("\n")]
+    [InlineData("\r\n")]
+    public void SqlLockAndBothProcessorsKeepPublicationInsideRegistration(string lineEnding)
     {
         var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var service = File.ReadAllText(Path.Combine(root, "LearnMore/Services/AudioStemJobService.cs"));
+        var service = File.ReadAllText(Path.Combine(root, "LearnMore/Services/AudioStemJobService.cs"))
+            .ReplaceLineEndings(lineEnding).ReplaceLineEndings("\n");
         Assert.Contains("dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", service);
         Assert.Contains("existsCommand.ExecuteScalarAsync(cancellationToken)", service);
         Assert.Contains("connection, transaction);\n            existsCommand", service);
