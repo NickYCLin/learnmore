@@ -95,11 +95,8 @@ public sealed class RemoteApiAudioStemProcessor : IAudioStemProcessor
             }
 
             string destinationRoot = Path.Combine(_environment.WebRootPath, "audio-stems", job.SongUid);
-            Directory.CreateDirectory(destinationRoot);
             string instrumentalDestination = Path.Combine(destinationRoot, "instrumental.flac");
             string vocalsDestination = Path.Combine(destinationRoot, "vocals.flac");
-            File.Copy(instrumentalFlac, instrumentalDestination, overwrite: true);
-            File.Copy(vocalsFlac, vocalsDestination, overwrite: true);
 
             await _jobService.RegisterCompletedStemsAsync(
                 job.SongUid,
@@ -107,6 +104,12 @@ public sealed class RemoteApiAudioStemProcessor : IAudioStemProcessor
                 vocalsDestination,
                 response.Model,
                 "remote-demucs",
+                () =>
+                {
+                    Directory.CreateDirectory(destinationRoot);
+                    File.Copy(instrumentalFlac, instrumentalDestination, overwrite: true);
+                    File.Copy(vocalsFlac, vocalsDestination, overwrite: true);
+                },
                 cancellationToken);
         }
         finally

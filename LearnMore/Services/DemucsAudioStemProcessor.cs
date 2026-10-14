@@ -50,12 +50,9 @@ public sealed class DemucsAudioStemProcessor : IAudioStemProcessor
             string sourceAudio = await DownloadAudioAsync(job, jobRoot, cancellationToken);
             var (instrumental, vocals) = await SeparateAudioAsync(sourceAudio, jobRoot, cancellationToken);
             string destinationRoot = Path.Combine(_environment.WebRootPath, "audio-stems", job.SongUid);
-            Directory.CreateDirectory(destinationRoot);
 
             string instrumentalDestination = Path.Combine(destinationRoot, "instrumental.flac");
             string vocalsDestination = Path.Combine(destinationRoot, "vocals.flac");
-            File.Copy(instrumental, instrumentalDestination, overwrite: true);
-            File.Copy(vocals, vocalsDestination, overwrite: true);
 
             await _jobService.RegisterCompletedStemsAsync(
                 job.SongUid,
@@ -63,6 +60,12 @@ public sealed class DemucsAudioStemProcessor : IAudioStemProcessor
                 vocalsDestination,
                 _options.ModelName,
                 "background-demucs",
+                () =>
+                {
+                    Directory.CreateDirectory(destinationRoot);
+                    File.Copy(instrumental, instrumentalDestination, overwrite: true);
+                    File.Copy(vocals, vocalsDestination, overwrite: true);
+                },
                 cancellationToken);
         }
         finally
