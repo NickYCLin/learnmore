@@ -18,11 +18,13 @@ const backend = 'https://magicplus-design.serveirc.com/LearnMore';
 let token = ''; // 憑證只留在記憶體，避免寫入 localStorage 或前端設定。
 let loginSerial = 0;
 let pendingLogin: { state: string; verifier: string; serial: number } | null = null;
+let loginNavigation: { serial: number; destination: 'favorites' } | null = null;
 let page = 1, favorites = false, query = '', listingSerial = 0, detailSerial = 0;
 let retrySong: { uid: string; serial: number } | null = null;
 let groupDialogSerial = 0, groupsRequestSerial = 0;
 let groupSubmitSerial: number | null = null, groupOpenedSerial: number | null = null;
 let catalogNeedsReload = false;
+let catalogActive = true;
 let detail: Detail | null = null, player: Player | null = null, selected = -1, loop = false;
 let youtubePromise: Promise<void> | null = null;
 
@@ -31,7 +33,7 @@ class SessionChangedError extends Error {}
 function reportError(error: unknown) {
   if (!(error instanceof SessionChangedError)) notice(errorMessage(error));
 }
-function cancelLogin() { loginSerial++; pendingLogin = null; }
+function cancelLogin() { loginSerial++; pendingLogin = null; loginNavigation = null; }
 function setGroupBusy(busy: boolean) {
   const form = $<HTMLFormElement>('new-group');
   form.setAttribute('aria-busy', String(busy));
@@ -117,11 +119,12 @@ async function loadWebsiteCatalog() {
 
 async function loadSongs(append = false) {
   const serial = ++listingSerial;
-  retrySong = null;
+  if (catalogActive) retrySong = null;
   $('catalog-title').textContent = query ? '搜尋結果' : favorites ? '我的收藏' : '探索歌曲';
   $('catalog-eyebrow').textContent = favorites ? 'YOUR PERSONAL COLLECTION' : 'YOUR DAILY PLAYLIST';
   $('songs').setAttribute('aria-busy', 'true');
-  notice('載入歌曲中…'); $('retry').hidden = true; $('more').hidden = true;
+  if (catalogActive) { notice('載入歌曲中…'); $('retry').hidden = true; }
+  $('more').hidden = true;
   if (!append) { page = 1; $('songs').replaceChildren(); }
   try {
     const catalog = !query && !favorites ? await loadWebsiteCatalog() : null;
@@ -129,8 +132,8 @@ async function loadSongs(append = false) {
     if (serial !== listingSerial) return;
     catalogNeedsReload = false;
     $('songs').append(...songs.map(card)); $('more').hidden = catalog ? !catalog.hasMore : songs.length < 30;
-    notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
-  } catch (error) { if (serial === listingSerial && !(error instanceof SessionChangedError)) { reportError(error); $('retry').hidden = false; if (append) page--; } }
+    if (catalogActive) notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
+  } catch (error) { if (serial === listingSerial && !(error instanceof SessionChangedError)) { if (append) page--; if (catalogActive) { reportError(error); $('retry').hidden = false; } else catalogNeedsReload = true; } }
   finally { if (serial === listingSerial) $('songs').setAttribute('aria-busy', 'false'); }
 }
 
@@ -175,8 +178,7 @@ function nativePlayer(videoId: string): Player {
 
 async function openSong(uid: string) {
   const serial = ++detailSerial;
-  listingSerial++; retrySong = null; closeGroups();
-  $('songs').setAttribute('aria-busy', 'false');
+  catalogActive = false; retrySong = null; closeGroups();
   notice('載入歌詞中…'); $('retry').hidden = true;
   try {
     const loaded = await api<Detail>(`songs/${encodeURIComponent(uid)}`);
@@ -232,10 +234,11 @@ setInterval(() => {
 }, 150);
 
 function base64Url(bytes: Uint8Array) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-async function login() {
+async function login(destination?: 'favorites') {
   if (!native) { notice('登入請使用 iOS App；瀏覽器預覽可測試搜尋與歌詞。'); return; }
   const serial = ++loginSerial;
   pendingLogin = null;
+  loginNavigation = destination ? { serial, destination } : null;
   const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
   const state = base64Url(crypto.getRandomValues(new Uint8Array(32)));
   try {
@@ -257,9 +260,12 @@ if (native) {
       const result = await api<{ token: string; user: { name: string } }>('session', 'POST', { code: callback.searchParams.get('code'), verifier }, serial);
       if (serial !== loginSerial) return;
       token = result.token; $('account').textContent = '登出'; notice(`已登入，${result.user.name}`);
+      const destination = loginNavigation?.serial === serial ? loginNavigation.destination : null;
+      loginNavigation = null;
+      if (destination === 'favorites') enterFavorites();
       await Browser.close().catch(() => {});
       if (serial !== loginSerial) return;
-      if (favorites) await loadSongs();
+      if (!destination && favorites) await loadSongs();
     } catch (error) { if (serial === loginSerial) reportError(error); }
   });
   void App.addListener('appStateChange', ({ isActive }) => { if (!isActive) player?.pauseVideo(); });
@@ -293,10 +299,11 @@ async function showGroups(intent = ++groupDialogSerial) {
 }
 
 $('search').onsubmit = event => { event.preventDefault(); query = $<HTMLInputElement>('query').value.trim(); void loadSongs(); };
-function returnToLibrary() { detailSerial++; retrySong = null; $('retry').hidden = true; closeGroups(); player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); window.scrollTo(0, 0); }
+function returnToLibrary() { catalogActive = true; detailSerial++; retrySong = null; $('retry').hidden = true; closeGroups(); player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); window.scrollTo(0, 0); }
+function enterFavorites() { returnToLibrary(); query = ''; $<HTMLInputElement>('query').value = ''; favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); }
 $('home').onclick = event => { event.preventDefault(); returnToLibrary(); if (favorites || catalogNeedsReload) void loadSongs(); };
 $('all').onclick = () => { returnToLibrary(); favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); void loadSongs(); };
-$('favorites').onclick = () => { if (!token) { void login().catch(error => notice(errorMessage(error))); return; } returnToLibrary(); favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); };
+$('favorites').onclick = () => { if (!token) { void login('favorites').catch(error => notice(errorMessage(error))); return; } enterFavorites(); };
 $('more').onclick = () => { page++; void loadSongs(true); };
 $('retry').onclick = () => { if (retrySong?.serial === detailSerial) void openSong(retrySong.uid); else void loadSongs(); };
 $('back').onclick = () => { returnToLibrary(); if (favorites || catalogNeedsReload) void loadSongs(); };
