@@ -35,7 +35,7 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     private var desiredPlaying = false
     private var interrupted = false
     private var resumeAfterInterruption = false
-    private let duration = 30.0
+    private let duration = 180.0
     private var enabled: Bool {
         guard let url = Bundle.main.url(forResource: "native-audio-diagnostic", withExtension: "json", subdirectory: "public"),
               let data = try? Data(contentsOf: url),
@@ -72,21 +72,47 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         if let fixtureURL = fixtureURL { try? FileManager.default.removeItem(at: fixtureURL) }
     }
 
-    private func perform(_ call: CAPPluginCall, action: @escaping () throws -> Void) {
+    private func perform(_ call: CAPPluginCall, resolveImmediately: Bool = true, action: @escaping () throws -> Void) {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { call.reject("診斷播放器已釋放", "DISPOSED"); return }
             guard self.enabled else { call.reject("原生音訊診斷建置旗標未開啟", "DISABLED"); return }
-            do { try action(); call.resolve(self.snapshot()) }
+            do { try action(); if resolveImmediately { call.resolve(self.snapshot()) } }
             catch { call.reject(error.localizedDescription, "DIAGNOSTIC_AUDIO") }
         }
     }
 
     @objc public func start(_ call: CAPPluginCall) {
-        perform(call) { [weak self] in
+        perform(call, resolveImmediately: false) { [weak self] in
             guard let self = self else { return }
-            guard call.getString("testId") == "tone-220-30s" else { throw self.failure("僅接受內建測試 ID") }
-            if self.player == nil { try self.prepare() }
+            guard call.getString("testId") == "tone-220-180s" else { throw self.failure("僅接受內建測試 ID") }
+            guard !self.interrupted else { throw self.failure("音訊中斷中") }
+            guard self.player != nil else {
+                self.stopPlayback()
+                let currentGeneration = self.generation
+                self.status = "loading"; self.publish()
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let result = Result { try Self.generateFixture() }
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self = self, self.generation == currentGeneration else {
+                            if case .success(let url) = result { try? FileManager.default.removeItem(at: url) }
+                            call.reject("測試訊號載入已取消", "CANCELLED"); return
+                        }
+                        do {
+                            self.fixtureURL = try result.get()
+                            try self.prepare()
+                            try self.play()
+                            call.resolve(self.snapshot())
+                        } catch {
+                            self.stopPlayback(); self.status = "error"
+                            self.errorMessage = error.localizedDescription; self.publish()
+                            call.reject(error.localizedDescription, "DIAGNOSTIC_AUDIO")
+                        }
+                    }
+                }
+                return
+            }
             try self.play()
+            call.resolve(self.snapshot())
         }
     }
 
@@ -96,7 +122,7 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc public func seek(_ call: CAPPluginCall) {
         perform(call) { [weak self] in
             guard let self = self, let seconds = call.getDouble("seconds"), seconds.isFinite,
-                  seconds >= 0, seconds <= self.duration, self.player != nil else { throw NSError(domain: "DiagnosticAudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "進度必須介於 0 至 30 秒且已載入測試訊號"]) }
+                  seconds >= 0, seconds <= self.duration, self.player != nil else { throw NSError(domain: "DiagnosticAudio", code: 1, userInfo: [NSLocalizedDescriptionKey: "進度必須介於 0 至 180 秒且已載入測試訊號"]) }
             self.seekPlayback(seconds)
         }
     }
@@ -105,9 +131,11 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         NSError(domain: "DiagnosticAudio", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 
-    private func generateFixture() throws -> URL {
-        let sampleRate = 22050, sampleCount = sampleRate * Int(duration)
+    private static func generateFixture() throws -> URL {
+        let duration = 180.0
+        let sampleRate = 8000, sampleCount = sampleRate * Int(duration)
         var data = Data()
+        data.reserveCapacity(44 + sampleCount * 2)
         func text(_ value: String) { data.append(contentsOf: value.utf8) }
         func integer<Value: FixedWidthInteger>(_ value: Value) {
             var littleEndian = value.littleEndian
@@ -128,8 +156,6 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func prepare() throws {
-        stopPlayback()
-        fixtureURL = try generateFixture()
         guard let fixtureURL = fixtureURL else { throw failure("無法產生測試訊號") }
         let item = AVPlayerItem(url: fixtureURL)
         let currentPlayer = AVPlayer(playerItem: item)
@@ -167,6 +193,7 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func play() throws {
         guard !interrupted, let player = player else { throw failure("音訊中斷中或未載入") }
+        guard player.status != .failed, player.currentItem?.status != .failed else { throw failure("測試訊號無法播放") }
         try session.setCategory(.playback, mode: .default, options: [])
         try session.setActive(true)
         desiredPlaying = true; resumeAfterInterruption = false; status = "loading"
@@ -176,6 +203,7 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func pausePlayback() {
+        if player == nil && status == "loading" { generation += 1; status = "stopped" }
         desiredPlaying = false; resumeAfterInterruption = false
         player?.pause()
         if player != nil { status = "paused" }
@@ -185,7 +213,6 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func stopPlayback() {
         generation += 1
-        interrupted = false
         pausePlayback()
         if let timeObserver = timeObserver { player?.removeTimeObserver(timeObserver) }
         timeObserver = nil; statusObserver = nil; rateObserver = nil
@@ -212,8 +239,7 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     private func handleInterruption(_ note: Notification) {
-        guard player != nil,
-              let value = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+        guard let value = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: value) else { return }
         if type == .began {
             resumeAfterInterruption = desiredPlaying && (player?.rate ?? 0) > 0
@@ -230,32 +256,45 @@ public class DiagnosticAudioPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    private func remoteCommand(_ currentGeneration: Int, action: @escaping () throws -> Void) -> MPRemoteCommandHandlerStatus {
+        let execute = { () -> MPRemoteCommandHandlerStatus in
+            guard self.generation == currentGeneration, self.player != nil, !self.interrupted else { return .commandFailed }
+            do { try action(); return .success }
+            catch {
+                self.pausePlayback(); self.errorMessage = error.localizedDescription; self.publish()
+                return .commandFailed
+            }
+        }
+        if Thread.isMainThread { return execute() }
+        return DispatchQueue.main.sync(execute: execute)
+    }
+
     private func installCommands() {
         let center = MPRemoteCommandCenter.shared()
         let currentGeneration = generation
         let playTarget = center.playCommand.addTarget { [weak self] _ in
             guard let self = self else { return .commandFailed }
-            DispatchQueue.main.async {
-                guard self.generation == currentGeneration else { return }
-                do { try self.play() } catch { self.pausePlayback(); self.errorMessage = error.localizedDescription; self.publish() }
-            }
-            return .success
+            return self.remoteCommand(currentGeneration) { try self.play() }
         }
         let pauseTarget = center.pauseCommand.addTarget { [weak self] _ in
-            DispatchQueue.main.async {
-                guard let self = self, self.generation == currentGeneration else { return }
-                self.pausePlayback()
-            }; return .success
+            guard let self = self else { return .commandFailed }
+            return self.remoteCommand(currentGeneration) { self.pausePlayback() }
+        }
+        let toggleTarget = center.togglePlayPauseCommand.addTarget { [weak self] _ in
+            guard let self = self else { return .commandFailed }
+            return self.remoteCommand(currentGeneration) {
+                if self.desiredPlaying { self.pausePlayback() }
+                else { try self.play() }
+            }
         }
         let seekTarget = center.changePlaybackPositionCommand.addTarget { [weak self] event in
-            guard let event = event as? MPChangePlaybackPositionCommandEvent, event.positionTime.isFinite,
-                  event.positionTime >= 0, event.positionTime <= 30 else { return .commandFailed }
-            DispatchQueue.main.async {
-                guard let self = self, self.generation == currentGeneration else { return }
+            guard let self = self, let event = event as? MPChangePlaybackPositionCommandEvent, event.positionTime.isFinite,
+                  event.positionTime >= 0, event.positionTime <= self.duration else { return .commandFailed }
+            return self.remoteCommand(currentGeneration) {
                 self.seekPlayback(event.positionTime)
-            }; return .success
+            }
         }
-        commands = [(center.playCommand, playTarget), (center.pauseCommand, pauseTarget), (center.changePlaybackPositionCommand, seekTarget)]
+        commands = [(center.playCommand, playTarget), (center.pauseCommand, pauseTarget), (center.togglePlayPauseCommand, toggleTarget), (center.changePlaybackPositionCommand, seekTarget)]
         commands.forEach { $0.0.isEnabled = true }
     }
 

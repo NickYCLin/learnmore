@@ -15,6 +15,8 @@ test('旗標開啟明確標示非曲庫，WebKit 不假裝提供原生背景播�
   const panel = page.locator('#audio-diagnostic');
   await expect(panel).toContainText('非曲庫');
   await expect(panel).toContainText('不下載音樂');
+  await expect(panel).toContainText('180 秒');
+  await expect(panel.locator('[data-seek]')).toHaveAttribute('max', '180');
   await expect(panel).toContainText('瀏覽器不模擬背景音訊');
   await expect(panel.locator('[data-play]')).toBeDisabled();
   await expect(panel.locator('[data-seek]')).toBeDisabled();

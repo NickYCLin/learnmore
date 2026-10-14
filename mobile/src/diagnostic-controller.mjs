@@ -21,7 +21,7 @@ export function createDiagnosticController({ bridge, suspendYouTube, render }) {
       return enqueue(async () => {
         await ready;
         if (disposed || current !== intent) return;
-        accept(await bridge.start({ testId: 'tone-220-30s' }));
+        accept(await bridge.start({ testId: 'tone-220-180s' }));
       });
     },
     pause() { return enqueue(async () => { accept(await bridge.pause()); }); },

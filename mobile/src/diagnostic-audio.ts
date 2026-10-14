@@ -5,7 +5,7 @@ import { createDiagnosticController } from './diagnostic-controller.mjs';
 
 type AudioState = { revision: number; status: string; seconds: number; duration: number; rate: number; error: string };
 interface DiagnosticBridge {
-  start(options: { testId: 'tone-220-30s' }): Promise<AudioState>;
+  start(options: { testId: 'tone-220-180s' }): Promise<AudioState>;
   pause(): Promise<AudioState>;
   stop(): Promise<AudioState>;
   seek(options: { seconds: number }): Promise<AudioState>;
@@ -20,7 +20,7 @@ export function initializeDiagnosticAudio(suspendYouTube: () => void) {
   if (import.meta.env.VITE_NATIVE_AUDIO_DIAGNOSTIC !== '1') return;
   const panel = document.createElement('section');
   panel.id = 'audio-diagnostic'; panel.setAttribute('aria-label', '原生背景音訊診斷');
-  panel.innerHTML = '<h2>原生背景音訊診斷（非曲庫）</h2><p>僅播放 App 自產的 30 秒低音量測試訊號，不下載音樂。請先調低裝置音量。</p><p role="status" data-status></p><button data-play>播放／恢復測試訊號</button><button data-pause>暫停</button><button data-stop>停止並清理</button><label>原生進度 <input data-seek type="range" min="0" max="30" step="0.1" value="0" disabled></label>';
+  panel.innerHTML = '<h2>原生背景音訊診斷（非曲庫）</h2><p>僅播放 App 自產的 180 秒低音量測試訊號，不下載音樂。請先調低裝置音量。</p><p role="status" data-status></p><button data-play>播放／恢復測試訊號</button><button data-pause>暫停</button><button data-stop>停止並清理</button><label>原生進度 <input data-seek type="range" min="0" max="180" step="0.1" value="0" disabled></label>';
   document.querySelector('main')!.append(panel);
   const status = panel.querySelector<HTMLElement>('[data-status]')!;
   const seek = panel.querySelector<HTMLInputElement>('[data-seek]')!;

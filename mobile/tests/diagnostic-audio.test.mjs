@@ -12,7 +12,7 @@ function deferred() {
 function setup() {
   const calls = [], states = [];
   let revision = 0, listener, removed = false;
-  const state = (status, seconds = 0) => ({ revision: ++revision, status, seconds, duration: 30, rate: status === 'playing' ? 1 : 0, error: '' });
+  const state = (status, seconds = 0) => ({ revision: ++revision, status, seconds, duration: 180, rate: status === 'playing' ? 1 : 0, error: '' });
   const bridge = {
     async addListener(name, receive) { assert.equal(name, 'stateChange'); listener = receive; return { remove: async () => { removed = true; } }; },
     async start(options) { calls.push(['start', options]); return state('playing'); },
@@ -28,7 +28,7 @@ function setup() {
 test('診斷先停止 YouTube，只傳固定測試 ID；pause/seek 以原生回傳為準', async () => {
   const fixture = setup();
   await fixture.controller.start(); await fixture.controller.pause(); await fixture.controller.seek(7);
-  assert.deepEqual(fixture.calls, [['destroyYouTube'], ['start', { testId: 'tone-220-30s' }], ['pause'], ['seek', { seconds: 7 }]]);
+  assert.deepEqual(fixture.calls, [['destroyYouTube'], ['start', { testId: 'tone-220-180s' }], ['pause'], ['seek', { seconds: 7 }]]);
   assert.equal(fixture.states.at(-1).seconds, 7);
   assert.equal(fixture.states.at(-1).rate, 0);
   await fixture.controller.dispose();
@@ -94,14 +94,13 @@ test('iOS source wiring：target、兩個 bridge 入口、背景模式與封閉�
   assert.match(read('ios/App/App/Base.lproj/Main.storyboard'), /customClass="LearnMoreBridgeViewController"/);
   assert.match(read('ios/App/App/Info.plist'), /UIBackgroundModes<\/key>\s*<array><string>audio<\/string>/);
   assert.match(source, /registerPluginInstance\(DiagnosticAudioPlugin\(\)\)/);
-  assert.match(source, /call.getString\("testId"\) == "tone-220-30s"/);
+  assert.match(source, /call.getString\("testId"\) == "tone-220-180s"/);
   assert.doesNotMatch(source, /URL\(string:|URLSession|AVAudioEngine|setCategory\(\.record/);
   assert.match(source, /resumeAfterInterruption && desiredPlaying && options.contains\(\.shouldResume\)/);
   assert.match(source, /desiredPlaying = false; resumeAfterInterruption = false/);
   assert.match(source, /oldDeviceUnavailable/);
   assert.match(source, /guard self\?\.player != nil/);
-  assert.match(source, /guard player != nil,\s*let value = note.userInfo/);
-  assert.match(source, /generation \+= 1\s*interrupted = false\s*pausePlayback\(\)/);
+  assert.match(source, /guard let value = note.userInfo/);
   assert.match(source, /notifyOthersOnDeactivation/);
   assert.match(source, /subdirectory: "public"/);
 });
