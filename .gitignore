@@ -20,7 +20,10 @@ LearnMore/wwwroot/uploads/
 *.pem
 *.pfx
 *.p8
+*.p12
 *.mobileprovision
+*.ipa
+*.xcarchive/
 *.key
 *.cookies
 cookies.txt
@@ -44,11 +47,21 @@ var/
 *.srt
 *.vtt
 
-# Xcode local build and signing state
-ios/DerivedData/
+# Kuromoji is restored by npm ci; the old unconfigured gitlink is unused.
+/LearnMore/wwwroot/js/dict/kuromoji.js/
+/LearnMore/Properties/PublishProfiles/*.pubxml.user
+**/.venv/
+**/.pytest_cache/
+/mobile/dist/
+/mobile/test-results/
+/mobile/playwright-report/
+/mobile/ios/App/App/public/
+/mobile/ios/App/Pods/
+/mobile/ios/App/build/
+/mobile/ios/App/App/capacitor.config.json
+/mobile/ios/App/App/config.xml
 **/xcuserdata/
-*.xcuserstate
-*.ipa
-*.xcarchive/
-ios/Config/Local.xcconfig
 **/.build/
+/.playwright-cli/
+/output/
+/artifacts/
