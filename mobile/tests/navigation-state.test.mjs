@@ -26,8 +26,10 @@ class Element {
   remove() {}
 }
 
-function setup() {
+function setup({ digest = (...args) => webcrypto.subtle.digest(...args) } = {}) {
   const elements = new Map(), listeners = {}, calls = [], loginURLs = [];
+  const browserOpenWaiters = [];
+  const waitForBrowserOpen = () => new Promise(resolve => { browserOpenWaiters.push(resolve); });
   const element = id => {
     if (!elements.has(id)) elements.set(id, new Element());
     return elements.get(id);
@@ -35,7 +37,8 @@ function setup() {
   const transport = { request: async options => { throw new Error(`Unexpected request: ${options.url}`); } };
   const request = options => { calls.push(options); return transport.request(options); };
   const context = {
-    console, URL, TextEncoder, AbortSignal, crypto: webcrypto,
+    console, URL, TextEncoder, AbortSignal,
+    crypto: { getRandomValues: values => webcrypto.getRandomValues(values), subtle: { digest } },
     btoa: value => Buffer.from(value, 'binary').toString('base64'),
     setInterval: () => 0, clearInterval() {}, clearTimeout() {},
     document: { getElementById: element, createElement: () => new Element(), querySelector: element,
@@ -45,14 +48,14 @@ function setup() {
     Capacitor: { isNativePlatform: () => true }, CapacitorHttp: { request, get: request },
     App: { addListener: async (name, listener) => { listeners[name] = listener; } },
     Browser: { addListener: async (name, listener) => { listeners[name] = listener; },
-      open: async options => { loginURLs.push(options.url); }, close: async () => {} },
+      open: async options => { loginURLs.push(options.url); browserOpenWaiters.shift()?.(options.url); }, close: async () => {} },
     DOMPurify: { sanitize: value => value }, activeLineIndex: () => 0, loopEnd: () => 1,
     parseWebsiteCatalog: () => ({ songs: [], hasMore: false }),
   };
   element('practice').hidden = true;
   element('favorites').setAttribute('aria-pressed', 'false');
   vm.createContext(context); vm.runInContext(compiled, context);
-  return { ...context.fixture, element, listeners, calls, loginURLs, transport };
+  return { ...context.fixture, element, listeners, calls, loginURLs, transport, waitForBrowserOpen };
 }
 
 function deferred() {
@@ -68,11 +71,32 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 const callback = (fixture, state) => fixture.listeners.appUrlOpen({ url: `learnmore://auth?state=${state}&code=fixture` });
 const state = fixture => new URL(fixture.loginURLs.at(-1)).searchParams.get('state');
 async function favoritesLogin(fixture) {
-  fixture.element('favorites').onclick(); await flush(); return state(fixture);
+  const opened = fixture.waitForBrowserOpen();
+  fixture.element('favorites').onclick();
+  return new URL(await opened).searchParams.get('state');
 }
 function setSearch(fixture) {
   fixture.setQuery('search'); fixture.element('query').value = 'search';
 }
+
+test('收藏登入 helper 等待延遲 digest 後的 Browser.open，而非 event-loop flush', { timeout: 5000 }, async () => {
+  const held = deferred(), fixture = setup({ digest: () => held.promise });
+  setSearch(fixture);
+  let completed = false;
+  const opening = favoritesLogin(fixture).then(value => { completed = true; return value; });
+  await flush();
+  assert.equal(completed, false);
+  assert.equal(fixture.loginURLs.length, 0);
+  held.resolve(new Uint8Array(32).buffer);
+  const loginState = await opening;
+  assert.equal(fixture.loginURLs.length, 1);
+  assert.equal(loginState, state(fixture));
+  fixture.transport.request = async options => options.method === 'POST'
+    ? response({ token: 'current', user: { name: 'fixture' } }) : response(songs);
+  await callback(fixture, loginState); await flush();
+  assert.equal(fixture.element('favorites').attributes['aria-pressed'], 'true');
+  assert.equal(new URL(fixture.calls.at(-1).url).searchParams.get('favorites'), 'true');
+});
 
 for (const returnBeforeResponse of [true, false]) {
   test(`分頁晚成功在${returnBeforeResponse ? '返回後' : '返回前'}恢復載入更多且不跳頁`, async () => {
