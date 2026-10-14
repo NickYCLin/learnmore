@@ -172,7 +172,7 @@ WHERE Id = @Id", connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task RegisterCompletedStemsAsync(string songUid, string instrumentalPath, string vocalsPath, string modelName, string source, CancellationToken cancellationToken = default)
+    public async Task RegisterCompletedStemsAsync(string songUid, string instrumentalPath, string vocalsPath, string modelName, string source, Action publishFiles, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
         await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
@@ -181,6 +181,16 @@ WHERE Id = @Id", connection);
 
         try
         {
+            await using var existsCommand = new SqlCommand("SELECT COUNT(*) FROM dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", connection, transaction);
+            existsCommand.Parameters.AddWithValue("@SongUid", songUid);
+            if (!await AudioStemPublicationGuard.PublishAsync(
+                async () => Convert.ToInt32(await existsCommand.ExecuteScalarAsync(cancellationToken)) > 0,
+                publishFiles, cancellationToken))
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return;
+            }
+
             await using (var deleteCommand = new SqlCommand("DELETE FROM dbo.SongAudioStems WHERE SongUid = @SongUid AND StemKind IN (N'instrumental', N'vocals')", connection, transaction))
             {
                 deleteCommand.Parameters.AddWithValue("@SongUid", songUid);

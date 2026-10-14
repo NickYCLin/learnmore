@@ -2,7 +2,7 @@
   "appId": "tw.learnmore.app",
   "appName": "ビビ學日語",
   "webDir": "dist",
-  "backgroundColor": "#f8fafc",
+  "backgroundColor": "#f6f6fb",
   "loggingBehavior": "debug",
   "ios": { "contentInset": "never", "allowsLinkPreview": false }
 }

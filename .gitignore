@@ -19,6 +19,11 @@ LearnMore/wwwroot/uploads/
 !.env.example
 *.pem
 *.pfx
+*.p8
+*.p12
+*.mobileprovision
+*.ipa
+*.xcarchive/
 *.key
 *.cookies
 cookies.txt
@@ -48,12 +53,15 @@ var/
 **/.venv/
 **/.pytest_cache/
 /mobile/dist/
+/mobile/test-results/
+/mobile/playwright-report/
 /mobile/ios/App/App/public/
 /mobile/ios/App/Pods/
 /mobile/ios/App/build/
 /mobile/ios/App/App/capacitor.config.json
 /mobile/ios/App/App/config.xml
 **/xcuserdata/
+**/.build/
 /.playwright-cli/
 /output/
 /artifacts/

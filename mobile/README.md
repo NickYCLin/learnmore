@@ -20,6 +20,17 @@ npm run ios:sync
 npm run ios:open
 ```
 
+要取得已編譯的模擬器 App，可下載 GitHub Actions 的 `LearnMore-iOS-Simulator` 成品；網站部署包為 `LearnMore-Backend`。下載與安裝步驟見 [iPhone 個人試用](DEVICE_TESTING.md#下載建置成品)。
+
+登入與收藏的畫面回歸測試使用 WebKit，首次執行先安裝測試瀏覽器：
+
+```sh
+npx playwright install webkit
+npm run test:ui
+```
+
+測試會操作實際前端，使用原創例句、模擬 API 與原生 bridge 替身；不會連正式帳號。測試設定獨立於正式 Vite 建置。最新結果與待辦見 [驗證紀錄](VALIDATION.md)。
+
 Xcode 選擇開發團隊、確認 Bundle ID `tw.learnmore.app` 的可用性，再選擇 iPhone 執行。正式簽章、Apple 憑證與 provisioning profile 不放進 Git。若變更 Bundle ID，也要同步後端 `mobile-player.js` 的 `widget_referrer`。
 
 前端預覽：`npm run dev`。Vite 將 `/backend` 代理到既有站台的 `/LearnMore`；原生 App 使用 Capacitor 原生 HTTP 呼叫正式 API，不需開放任意 CORS。預覽的登入功能僅在 iOS 提供，前端沒有測試帳密或繞過驗證的入口。
@@ -36,6 +47,8 @@ Xcode 選擇開發團隊、確認 Bundle ID `tw.learnmore.app` 的可用性，�
 - 未登入呼叫 `GET /LearnMore/api/mobile/v1/groups` 回傳 401。
 
 不新增資料表，不將資料庫埠開放給 App。私有資料 API 只接受後端簽發的 Bearer 工作階段，不接受 App 指定使用者 ID。
+
+部署後執行 `npm run check:backend`，會檢查版本、歌曲清單、單曲與歌詞格式，以及訪客存取收藏是否回傳 401。驗證其他環境時可使用 `npm run check:backend -- --base-url https://網站/LearnMore`。這不會更改 App 內設定的伺服器地址，也不會登入或修改資料。
 
 ## 登入與收藏
 

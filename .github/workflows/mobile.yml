@@ -11,7 +11,7 @@ permissions:
 jobs:
   mobile:
     runs-on: macos-15
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: mobile
@@ -26,6 +26,39 @@ jobs:
       - name: 選擇 Xcode 26
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
       - run: npm test
+      - name: 安裝 WebKit 測試瀏覽器
+        run: npx playwright install webkit
+      - name: 驗證登入與收藏畫面
+        run: npm run test:ui
+      - name: 保留失敗的畫面測試紀錄
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mobile-ui-test-results
+          path: mobile/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
       - run: npm run ios:sync
       - name: 編譯 iOS 模擬器版本
-        run: xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
+        timeout-minutes: 15
+        run: >-
+          xcodebuild -quiet -project ios/App/App.xcodeproj -scheme App
+          -configuration Release -sdk iphonesimulator
+          -destination 'generic/platform=iOS Simulator'
+          -derivedDataPath "$RUNNER_TEMP/LearnMoreIOS" -jobs 2
+          CODE_SIGNING_ALLOWED=NO build
+      - name: 打包模擬器 App
+        run: |
+          mkdir -p ../artifacts/ios
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/LearnMoreIOS/Build/Products/Release-iphonesimulator/App.app" \
+            ../artifacts/ios/LearnMore-simulator.zip
+          git rev-parse HEAD > ../artifacts/ios/commit.txt
+          xcodebuild -version > ../artifacts/ios/xcode-version.txt
+      - name: 保留模擬器 App
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-iOS-Simulator
+          path: artifacts/ios/
+          if-no-files-found: error
+          retention-days: 14

@@ -8,26 +8,29 @@
   <title>ビビ學日語</title>
 </head>
 <body>
-  <header><a href="#" class="brand">ビビ學日語 <small>LearnMore</small></a><button id="account">登入</button></header>
+  <header class="app-header"><a href="#" class="brand" id="home"><span class="brand-mark" aria-hidden="true">ビ</span><span>ビビ學日語<small>LEARNMORE</small></span></a><button id="account">登入</button></header>
   <main>
-    <section id="library">
-      <div class="intro"><p class="eyebrow">今天想練哪一首？</p><h1>從喜歡的歌，<br>多懂一句日語。</h1><p>跟著歌詞聽、逐句練，慢慢唱出來。</p></div>
-      <form id="search"><label class="sr-only" for="query">搜尋歌曲或歌手</label><input id="query" type="search" maxlength="100" placeholder="搜尋歌曲、歌手或演唱者" /><button>搜尋</button></form>
-      <nav aria-label="歌曲分類"><button id="all" aria-pressed="true">探索歌曲</button><button id="favorites" aria-pressed="false">我的收藏</button></nav>
-      <div id="songs" class="songs"></div><button id="more" hidden>載入更多</button>
+    <section id="library" aria-label="歌曲圖書館">
+      <div class="intro"><p class="eyebrow">LISTEN. SING. LEARN.</p><h1>把喜歡的歌，<br>唱成你的日語。</h1><p>一句一句聽懂，一點一點進步。</p><div class="intro-tags"><span>假名標註</span><span>逐句跟唱</span><span>中文翻譯</span></div><div class="record" aria-hidden="true"><div>ビビ<span>日語練習室</span></div></div></div>
+      <form id="search"><span class="search-icon" aria-hidden="true"></span><label class="sr-only" for="query">搜尋歌曲或歌手</label><input id="query" type="search" maxlength="100" placeholder="搜尋歌曲或歌手" /><button>搜尋</button></form>
+      <div class="section-heading"><div><p class="eyebrow" id="catalog-eyebrow">YOUR DAILY PLAYLIST</p><h2 id="catalog-title">探索歌曲</h2></div><span class="section-note">聽見喜歡，點開練習</span></div>
+      <div id="songs" class="songs" aria-label="歌曲清單"></div><button id="more" hidden>載入更多歌曲 ↓</button>
     </section>
     <section id="practice" hidden>
-      <button id="back">← 返回歌曲</button><h1 id="song-title"></h1><p id="song-artist"></p>
+      <button id="back" class="back-button">← 返回歌曲</button>
+      <div class="song-heading"><p class="eyebrow">日語練習室</p><h1 id="song-title"></h1><p id="song-artist"></p></div>
       <div class="player-wrap"><div id="player"></div></div>
       <p id="playback-status" role="status"></p>
       <div class="practice-actions"><button id="collect">加入收藏</button><button id="loop" aria-pressed="false">單句重複：關</button><button id="roman" aria-pressed="true">羅馬拼音：開</button></div>
-      <p class="hint">點歌詞跳到該句，開啟單句重複後可以反覆練習。</p>
+      <div class="lyrics-heading"><h2>跟著歌詞，慢慢唱</h2><span>LYRICS</span></div>
+      <p class="hint">點選任一句就能跳播，開啟單句重複反覆練習。</p>
       <div id="lyrics"></div>
     </section>
     <p id="notice" role="status" aria-live="polite"></p><button id="retry" hidden>重新載入</button>
   </main>
-  <dialog id="group-dialog"><h2>收藏到歌曲群組</h2><div id="groups"></div><form id="new-group"><label for="group-name">新增群組</label><input id="group-name" maxlength="50" required placeholder="例如：每天練一首" /><button>建立群組</button></form><button id="close-groups">完成</button></dialog>
+  <dialog id="group-dialog"><div class="sheet-handle" aria-hidden="true"></div><p class="eyebrow">SAVE YOUR FAVORITES</p><h2>收藏到歌曲群組</h2><p class="dialog-description">把喜歡的歌放在一起，下次接著練。</p><div id="groups"></div><form id="new-group"><label for="group-name">建立新的練習清單</label><input id="group-name" maxlength="50" required placeholder="例如：每天練一首" /><button>建立群組</button></form><button id="close-groups">完成</button></dialog>
   <footer>每一次跟唱，都是一點進步。</footer>
+  <nav class="bottom-nav" aria-label="歌曲分類"><button id="all" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg>探索歌曲</button><button id="favorites" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></svg>我的收藏</button></nav>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

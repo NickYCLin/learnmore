@@ -90,7 +90,7 @@ namespace LearnMore.Controllers
             string? cookiesToken = Request.Cookies["g_csrf_token"]; //Cookie 令牌
 
             // 驗證 Google Token
-            GoogleJsonWebSignature.Payload? payload = VerifyGoogleToken(formCredential, formToken, cookiesToken).Result;
+            GoogleJsonWebSignature.Payload? payload = await VerifyGoogleToken(formCredential, formToken, cookiesToken);
             if (payload == null)
             {
                 // 驗證失敗
@@ -157,6 +157,11 @@ END";
                 payload.Name ?? "None",
                 displayPicture);
 
+            return RedirectAfterGoogleLogin();
+        }
+
+        protected IActionResult RedirectAfterGoogleLogin()
+        {
             var mobileReturnUrl = HttpContext.Session.GetString("MobileLoginReturnUrl");
             HttpContext.Session.Remove("MobileLoginReturnUrl");
             if (!string.IsNullOrWhiteSpace(mobileReturnUrl) && Url.IsLocalUrl(mobileReturnUrl))
@@ -196,7 +201,7 @@ END";
         public async Task<GoogleJsonWebSignature.Payload?> VerifyGoogleToken(string? formCredential, string? formToken, string? cookiesToken)
         {
             // 檢查空值
-            if (formCredential == null || formToken == null && cookiesToken == null)
+            if (string.IsNullOrWhiteSpace(formCredential) || string.IsNullOrWhiteSpace(formToken) || string.IsNullOrWhiteSpace(cookiesToken))
             {
                 return null;
             }
@@ -211,13 +216,14 @@ END";
                 }
 
                 // 驗證憑證
-                IConfiguration Config = new ConfigurationBuilder().AddJsonFile("appSettings.json").Build();
-                string GoogleApiClientId = Config.GetSection("GoogleApiClientId").Value ?? string.Empty;
+                string GoogleApiClientId = _configuration["GoogleApiClientId"] ?? string.Empty;
+                if (string.IsNullOrWhiteSpace(GoogleApiClientId)) return null;
                 var settings = new GoogleJsonWebSignature.ValidationSettings()
                 {
                     Audience = new List<string>() { GoogleApiClientId }
                 };
-                payload = await GoogleJsonWebSignature.ValidateAsync(formCredential, settings);
+                payload = await ValidateGoogleCredentialAsync(formCredential, settings);
+                if (!payload.EmailVerified) return null;
                 if (!payload.Issuer.Equals("accounts.google.com") && !payload.Issuer.Equals("https://accounts.google.com"))
                 {
                     return null;
@@ -241,6 +247,12 @@ END";
                 return null;
             }
             return payload;
+        }
+
+        protected virtual Task<GoogleJsonWebSignature.Payload> ValidateGoogleCredentialAsync(
+            string credential, GoogleJsonWebSignature.ValidationSettings settings)
+        {
+            return GoogleJsonWebSignature.ValidateAsync(credential, settings);
         }
         #endregion
 

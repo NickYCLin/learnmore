@@ -35,6 +35,13 @@ jobs:
       - name: 還原日文處理套件
         run: npm ci --prefix LearnMore/wwwroot/js
 
+      - name: 驗證 Windows PowerShell 部署檢查
+        shell: powershell
+        run: |
+          if ($PSVersionTable.PSVersion.Major -ne 5) { throw "Windows PowerShell 5.1 is required for this regression test." }
+          node scripts/verify_learnmore_mobile_backend.test.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: 還原套件
         run: dotnet restore LearnMore.sln
 
@@ -49,6 +56,26 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           if (Test-Path artifacts/publish/appsettings.Local.json) { throw "發布成品不應包含本機設定" }
           if (!(Test-Path artifacts/publish/wwwroot/js/node_modules/kuromoji/dict/tid_pos.dat.gz)) { throw "發布成品缺少 Kuromoji 字典" }
+
+      - name: 記錄部署版本
+        shell: pwsh
+        run: git rev-parse HEAD | Set-Content artifacts/publish/commit.txt
+
+      - name: 保留網站部署包
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-Backend
+          path: artifacts/publish/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: 保留已驗證的部署檢查腳本
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-Deployment-Tools
+          path: scripts/verify_learnmore_mobile_backend.ps1
+          if-no-files-found: error
+          retention-days: 14
 
   api-test:
     name: API 與維運腳本檢查

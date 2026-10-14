@@ -1,6 +1,11 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  plugins: [{ name: 'diagnostic-audio-gate', generateBundle() {
+    if (loadEnv(mode, process.cwd(), 'VITE_').VITE_NATIVE_AUDIO_DIAGNOSTIC === '1') {
+      this.emitFile({ type: 'asset', fileName: 'native-audio-diagnostic.json', source: '{"enabled":true}' });
+    }
+  } }],
   server: {
     proxy: {
       '/backend': {
@@ -10,4 +15,4 @@ export default defineConfig({
       }
     }
   }
-});
+}));

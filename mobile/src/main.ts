@@ -4,6 +4,8 @@ import { Browser } from '@capacitor/browser';
 import DOMPurify from 'dompurify';
 import { activeLineIndex, loopEnd } from './practice.mjs';
 import './style.css';
+import { parseWebsiteCatalog } from './website-catalog';
+import { diagnosticAudio, initializeDiagnosticAudio } from './diagnostic-audio';
 
 type Song = { songUid: string; title: string; artist: string; performer: string; videoId: string | null };
 type Line = { id: number; time: number; japanese: string; ruby: string; roman: string; chinese: string };
@@ -15,50 +17,125 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const native = Capacitor.isNativePlatform();
 const backend = 'https://magicplus-design.serveirc.com/LearnMore';
 let token = ''; // 憑證只留在記憶體，避免寫入 localStorage 或前端設定。
-let pendingLogin: { state: string; verifier: string } | null = null;
+let loginSerial = 0;
+let pendingLogin: { state: string; verifier: string; serial: number } | null = null;
+let loginNavigation: { serial: number; destination: 'favorites' } | null = null;
 let page = 1, favorites = false, query = '', listingSerial = 0, detailSerial = 0;
+let retrySong: { uid: string; serial: number } | null = null;
+let groupDialogSerial = 0, groupsRequestSerial = 0;
+let groupSubmitSerial: number | null = null, groupOpenedSerial: number | null = null;
+let catalogNeedsReload = false;
+let catalogActive = true;
 let detail: Detail | null = null, player: Player | null = null, selected = -1, loop = false;
 let youtubePromise: Promise<void> | null = null;
 
 function notice(text: string) { $('notice').textContent = text; }
-function signOut() { token = ''; $('account').textContent = '登入'; }
-async function api<T>(path: string, method = 'GET', data?: unknown): Promise<T> {
+class SessionChangedError extends Error {}
+function reportError(error: unknown) {
+  if (!(error instanceof SessionChangedError)) notice(errorMessage(error));
+}
+function cancelLogin() { loginSerial++; pendingLogin = null; loginNavigation = null; }
+function setGroupBusy(busy: boolean) {
+  const form = $<HTMLFormElement>('new-group');
+  form.setAttribute('aria-busy', String(busy));
+  form.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button').forEach(control => { control.disabled = busy; });
+}
+function closeGroups() {
+  groupDialogSerial++; groupSubmitSerial = null; groupOpenedSerial = null;
+  setGroupBusy(false);
+  $<HTMLDialogElement>('group-dialog').close();
+}
+function signOut() {
+  token = ''; cancelLogin();
+  $('account').textContent = '登入';
+  closeGroups();
+  $('groups').replaceChildren();
+  $<HTMLFormElement>('new-group').reset();
+  favorites = false;
+  $('all').setAttribute('aria-pressed', 'true');
+  $('favorites').setAttribute('aria-pressed', 'false');
+  // 清除私人清單，也讓尚未完成的舊清單請求失效。
+  listingSerial++;
+  $('songs').replaceChildren(); $('more').hidden = true; $('retry').hidden = true;
+  catalogNeedsReload = true;
+  if ($('practice').hidden) void loadSongs();
+}
+async function api<T>(path: string, method = 'GET', data?: unknown, loginAttempt?: number): Promise<T> {
+  const requestToken = token;
+  const sessionChanged = () => (requestToken && requestToken !== token) || (loginAttempt !== undefined && loginAttempt !== loginSerial);
   const headers: Record<string,string> = { Accept: 'application/json' };
   if (data !== undefined) headers['Content-Type'] = 'application/json';
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (requestToken) headers.Authorization = `Bearer ${requestToken}`;
   let status: number, result: unknown;
-  if (native) {
-    const response = await CapacitorHttp.request({ url: `${backend}/api/mobile/v1/${path}`, method, headers, data, connectTimeout: 15000, readTimeout: 20000 });
-    status = response.status; result = response.data;
-  } else {
-    const response = await fetch(`/backend/api/mobile/v1/${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(20000) });
-    status = response.status; result = response.status === 204 ? null : await response.json().catch(() => null);
+  try {
+    if (native) {
+      const response = await CapacitorHttp.request({ url: `${backend}/api/mobile/v1/${path}`, method, headers, data, connectTimeout: 15000, readTimeout: 20000 });
+      status = response.status; result = response.data;
+    } else {
+      const response = await fetch(`/backend/api/mobile/v1/${path}`, { method, headers, body: data === undefined ? undefined : JSON.stringify(data), signal: AbortSignal.timeout(20000) });
+      status = response.status; result = response.status === 204 ? null : await response.json().catch(() => null);
+    }
+  } catch (error) {
+    if (sessionChanged()) throw new SessionChangedError();
+    throw error;
   }
-  if (status === 401) { signOut(); throw new Error('登入已到期，請重新登入。'); }
+  // 舊工作階段的成功或失敗回應，都不能更新目前帳號的畫面。
+  if (sessionChanged()) throw new SessionChangedError();
+  if (status === 401) {
+    if (requestToken) signOut();
+    throw new Error('登入已到期，請重新登入。');
+  }
   if (status < 200 || status >= 300) throw new Error(status === 429 ? '操作較頻繁，請稍後再試。' : '暫時無法取得資料，請稍後重試。');
   return result as T;
 }
 
 function card(song: Song) {
   const button = document.createElement('button'); button.className = 'song-card';
+  const art = document.createElement('span'); art.className = 'song-art';
+  const placeholder = document.createElement('span'); placeholder.className = 'art-placeholder'; placeholder.textContent = '♫'; placeholder.setAttribute('aria-hidden', 'true'); art.append(placeholder);
   if (song.videoId && /^[A-Za-z0-9_-]{11}$/.test(song.videoId)) {
-    const image = document.createElement('img'); image.src = `https://i.ytimg.com/vi/${song.videoId}/mqdefault.jpg`; image.alt = ''; image.loading = 'lazy'; button.append(image);
+    const image = document.createElement('img'); image.src = `https://i.ytimg.com/vi/${song.videoId}/mqdefault.jpg`; image.alt = ''; image.loading = 'lazy'; image.onerror = () => image.remove(); art.append(image);
   }
+  const play = document.createElement('span'); play.className = 'play-badge'; play.textContent = '▶'; play.setAttribute('aria-hidden', 'true'); art.append(play);
   const title = document.createElement('strong'); title.textContent = song.title;
-  const artist = document.createElement('span'); artist.textContent = song.performer || song.artist;
-  button.append(title, artist); button.onclick = () => void openSong(song.songUid); return button;
+  const artist = document.createElement('span'); artist.className = 'song-artist'; artist.textContent = song.performer || song.artist;
+  button.append(art, title, artist); button.onclick = () => void openSong(song.songUid); return button;
+}
+
+async function loadWebsiteCatalog() {
+  const requestedPage = page;
+  const path = `/?type=all&page=${requestedPage}`;
+  let html: string;
+  if (native) {
+    const response = await CapacitorHttp.get({ url: backend + path, headers: { Accept: 'text/html' }, responseType: 'text', connectTimeout: 15000, readTimeout: 20000 });
+    if (response.status !== 200 || typeof response.data !== 'string') throw new Error('暫時無法讀取網站歌曲清單，請稍後重新載入。');
+    html = response.data;
+  } else {
+    const response = await fetch('/backend' + path, { signal: AbortSignal.timeout(20000) });
+    if (!response.ok) throw new Error('暫時無法讀取網站歌曲清單，請稍後重新載入。');
+    html = await response.text();
+  }
+  return parseWebsiteCatalog(html, requestedPage);
 }
 
 async function loadSongs(append = false) {
   const serial = ++listingSerial;
-  notice('載入歌曲中…'); $('retry').hidden = true; $('more').hidden = true;
+  if (catalogActive) retrySong = null;
+  $('catalog-title').textContent = query ? '搜尋結果' : favorites ? '我的收藏' : '探索歌曲';
+  $('catalog-eyebrow').textContent = favorites ? 'YOUR PERSONAL COLLECTION' : 'YOUR DAILY PLAYLIST';
+  $('songs').setAttribute('aria-busy', 'true');
+  if (catalogActive) { notice('載入歌曲中…'); $('retry').hidden = true; }
+  $('more').hidden = true;
   if (!append) { page = 1; $('songs').replaceChildren(); }
   try {
-    const songs = await api<Song[]>(`songs?q=${encodeURIComponent(query)}&page=${page}&favorites=${favorites}`);
+    const catalog = !query && !favorites ? await loadWebsiteCatalog() : null;
+    const songs = catalog?.songs ?? await api<Song[]>(`songs?q=${encodeURIComponent(query)}&page=${page}&favorites=${favorites}`);
     if (serial !== listingSerial) return;
-    $('songs').append(...songs.map(card)); $('more').hidden = songs.length < 30;
-    notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
-  } catch (error) { if (serial === listingSerial) { notice(errorMessage(error)); $('retry').hidden = false; if (append) page--; } }
+    catalogNeedsReload = false;
+    $('songs').append(...songs.map(card)); $('more').hidden = catalog ? !catalog.hasMore : songs.length < 30;
+    if (catalogActive) notice(!append && !songs.length ? (favorites ? '還沒有收藏，選一首歌加入群組吧。' : '沒有找到歌曲，試試其他關鍵字。') : '');
+  } catch (error) { if (serial === listingSerial && !(error instanceof SessionChangedError)) { if (append) page--; if (catalogActive) { reportError(error); $('retry').hidden = false; } else catalogNeedsReload = true; } }
+  finally { if (serial === listingSerial) $('songs').setAttribute('aria-busy', 'false'); }
 }
 
 function errorMessage(error: unknown) { return error instanceof Error && !/fetch|network|timeout/i.test(error.message) ? error.message : '目前無法連線，請確認網路後重試。'; }
@@ -102,8 +179,12 @@ function nativePlayer(videoId: string): Player {
 
 async function openSong(uid: string) {
   const serial = ++detailSerial;
+  catalogActive = false; retrySong = null; closeGroups();
   notice('載入歌詞中…'); $('retry').hidden = true;
   try {
+    const stopping = diagnosticAudio.stop();
+    if (stopping) await stopping;
+    if (serial !== detailSerial) return;
     const loaded = await api<Detail>(`songs/${encodeURIComponent(uid)}`);
     if (serial !== detailSerial) return;
     detail = loaded; selected = -1; loop = false; $('loop').textContent = '單句重複：關'; $('loop').setAttribute('aria-pressed', 'false');
@@ -135,7 +216,11 @@ async function openSong(uid: string) {
       events: { onError: () => { $('playback-status').textContent = '影片暫時無法播放，可能是嵌入限制或連線問題。'; } }
     });
     window.scrollTo(0, 0);
-  } catch (error) { if (serial === detailSerial) notice(errorMessage(error)); }
+  } catch (error) {
+    if (serial === detailSerial && !(error instanceof SessionChangedError)) {
+      reportError(error); retrySong = { uid, serial }; $('retry').hidden = false;
+    }
+  }
 }
 
 setInterval(() => {
@@ -153,61 +238,105 @@ setInterval(() => {
 }, 150);
 
 function base64Url(bytes: Uint8Array) { return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-async function login() {
+async function login(destination?: 'favorites') {
   if (!native) { notice('登入請使用 iOS App；瀏覽器預覽可測試搜尋與歌詞。'); return; }
+  const serial = ++loginSerial;
+  pendingLogin = null;
+  loginNavigation = destination ? { serial, destination } : null;
   const verifier = base64Url(crypto.getRandomValues(new Uint8Array(32)));
   const state = base64Url(crypto.getRandomValues(new Uint8Array(32)));
-  const challenge = base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
-  pendingLogin = { verifier, state };
-  await Browser.open({ url: `${backend}/Mobile/Connect?challenge=${challenge}&state=${state}` });
+  try {
+    const challenge = base64Url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))));
+    if (serial !== loginSerial) return;
+    pendingLogin = { verifier, state, serial };
+    await Browser.open({ url: `${backend}/Mobile/Connect?challenge=${challenge}&state=${state}` });
+  } catch (error) { if (serial === loginSerial) { cancelLogin(); throw error; } }
 }
 
 if (native) {
+  void Browser.addListener('browserFinished', cancelLogin);
   void App.addListener('appUrlOpen', async ({ url }) => {
+    const serial = loginSerial;
     try {
       const callback = new URL(url);
-      if (callback.protocol !== 'learnmore:' || callback.hostname !== 'auth' || !pendingLogin || callback.searchParams.get('state') !== pendingLogin.state) return;
+      if (callback.protocol !== 'learnmore:' || callback.hostname !== 'auth' || !pendingLogin || pendingLogin.serial !== serial || callback.searchParams.get('state') !== pendingLogin.state) return;
       const verifier = pendingLogin.verifier; pendingLogin = null;
-      const result = await api<{ token: string; user: { name: string } }>('session', 'POST', { code: callback.searchParams.get('code'), verifier });
+      const result = await api<{ token: string; user: { name: string } }>('session', 'POST', { code: callback.searchParams.get('code'), verifier }, serial);
+      if (serial !== loginSerial) return;
       token = result.token; $('account').textContent = '登出'; notice(`已登入，${result.user.name}`);
+      const destination = loginNavigation?.serial === serial ? loginNavigation.destination : null;
+      loginNavigation = null;
+      if (destination === 'favorites') enterFavorites();
       await Browser.close().catch(() => {});
-      if (favorites) await loadSongs();
-    } catch (error) { notice(errorMessage(error)); }
+      if (serial !== loginSerial) return;
+      if (!destination && favorites) await loadSongs();
+    } catch (error) { if (serial === loginSerial) reportError(error); }
   });
   void App.addListener('appStateChange', ({ isActive }) => { if (!isActive) player?.pauseVideo(); });
 }
 
-async function showGroups() {
+async function showGroups(intent = ++groupDialogSerial) {
+  if (intent !== groupDialogSerial) return;
+  if (groupSubmitSerial !== intent) { groupSubmitSerial = null; setGroupBusy(false); }
   if (!token) { await login(); return; }
   if (!detail) return;
+  const uid = detail.song.songUid, serial = detailSerial, requestToken = token;
+  const current = () => intent === groupDialogSerial && serial === detailSerial && requestToken === token;
+  const request = ++groupsRequestSerial;
   try {
-    const uid = detail.song.songUid;
     const groups = await api<Group[]>(`groups?songUid=${encodeURIComponent(uid)}`);
+    if (!current() || request !== groupsRequestSerial) return;
     $('groups').replaceChildren(...groups.map(group => {
       const button = document.createElement('button'); button.textContent = group.name; button.setAttribute('aria-pressed', String(group.included));
       button.onclick = async () => {
+        if (!current() || button.disabled) return;
         button.disabled = true;
-        try { await api(`groups/${group.id}/songs/${encodeURIComponent(uid)}`, 'PUT', { included: !group.included }); group.included = !group.included; button.setAttribute('aria-pressed', String(group.included)); }
-        catch (error) { notice(errorMessage(error)); ($('group-dialog') as HTMLDialogElement).close(); }
+        try { await api(`groups/${group.id}/songs/${encodeURIComponent(uid)}`, 'PUT', { included: !group.included }); if (!current()) return; group.included = !group.included; button.setAttribute('aria-pressed', String(group.included)); }
+        catch (error) { if (current() && !(error instanceof SessionChangedError)) { reportError(error); closeGroups(); } }
         finally { button.disabled = false; }
       }; return button;
     }));
     if (!groups.length) $('groups').textContent = '先建立一個群組，就能收藏這首歌。';
+    groupOpenedSerial = intent;
     if (!$<HTMLDialogElement>('group-dialog').open) $<HTMLDialogElement>('group-dialog').showModal();
-  } catch (error) { notice(errorMessage(error)); }
+  } catch (error) { if (current() && request === groupsRequestSerial) reportError(error); }
 }
 
 $('search').onsubmit = event => { event.preventDefault(); query = $<HTMLInputElement>('query').value.trim(); void loadSongs(); };
-$('all').onclick = () => { favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); void loadSongs(); };
-$('favorites').onclick = () => { if (!token) { void login().catch(error => notice(errorMessage(error))); return; } favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); };
+function returnToLibrary() { catalogActive = true; detailSerial++; retrySong = null; $('retry').hidden = true; closeGroups(); player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); window.scrollTo(0, 0); }
+function enterFavorites() { returnToLibrary(); query = ''; $<HTMLInputElement>('query').value = ''; favorites = true; $('all').setAttribute('aria-pressed','false'); $('favorites').setAttribute('aria-pressed','true'); void loadSongs(); }
+$('home').onclick = event => { event.preventDefault(); returnToLibrary(); if (favorites || catalogNeedsReload) void loadSongs(); };
+$('all').onclick = () => { returnToLibrary(); favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); void loadSongs(); };
+$('favorites').onclick = () => { if (!token) { void login('favorites').catch(error => notice(errorMessage(error))); return; } enterFavorites(); };
 $('more').onclick = () => { page++; void loadSongs(true); };
-$('retry').onclick = () => void loadSongs();
-$('back').onclick = () => { detailSerial++; player?.destroy(); player = null; detail = null; $('practice').hidden = true; $('library').hidden = false; notice(''); if (favorites) void loadSongs(); };
+$('retry').onclick = () => { if (retrySong?.serial === detailSerial) void openSong(retrySong.uid); else void loadSongs(); };
+$('back').onclick = () => { returnToLibrary(); if (favorites || catalogNeedsReload) void loadSongs(); };
 $('loop').onclick = () => { loop = !loop; if (loop && selected < 0) selected = Math.max(0, activeLineIndex(detail?.lyrics || [], player?.getCurrentTime() || 0)); $('loop').textContent = `單句重複：${loop ? '開' : '關'}`; $('loop').setAttribute('aria-pressed',String(loop)); };
 $('roman').onclick = () => { const hidden = $('lyrics').classList.toggle('hide-roman'); $('roman').textContent = `羅馬拼音：${hidden ? '關' : '開'}`; $('roman').setAttribute('aria-pressed',String(!hidden)); };
 $('collect').onclick = () => void showGroups();
-$('close-groups').onclick = () => $<HTMLDialogElement>('group-dialog').close();
-$('new-group').onsubmit = async event => { event.preventDefault(); try { await api('groups','POST',{ name: $<HTMLInputElement>('group-name').value }); $<HTMLInputElement>('group-name').value = ''; await showGroups(); } catch (error) { notice(errorMessage(error)); $<HTMLDialogElement>('group-dialog').close(); } };
-$('account').onclick = async () => { try { if (!token) { await login(); return; } await api('session','DELETE'); signOut(); favorites = false; $('all').setAttribute('aria-pressed','true'); $('favorites').setAttribute('aria-pressed','false'); if ($('practice').hidden) await loadSongs(); } catch (error) { notice(errorMessage(error)); } };
+$('close-groups').onclick = closeGroups;
+$('group-dialog').oncancel = closeGroups;
+$('group-dialog').onclose = () => { if (!$<HTMLDialogElement>('group-dialog').open && groupOpenedSerial === groupDialogSerial) closeGroups(); };
+$('new-group').onsubmit = async event => {
+  event.preventDefault();
+  const intent = groupDialogSerial, serial = detailSerial, requestToken = token;
+  if (!requestToken || !detail || !$<HTMLDialogElement>('group-dialog').open || groupSubmitSerial === intent) return;
+  const current = () => intent === groupDialogSerial && serial === detailSerial && requestToken === token;
+  groupSubmitSerial = intent; setGroupBusy(true);
+  try {
+    await api('groups','POST',{ name: $<HTMLInputElement>('group-name').value });
+    if (!current()) return;
+    $<HTMLInputElement>('group-name').value = ''; await showGroups(intent);
+  } catch (error) { if (current() && !(error instanceof SessionChangedError)) { reportError(error); closeGroups(); } }
+  finally { if (current() && groupSubmitSerial === intent) { groupSubmitSerial = null; setGroupBusy(false); } }
+};
+$('account').onclick = async () => {
+  if (!token) { try { await login(); } catch (error) { reportError(error); } return; }
+  cancelLogin();
+  const serial = loginSerial;
+  try { await api('session','DELETE', undefined, serial); if (serial === loginSerial) signOut(); }
+  catch (error) { if (serial === loginSerial) reportError(error); }
+};
 window.addEventListener('offline', () => notice('目前沒有網路連線，恢復連線後可以重新載入歌曲。'));
+initializeDiagnosticAudio(returnToLibrary);
 void loadSongs();
