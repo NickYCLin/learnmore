@@ -38,7 +38,7 @@ class Element {
   remove() {}
 }
 
-function setup({ digest = (...args) => webcrypto.subtle.digest(...args) } = {}) {
+function setup({ digest = (...args) => webcrypto.subtle.digest(...args), diagnosticStop = () => undefined } = {}) {
   const elements = new Map(), listeners = {}, calls = [], loginURLs = [], browserCalls = [];
   const element = id => {
     if (!elements.has(id)) elements.set(id, new Element());
@@ -57,6 +57,7 @@ function setup({ digest = (...args) => webcrypto.subtle.digest(...args) } = {}) 
       addEventListener: () => {}, removeEventListener: () => {}, scrollTo: () => {},
       setInterval: () => 0, setTimeout: () => 0, location: { origin: 'http://fixture.invalid' },
     },
+    diagnosticAudio: { stop: diagnosticStop }, initializeDiagnosticAudio() {},
     Capacitor: { isNativePlatform: () => true },
     CapacitorHttp: {
       request: options => { calls.push(options); return transport.request(options); },
@@ -86,6 +87,32 @@ function deferred() {
   return { promise, resolve, reject };
 }
 const response = (data, status = 200) => ({ status, data });
+
+test('開啟歌曲必須等待診斷原生 stop，不能同時播放', async () => {
+  const stopping = deferred(), fixture = setup({ diagnosticStop: () => stopping.promise });
+  fixture.transport.request = () => response(detail);
+  const opening = fixture.openSong('original');
+  assert.equal(fixture.calls.length, 0);
+  stopping.resolve(); await opening;
+  assert.equal(fixture.calls.length, 1);
+  assert.equal(fixture.element('practice').hidden, false);
+});
+
+test('等待診斷停止期間返回，不再復活歌曲請求', async () => {
+  const stopping = deferred(), fixture = setup({ diagnosticStop: () => stopping.promise });
+  const opening = fixture.openSong('original');
+  fixture.returnToLibrary(); stopping.resolve(); await opening;
+  assert.equal(fixture.calls.length, 0);
+  assert.equal(fixture.element('practice').hidden, true);
+});
+
+test('診斷 stop 失敗不開啟 YouTube，保留原歌曲重試', async () => {
+  const fixture = setup({ diagnosticStop: async () => { throw new Error('診斷停止失敗'); } });
+  await fixture.openSong('original');
+  assert.equal(fixture.calls.length, 0);
+  assert.equal(fixture.element('retry').hidden, false);
+  assert.ok(fixture.element('notice').textContent.length > 0);
+});
 const session = token => response({ token, user: { name: token } });
 const song = { songUid: 'original', title: '原創練習例句', artist: '測試資料', performer: '', videoId: null };
 const detail = { song, lyrics: [{ id: 1, time: 0, japanese: 'こんにちは', ruby: '', roman: 'konnichiwa', chinese: '你好' }] };

@@ -5,6 +5,7 @@ import DOMPurify from 'dompurify';
 import { activeLineIndex, loopEnd } from './practice.mjs';
 import './style.css';
 import { parseWebsiteCatalog } from './website-catalog';
+import { diagnosticAudio, initializeDiagnosticAudio } from './diagnostic-audio';
 
 type Song = { songUid: string; title: string; artist: string; performer: string; videoId: string | null };
 type Line = { id: number; time: number; japanese: string; ruby: string; roman: string; chinese: string };
@@ -181,6 +182,9 @@ async function openSong(uid: string) {
   catalogActive = false; retrySong = null; closeGroups();
   notice('載入歌詞中…'); $('retry').hidden = true;
   try {
+    const stopping = diagnosticAudio.stop();
+    if (stopping) await stopping;
+    if (serial !== detailSerial) return;
     const loaded = await api<Detail>(`songs/${encodeURIComponent(uid)}`);
     if (serial !== detailSerial) return;
     detail = loaded; selected = -1; loop = false; $('loop').textContent = '單句重複：關'; $('loop').setAttribute('aria-pressed', 'false');
@@ -334,4 +338,5 @@ $('account').onclick = async () => {
   catch (error) { if (serial === loginSerial) reportError(error); }
 };
 window.addEventListener('offline', () => notice('目前沒有網路連線，恢復連線後可以重新載入歌曲。'));
+initializeDiagnosticAudio(returnToLibrary);
 void loadSongs();

@@ -45,6 +45,7 @@ function setup({ digest = (...args) => webcrypto.subtle.digest(...args) } = {}) 
       querySelectorAll: () => [], head: new Element() },
     window: { addEventListener() {}, removeEventListener() {}, scrollTo() {}, setInterval: () => 0,
       setTimeout: () => 0, location: { origin: 'http://fixture.invalid' } },
+    diagnosticAudio: { stop() {} }, initializeDiagnosticAudio() {},
     Capacitor: { isNativePlatform: () => true }, CapacitorHttp: { request, get: request },
     App: { addListener: async (name, listener) => { listeners[name] = listener; } },
     Browser: { addListener: async (name, listener) => { listeners[name] = listener; },
