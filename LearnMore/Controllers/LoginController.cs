@@ -128,7 +128,7 @@ AND NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities I WHERE I.UserId = U.Id AND I
                     identityCheck.Parameters.AddWithValue("@Email", accountEmail);
                     identityCheck.Parameters.AddWithValue("@Subject", payload.Subject);
                     if (Convert.ToInt32(await identityCheck.ExecuteScalarAsync()) > 0)
-                        return StatusCode(409, "請先在 LearnMore App 登入原帳號，再於帳號頁連結此 Google 帳號。");
+                        return StatusCode(409, "此帳號尚未連結此 Google 登入方式；安全連結功能尚未開放，請聯絡支援。");
                 }
 
                 var query = @"
@@ -185,6 +185,15 @@ END";
                 payload.Name ?? "None",
                 displayPicture);
 
+            return RedirectAfterGoogleLogin();
+        }
+
+        protected IActionResult RedirectAfterGoogleLogin()
+        {
+            var mobileReturnUrl = HttpContext.Session.GetString("MobileLoginReturnUrl");
+            HttpContext.Session.Remove("MobileLoginReturnUrl");
+            if (!string.IsNullOrWhiteSpace(mobileReturnUrl) && Url.IsLocalUrl(mobileReturnUrl))
+                return LocalRedirect(mobileReturnUrl);
             return RedirectToAction("Index", "Home");
         }
 
@@ -241,7 +250,7 @@ END";
                 {
                     Audience = new List<string>() { GoogleApiClientId }
                 };
-                payload = await GoogleJsonWebSignature.ValidateAsync(formCredential, settings);
+                payload = await ValidateGoogleCredentialAsync(formCredential, settings);
                 if (!payload.EmailVerified) return null;
                 if (!payload.Issuer.Equals("accounts.google.com") && !payload.Issuer.Equals("https://accounts.google.com"))
                 {
@@ -266,6 +275,12 @@ END";
                 return null;
             }
             return payload;
+        }
+
+        protected virtual Task<GoogleJsonWebSignature.Payload> ValidateGoogleCredentialAsync(
+            string credential, GoogleJsonWebSignature.ValidationSettings settings)
+        {
+            return GoogleJsonWebSignature.ValidateAsync(credential, settings);
         }
         #endregion
 

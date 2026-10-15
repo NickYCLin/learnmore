@@ -138,7 +138,8 @@ public sealed class MobileAccountSecurityTests
         var controller = new MobileAccountController(store, new RejectingVerifier())
         { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
         controller.HttpContext.Items[typeof(MobileUser)] = new MobileUser(7, "Member", "member@example.com", new[] { "apple" });
-        await Assert.ThrowsAsync<MobileAuthException>(() => controller.Delete(new() { Provider = "apple", Code = "replayed-code" }, default));
+        var error = await Assert.ThrowsAsync<MobileAuthException>(() => controller.Delete(new() { Provider = "apple", Code = "replayed-code" }, default));
+        Assert.Equal(503, error.Status);
         Assert.False(store.Deleted);
     }
 

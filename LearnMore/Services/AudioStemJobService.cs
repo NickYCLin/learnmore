@@ -172,7 +172,7 @@ WHERE Id = @Id", connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task RegisterCompletedStemsAsync(string songUid, string instrumentalPath, string vocalsPath, string modelName, string source, CancellationToken cancellationToken = default)
+    public async Task RegisterCompletedStemsAsync(string songUid, string instrumentalPath, string vocalsPath, string modelName, string source, Action publishFiles, CancellationToken cancellationToken = default)
     {
         await EnsureSchemaAsync(cancellationToken);
         await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
@@ -181,30 +181,30 @@ WHERE Id = @Id", connection);
 
         try
         {
-            // A worker may finish after its song/account was deleted. Do not recreate orphaned stems.
-            await using (var exists = new SqlCommand("SELECT COUNT(*) FROM dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", connection, transaction))
+            await using var existsCommand = new SqlCommand("SELECT COUNT(*) FROM dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", connection, transaction);
+            await AudioStemPublicationGuard.AcquireTransactionLockAsync(connection, transaction, cancellationToken);
+            existsCommand.Parameters.AddWithValue("@SongUid", songUid);
+            if (!await AudioStemPublicationGuard.PublishAsync(
+                async () => Convert.ToInt32(await existsCommand.ExecuteScalarAsync(cancellationToken)) > 0,
+                publishFiles, cancellationToken))
             {
-                exists.Parameters.AddWithValue("@SongUid", songUid);
-                if (Convert.ToInt32(await exists.ExecuteScalarAsync(cancellationToken)) == 0)
-                {
-                    // Keep cleanup durable when mobile account deletion is installed.
-                    await using var cleanup = new SqlCommand(@"
+                await using var cleanup = new SqlCommand(@"
 IF OBJECT_ID('dbo.MobileFileDeletionJobs', 'U') IS NOT NULL
 BEGIN
     INSERT INTO dbo.MobileFileDeletionJobs (FileName, Kind) VALUES (@SongUid, 'song');
     SELECT 1;
 END
 ELSE SELECT 0;", connection, transaction);
-                    cleanup.Parameters.AddWithValue("@SongUid", songUid);
-                    if (Convert.ToInt32(await cleanup.ExecuteScalarAsync(cancellationToken)) == 0)
-                    {
-                        File.Delete(instrumentalPath);
-                        File.Delete(vocalsPath);
-                    }
-                    await transaction.CommitAsync(cancellationToken);
-                    return;
+                cleanup.Parameters.AddWithValue("@SongUid", songUid);
+                if (Convert.ToInt32(await cleanup.ExecuteScalarAsync(cancellationToken)) == 0)
+                {
+                    File.Delete(instrumentalPath);
+                    File.Delete(vocalsPath);
                 }
+                await transaction.CommitAsync(cancellationToken);
+                return;
             }
+
             await using (var deleteCommand = new SqlCommand("DELETE FROM dbo.SongAudioStems WHERE SongUid = @SongUid AND StemKind IN (N'instrumental', N'vocals')", connection, transaction))
             {
                 deleteCommand.Parameters.AddWithValue("@SongUid", songUid);

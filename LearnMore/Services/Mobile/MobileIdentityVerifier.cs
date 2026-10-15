@@ -43,7 +43,9 @@ public sealed class MobileIdentityVerifier(IConfiguration config, IHttpClientFac
             // Google is authoritative for Gmail and Workspace addresses, but not arbitrary external mailboxes.
             var authoritative = payload.Email.EndsWith("@gmail.com", StringComparison.OrdinalIgnoreCase) ||
                 !string.IsNullOrWhiteSpace(payload.HostedDomain);
-            return new("google", payload.Subject, payload.Email, payload.Name ?? "LearnMore 使用者", authoritative);
+            var authenticated = AuthenticationTime(new JwtSecurityTokenHandler().ReadJwtToken(idToken).Claims);
+            return new("google", payload.Subject, payload.Email, payload.Name ?? "LearnMore 使用者", authoritative,
+                AuthenticatedAt: authenticated);
         }
         if (request.Provider != "apple") throw new MobileAuthException("不支援的登入方式。", 400);
         if (!AppleEnabled) throw new MobileAuthException("Apple 登入暫時無法使用。", 503);
@@ -69,7 +71,15 @@ public sealed class MobileIdentityVerifier(IConfiguration config, IHttpClientFac
         var refreshToken = apple.RootElement.TryGetProperty("refresh_token", out var refresh) ? refresh.GetString() : null;
         if (string.IsNullOrEmpty(refreshToken)) throw new MobileAuthException("Apple 授權不完整，請重新登入。");
         return new("apple", principal.FindFirst("sub")!.Value, email,
-            string.IsNullOrWhiteSpace(request.Name) ? "LearnMore 使用者" : request.Name.Trim(), false, refreshToken);
+            string.IsNullOrWhiteSpace(request.Name) ? "LearnMore 使用者" : request.Name.Trim(), false, refreshToken,
+            AuthenticationTime(principal.Claims));
+    }
+
+    private static DateTimeOffset? AuthenticationTime(IEnumerable<Claim> claims)
+    {
+        if (!long.TryParse(claims.FirstOrDefault(claim => claim.Type == "auth_time")?.Value, out var seconds)) return null;
+        try { return DateTimeOffset.FromUnixTimeSeconds(seconds); }
+        catch (ArgumentOutOfRangeException) { return null; }
     }
 
     public static ClaimsPrincipal ValidateAppleToken(string token, IEnumerable<SecurityKey> keys, string audience, string rawNonce)

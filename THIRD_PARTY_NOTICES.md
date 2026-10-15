@@ -19,6 +19,8 @@
 
 ## 專案視覺與媒體素材
 
+`mobile/assets/app-icon.svg` 是本專案以幾何圖形繪製的書本與音符圖示；該 SVG 與由它產生的 iOS AppIcon PNG 採根目錄 MIT 授權。此範圍不包含以下既有角色與媒體素材。
+
 在來源及可再授權範圍獲得進一步確認前，下列素材不包含在根目錄 MIT 授權範圍內：
 
 - `LearnMore/wwwroot/apple-touch-icon.png`
@@ -28,6 +30,8 @@
 - `docs/images/**`
 
 ## 外部歌曲與服務內容
+
+素材來源、已核對的官方條款與待確認項目見 [內容來源與授權查核](docs/CONTENT_RIGHTS.md)。該紀錄不會擴張任何第三方授權。
 
 歌曲、歌詞、翻譯、封面、音訊、影片、字幕及使用者內容不因 LearnMore 的程式碼採用 MIT 而獲得授權。透過 YouTube、LRCLIB、NetEase、TypingTube 或其他外部服務取得或顯示的內容，仍受原權利人及各服務條款約束。
 

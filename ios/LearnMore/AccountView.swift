@@ -18,12 +18,15 @@ struct AccountView: View {
                         Text(member.email).foregroundStyle(.secondary).textSelection(.enabled)
                         Text("已連結：" + member.providers.map { $0 == "apple" ? "Apple" : "Google" }.joined(separator: "、"))
                         Button("連結其他登入方式") { action = .link }
+                            .disabled(account.busy || !account.providers.accountMutations)
                     }
                     Section {
                         Button("登出") { confirmLogout = true }.disabled(account.busy)
-                        Button("刪除帳號", role: .destructive) { confirmDelete = true }.disabled(account.busy)
+                        Button("刪除帳號", role: .destructive) { confirmDelete = true }
+                            .disabled(account.busy || !account.providers.accountMutations)
                     } footer: {
-                        Text("此帳號與網站共用。刪除後，個人資料、收藏、留言與回報也會一併移除，無法復原。")
+                        Text("此帳號與網站共用。帳號連結與刪除尚待安全驗證，目前無法使用；登出仍可使用。這些功能尚未完成，不代表你的資料已刪除。")
+                        Link("帳號與隱私問題", destination: Server.url("Mobile/Support"))
                     }
                 } else {
                     Section {
@@ -164,7 +167,7 @@ struct PrivacyView: View {
                 Link("Apple 隱私權政策", destination: URL(string: "https://www.apple.com/legal/privacy/")!)
             }
             Section("刪除與聯絡") {
-                Text("可在「帳號與設定 → 刪除帳號」重新驗證後刪除個人資料、收藏、留言及回報。這也會影響網站上的同一帳號。你上傳的歌曲、歌詞與相關音軌也會刪除。")
+                Text("App 內的帳號連結與刪除尚待安全驗證，目前無法使用。若需要處理帳號或資料，請透過支援頁聯絡；聯絡或登出不等於資料已刪除。")
                 Link("完整隱私權政策", destination: Server.url("Mobile/Privacy"))
                 Link("支援與隱私問題", destination: Server.url("Mobile/Support"))
             }

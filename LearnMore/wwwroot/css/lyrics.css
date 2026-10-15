@@ -310,7 +310,30 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 
 @media (min-width: 1200px) {
     .main-content {
-        grid-template-columns: minmax(520px, 720px) minmax(420px, 1fr);
+        grid-template-columns: minmax(400px, 1fr) minmax(310px, 0.82fr) minmax(300px, 0.78fr);
+        gap: 20px;
+    }
+
+    .lyrics-section {
+        grid-column: 2;
+    }
+
+    .lyrics-avatar-rail {
+        grid-column: 3;
+        grid-row: 1;
+        position: sticky;
+        top: 96px;
+        align-self: start;
+    }
+
+    .lyrics-avatar-rail .mika-avatar-stage {
+        border: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 50% 18%, rgba(255, 183, 77, 0.22), transparent 34%),
+            radial-gradient(circle at 50% 76%, rgba(99, 102, 241, 0.10), transparent 42%),
+            linear-gradient(180deg, rgba(255, 247, 237, 0.72), rgba(232, 247, 255, 0.46));
+        box-shadow: var(--shadow-md);
     }
 }
 

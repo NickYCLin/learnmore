@@ -132,6 +132,57 @@ public class UploadQualityStatusMvpTests
     }
 
     [Fact]
+    public void CodexTranslationQueueScript_ShouldExportApplyAndVerifyPendingTranslations()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "scripts",
+            "learnmore_codex_translation_queue.py"));
+
+        Assert.Contains("translation_pending_codex", source);
+        Assert.Contains("subparsers.add_parser(\"export\"", source);
+        Assert.Contains("subparsers.add_parser(\"apply\"", source);
+        Assert.Contains("--dry-run", source);
+        Assert.Contains("LyricID", source);
+        Assert.Contains("Japanese", source);
+        Assert.Contains("OrderBad", source);
+        Assert.Contains("expectedFull", source);
+        Assert.Contains("rowsTable.Rows.Count", source);
+        Assert.Contains("learnmore_codex_translation_", source);
+        Assert.Contains("timingValidationPending", source);
+        Assert.Contains("high_accuracy_needs_review", source);
+    }
+
+    [Fact]
+    public void SongAliasBackfillScripts_ShouldUseLearnMoreApiAndIdempotentAliasInsert()
+    {
+        var generator = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "scripts",
+            "learnmore_alias_codex_batch.py"));
+        var apply = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "scripts",
+            "apply_learnmore_alias_seed.ps1"));
+        var export = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "scripts",
+            "export_learnmore_alias_candidates.ps1"));
+
+        Assert.Contains("--use-learnmore-api", generator);
+        Assert.Contains("/v1/generate-song-aliases", generator);
+        Assert.Contains("LEARNMORE_API_TOKEN", generator);
+        Assert.Contains("UX_SongAliases_SongUid_AliasText", apply);
+        Assert.Contains("NOT EXISTS (SELECT 1 FROM dbo.SongAliases WHERE SongUid = @SongUid AND AliasText = @AliasText)", apply);
+        Assert.Contains("NOT EXISTS", export);
+        Assert.Contains("AliasText LIKE N'%[一-龥]%'", export);
+    }
+
+    [Fact]
     public void WebTranscribe_ShouldAutoApplyStableFixedOffsetBeforeCompletingSyncedLyrics()
     {
         var controllerSource = File.ReadAllText(Path.Combine(

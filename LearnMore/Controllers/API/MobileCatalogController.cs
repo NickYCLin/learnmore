@@ -9,7 +9,7 @@ namespace LearnMore.Controllers.API;
 
 // Public, read-only catalog. Uses the same database/view as the website.
 [ApiController]
-[Route("api/mobile/v1/songs")]
+[Route("api/mobile/v2/songs")]
 public sealed class MobileCatalogController(IConfiguration configuration) : ControllerBase
 {
     private readonly string connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";

@@ -14,7 +14,15 @@ public sealed record MobileSession(
     [property: JsonPropertyName("user")] MobileUser User);
 
 public sealed record ProviderIdentity(string Provider, string Subject, string Email, string Name,
-    bool CanMatchLegacyEmail, string? RefreshToken = null);
+    bool CanMatchLegacyEmail, string? RefreshToken = null, DateTimeOffset? AuthenticatedAt = null);
+
+public sealed class MobileLinkRequest
+{
+    [Required]
+    public MobileLoginRequest CurrentProof { get; set; } = new();
+    [Required]
+    public MobileLoginRequest TargetProof { get; set; } = new();
+}
 
 public sealed class MobileLoginRequest
 {
@@ -47,5 +55,10 @@ public interface IMobileAccountStore
     Task<MobileUser?> AuthenticateAsync(string token, CancellationToken ct);
     Task SignOutAsync(string token, CancellationToken ct);
     Task LinkAsync(int userId, ProviderIdentity identity, CancellationToken ct);
+    Task LinkWithProofAsync(int userId, ProviderIdentity currentProof, ProviderIdentity targetProof, CancellationToken ct)
+    {
+        MobileAccountMutationGate.RequireAvailable();
+        return Task.CompletedTask;
+    }
     Task DeleteAsync(int userId, ProviderIdentity proof, CancellationToken ct);
 }

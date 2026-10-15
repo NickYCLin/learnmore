@@ -1,5 +1,13 @@
 import Foundation
 
+public enum CatalogRoutes {
+    public static let songs = "api/mobile/v2/songs"
+
+    public static func lyrics(songID: String) -> String {
+        "\(songs)/\(songID)/lyrics"
+    }
+}
+
 // Also compiled directly into the iOS target; the Swift package tests this exact source.
 public enum YouTubeVideoID {
     public static func parse(_ value: String) -> String? {

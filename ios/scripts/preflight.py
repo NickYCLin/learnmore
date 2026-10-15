@@ -77,7 +77,7 @@ else:
     info = plistlib.loads((ROOT / "LearnMore/Info.plist").read_bytes())
     base = info["LearnMoreServerURL"].rstrip("/") + "/"
     endpoints = {
-        "api/mobile/v1/songs?pageSize=1": lambda data: isinstance(data.get("songs"), list) and len(data["songs"]) == 1,
+        "api/mobile/v2/songs?pageSize=1": lambda data: isinstance(data.get("songs"), list) and len(data["songs"]) == 1,
         "api/mobile/v1/auth/providers": lambda data: data.get("google") is True and data.get("apple") is True,
         "Mobile/Privacy": None,
         "Mobile/Support": None,

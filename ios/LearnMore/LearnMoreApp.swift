@@ -1,5 +1,6 @@
 import SwiftUI
 import GoogleSignIn
+import PlaybackCore
 
 enum Server {
     // Keep the deployment subpath and trailing slash. No database credentials belong in the app.
@@ -59,14 +60,14 @@ struct CatalogAPI {
     }
 
     func songs(query: String, page: Int) async throws -> SongPage {
-        try await get("api/mobile/v1/songs", query: [
+        try await get(CatalogRoutes.songs, query: [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "page", value: String(page))
         ])
     }
 
     func lyrics(songID: String) async throws -> [Lyric] {
-        try await get("api/mobile/v1/songs/\(songID)/lyrics")
+        try await get(CatalogRoutes.lyrics(songID: songID))
     }
 }
 

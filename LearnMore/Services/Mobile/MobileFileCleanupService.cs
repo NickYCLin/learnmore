@@ -23,6 +23,14 @@ public sealed class MobileFileCleanupService(IConfiguration config, IWebHostEnvi
                     while (await rows.ReadAsync(stoppingToken)) jobs.Add((rows.GetInt64(0), rows.GetString(1), rows.GetString(2)));
                 foreach (var job in jobs)
                 {
+                    if (job.Kind != "song" && job.Kind != "avatar" ||
+                        job.Kind == "song" && !Regex.IsMatch(job.Name, "\\A[A-Za-z0-9_-]{1,100}\\z") ||
+                        job.Kind == "avatar" && (job.Name != Path.GetFileName(job.Name) ||
+                            !Guid.TryParse(Path.GetFileNameWithoutExtension(job.Name), out _) ||
+                            !Path.GetExtension(job.Name).Equals(".png", StringComparison.OrdinalIgnoreCase)))
+                    { logger.LogError("Invalid mobile file cleanup job {JobId}", job.Id); continue; }
+                    await CompleteDeletionAsync(() =>
+                    {
                     if (job.Kind == "song" && Regex.IsMatch(job.Name, "\\A[A-Za-z0-9_-]{1,100}\\z"))
                     {
                         var workRoot = config["AudioStemProcessing:WorkRoot"];
@@ -33,18 +41,26 @@ public sealed class MobileFileCleanupService(IConfiguration config, IWebHostEnvi
                     }
                     else
                     {
-                    if (job.Name != Path.GetFileName(job.Name) || !Guid.TryParse(Path.GetFileNameWithoutExtension(job.Name), out _) ||
-                        !Path.GetExtension(job.Name).Equals(".png", StringComparison.OrdinalIgnoreCase) || job.Kind != "avatar")
-                    { logger.LogError("Invalid mobile file cleanup job {JobId}", job.Id); continue; }
                     File.Delete(Path.Combine(environment.WebRootPath, "uploads", job.Name));
                     }
+                    }, async () =>
+                    {
                     using var done = new SqlCommand("DELETE FROM dbo.MobileFileDeletionJobs WHERE Id = @Id", db);
                     done.Parameters.AddWithValue("@Id", job.Id);
                     await done.ExecuteNonQueryAsync(stoppingToken);
+                    }, stoppingToken);
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
             catch (Exception exception) { logger.LogError(exception, "Mobile avatar cleanup will retry."); }
         } while (await timer.WaitForNextTickAsync(stoppingToken));
+    }
+
+    public static async Task CompleteDeletionAsync(Action deleteFiles, Func<Task> acknowledge, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        deleteFiles();
+        cancellationToken.ThrowIfCancellationRequested();
+        await acknowledge();
     }
 }

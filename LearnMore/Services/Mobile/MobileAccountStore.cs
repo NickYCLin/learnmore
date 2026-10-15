@@ -23,10 +23,7 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
         {
             using var find = Command(db, tx, "SELECT Id FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Email = @Email", ("@Email", identity.Email));
             var existing = await find.ExecuteScalarAsync(ct);
-            if (existing is not null && (identity.Provider != "google" || !identity.CanMatchLegacyEmail))
-                throw new MobileAuthException("此電子郵件已有帳號，請先以原本的 Google 帳號登入，再於帳號頁連結 Apple。", 409);
-            if (existing is not null) userId = Convert.ToInt32(existing);
-            else
+            MobileIdentityPolicy.RequireNewAccountEmail(existing is not null);
             {
                 if (string.IsNullOrWhiteSpace(identity.Email)) throw new MobileAuthException("首次登入需要提供電子郵件。", 400);
                 using var create = Command(db, tx, """
@@ -80,9 +77,26 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
 
     public async Task LinkAsync(int userId, ProviderIdentity identity, CancellationToken ct)
     {
+        MobileAccountMutationGate.RequireAvailable();
+        await Task.CompletedTask;
+    }
+
+    public async Task LinkWithProofAsync(int userId, ProviderIdentity currentProof, ProviderIdentity identity, CancellationToken ct)
+    {
+        MobileAccountMutationGate.RequireAvailable();
+        await LinkCoreAsync(userId, currentProof, identity, ct);
+    }
+
+    private async Task LinkCoreAsync(int userId, ProviderIdentity currentProof, ProviderIdentity identity, CancellationToken ct)
+    {
+        MobileMutationProofPolicy.RequireFresh(currentProof, DateTimeOffset.UtcNow);
+        MobileMutationProofPolicy.RequireFresh(identity, DateTimeOffset.UtcNow);
         await using var db = new SqlConnection(connectionString);
         await db.OpenAsync(ct);
         using var tx = db.BeginTransaction(IsolationLevel.Serializable);
+        using var user = Command(db, tx, "SELECT Id FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Id = @Id", ("@Id", userId));
+        if (await user.ExecuteScalarAsync(ct) is null) throw new MobileAuthException("帳號已不存在。", 403);
+        MobileMutationProofPolicy.RequireOwner(userId, await FindIdentityAsync(db, tx, currentProof, ct));
         var owner = await FindIdentityAsync(db, tx, identity, ct);
         if (owner.HasValue && owner != userId)
             throw new MobileAuthException("這個登入方式已連結其他帳號，無法自動合併。", 409);
@@ -97,9 +111,19 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
 
     public async Task DeleteAsync(int userId, ProviderIdentity proof, CancellationToken ct)
     {
+        MobileAccountMutationGate.RequireAvailable();
+        await DeleteCoreAsync(userId, proof, ct);
+    }
+
+    private async Task DeleteCoreAsync(int userId, ProviderIdentity proof, CancellationToken ct)
+    {
+        MobileMutationProofPolicy.RequireFresh(proof, DateTimeOffset.UtcNow);
         await using var db = new SqlConnection(connectionString);
         await db.OpenAsync(ct);
         using var tx = db.BeginTransaction(IsolationLevel.Serializable);
+        await AudioStemPublicationGuard.AcquireTransactionLockAsync(db, tx, ct);
+        using var exists = Command(db, tx, "SELECT Id FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Id = @Id", ("@Id", userId));
+        if (await exists.ExecuteScalarAsync(ct) is null) { await tx.CommitAsync(ct); return; }
         // Fresh provider proof must belong to this account. Never accept an arbitrary email as confirmation.
         if (await FindIdentityAsync(db, tx, proof, ct) != userId)
             throw new MobileAuthException("請使用此帳號已連結的登入方式確認刪除。", 403);

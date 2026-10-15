@@ -91,8 +91,10 @@
 }
 
 .mika-avatar-switcher button {
-    width: 34px;
+    min-width: 52px;
+    width: auto;
     height: 28px;
+    padding: 0 8px;
     border: 0;
     border-radius: 7px;
     background: transparent;
@@ -101,6 +103,7 @@
     font-weight: 800;
     line-height: 1;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .mika-avatar-switcher button[data-active="true"] {
@@ -114,6 +117,37 @@
 
 .mika-avatar-panel[data-live2d-state="ready"] .mika-avatar-fallback {
     display: none;
+}
+
+.mika-avatar-unavailable {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    padding: 24px;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    color: var(--text-primary, #334155);
+    background: linear-gradient(180deg, #fff7ed, #e8f7ff);
+}
+
+.mika-avatar-panel[data-live2d-state="error"] .mika-avatar-unavailable {
+    display: flex;
+}
+
+.mika-avatar-unavailable p { margin: 0; font-weight: 700; }
+.mika-avatar-unavailable span { font-size: 14px; }
+.mika-avatar-unavailable button {
+    min-height: 44px;
+    padding: 8px 16px;
+    border: 1px solid #cbd5e1;
+    border-radius: 10px;
+    background: #fff;
+    color: #334155;
+    cursor: pointer;
 }
 
 .mika-avatar-image {
@@ -265,5 +299,17 @@
         border-radius: 0;
         background: transparent;
         box-shadow: none;
+    }
+}
+
+@media (min-width: 1200px) {
+    .lyrics-avatar-rail .mika-avatar-stage {
+        border: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
+        border-radius: 18px;
+        background:
+            radial-gradient(circle at 50% 18%, rgba(255, 183, 77, 0.22), transparent 34%),
+            radial-gradient(circle at 50% 76%, rgba(99, 102, 241, 0.10), transparent 42%),
+            linear-gradient(180deg, rgba(255, 247, 237, 0.72), rgba(232, 247, 255, 0.46));
+        box-shadow: var(--shadow-md);
     }
 }

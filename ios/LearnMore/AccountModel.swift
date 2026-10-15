@@ -14,6 +14,16 @@ struct Member: Codable, Equatable {
 struct LoginProviders: Decodable {
     var google = false
     var apple = false
+    var accountMutations = false
+
+    private enum CodingKeys: String, CodingKey { case google, apple, accountMutations }
+    init() {}
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        google = try values.decodeIfPresent(Bool.self, forKey: .google) ?? false
+        apple = try values.decodeIfPresent(Bool.self, forKey: .apple) ?? false
+        accountMutations = try values.decodeIfPresent(Bool.self, forKey: .accountMutations) ?? false
+    }
 }
 
 struct LoginProof: Encodable {
@@ -98,6 +108,9 @@ final class AccountModel {
         do {
             #if DEBUG
             if UITestURLProtocol.enabled { SessionKeychain.clear() }
+            if UITestURLProtocol.enabled && ProcessInfo.processInfo.arguments.contains("--ui-test-member") {
+                member = Member(id: 1, name: "隔離測試帳號", email: "test@example.invalid", providers: ["google"])
+            }
             #endif
             token = try SessionKeychain.read()
             providers = try await request("auth/providers", authenticated: false)
@@ -141,6 +154,10 @@ final class AccountModel {
 
     func complete(_ proof: LoginProof, action: AccountAction) async -> Bool {
         guard !busy else { return false }
+        guard action == .login else {
+            error = "帳號連結與刪除尚待安全驗證，目前無法使用。"
+            return false
+        }
         busy = true; error = nil
         defer { busy = false }
         do {

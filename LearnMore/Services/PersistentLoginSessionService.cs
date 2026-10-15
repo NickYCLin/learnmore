@@ -10,10 +10,12 @@ public sealed class PersistentLoginSessionService
     private const string DataProtectionPurpose = "LearnMore.PersistentLoginSession.v1";
     private static readonly TimeSpan CookieLifetime = TimeSpan.FromDays(30);
     private readonly IDataProtector _protector;
+    private readonly IAccountSessionValidator _accounts;
 
-    public PersistentLoginSessionService(IDataProtectionProvider dataProtectionProvider)
+    public PersistentLoginSessionService(IDataProtectionProvider dataProtectionProvider, IAccountSessionValidator accounts)
     {
         _protector = dataProtectionProvider.CreateProtector(DataProtectionPurpose);
+        _accounts = accounts;
     }
 
     public async Task PersistAsync(
@@ -54,6 +56,13 @@ public sealed class PersistentLoginSessionService
         var currentEmail = httpContext.Session.GetString("Email");
         if (!string.IsNullOrWhiteSpace(currentEmail))
         {
+            if (!ValidAccount(httpContext.Session.GetString("UserId"), currentEmail))
+            {
+                httpContext.Session.Clear();
+                ClearPersistentCookie(httpContext);
+                await httpContext.Session.CommitAsync(cancellationToken);
+                return;
+            }
             RenewPersistentCookie(httpContext, new PersistentLoginSessionPayload(
                 currentEmail,
                 httpContext.Session.GetString("UserId"),
@@ -80,7 +89,8 @@ public sealed class PersistentLoginSessionService
             return;
         }
 
-        if (payload is null || payload.ExpiresAt <= DateTimeOffset.UtcNow || string.IsNullOrWhiteSpace(payload.Email))
+        if (payload is null || payload.ExpiresAt <= DateTimeOffset.UtcNow || string.IsNullOrWhiteSpace(payload.Email) ||
+            !ValidAccount(payload.UserId, payload.Email))
         {
             ClearPersistentCookie(httpContext);
             return;
@@ -104,6 +114,9 @@ public sealed class PersistentLoginSessionService
         ArgumentNullException.ThrowIfNull(httpContext);
         httpContext.Response.Cookies.Delete(CookieName, BuildCookieOptions(httpContext));
     }
+
+    private bool ValidAccount(string? userId, string email)
+        => int.TryParse(userId, out var id) && _accounts.Exists(id, email);
 
     private void RenewPersistentCookie(HttpContext httpContext, PersistentLoginSessionPayload payload)
     {

@@ -1,0 +1,13 @@
+@model LearnMore.Controllers.MobileController.ConnectRequest
+@{ ViewData["Title"] = "連接 LearnMore App"; Layout = "_LayoutLogin"; }
+<main style="max-width:420px;margin:48px auto;padding:24px">
+    <h1>連接 LearnMore App</h1>
+    <p>允許 App 使用目前的帳號，讀取與管理你的歌曲收藏。</p>
+    <form action="@Url.Action("Approve", "Mobile")" method="post">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Challenge" value="@Model.Challenge" />
+        <input type="hidden" name="State" value="@Model.State" />
+        <button type="submit" class="btn btn-primary">允許並返回 App</button>
+        <a href="@Url.Action("Index", "Home")" class="btn">取消</a>
+    </form>
+</main>

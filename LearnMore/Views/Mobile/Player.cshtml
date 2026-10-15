@@ -1,0 +1,7 @@
+@model string
+@{ Layout = null; }
+<!doctype html>
+<html lang="zh-Hant">
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><meta name="referrer" content="strict-origin-when-cross-origin" /><title>LearnMore 播放器</title><style>html,body,#player{width:100%;height:100%;margin:0;background:#000;overflow:hidden}</style></head>
+<body data-video-id="@Model"><div id="player"></div><script src="@Url.Content("~/js/mobile-player.js")"></script><script src="https://www.youtube.com/iframe_api"></script></body>
+</html>

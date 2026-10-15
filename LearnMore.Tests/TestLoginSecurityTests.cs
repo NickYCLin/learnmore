@@ -57,7 +57,7 @@ public sealed class TestLoginSecurityTests
             })
             .Build();
         var persistentSession = new PersistentLoginSessionService(
-            new EphemeralDataProtectionProvider());
+            new EphemeralDataProtectionProvider(), new SessionValidatorFake());
 
         return new LoginController(configuration, persistentSession)
         {

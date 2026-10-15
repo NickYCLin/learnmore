@@ -2,6 +2,11 @@ import XCTest
 @testable import PlaybackCore
 
 final class PlaybackCoreTests: XCTestCase {
+    func testCatalogUsesSeparatePaginatedContract() {
+        XCTAssertEqual(CatalogRoutes.songs, "api/mobile/v2/songs")
+        XCTAssertEqual(CatalogRoutes.lyrics(songID: "sample"), "api/mobile/v2/songs/sample/lyrics")
+    }
+
     func testSupportedVideoLinks() {
         let id = "OHAjc-ayhus"
         for value in [id, "https://www.youtube.com/watch?v=\(id)&list=123", "https://youtu.be/\(id)?si=abc",

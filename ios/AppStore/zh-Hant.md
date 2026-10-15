@@ -38,7 +38,7 @@ LearnMore is a native Japanese song practice app. Browsing, search, lyrics, and 
 
 The Favorites tab uses the same account and playlists as our website. Sign in using Google or Apple in the Account tab. Existing website members can use their Google account and explicitly link Apple in Account settings. No accounts are automatically merged based on Apple email addresses.
 
-Account deletion: Account → Delete Account → Continue identity verification → sign in with a linked provider. This permanently removes the shared account, playlists, comments, and feedback, and revokes its sessions and Apple authorization. Songs, lyrics, and generated stems uploaded by that user are also removed, including their references in other playlists. Third-party YouTube source videos are not deleted.
+Account linking and deletion are not available in this build. The server rejects these operations with HTTP 503 while fresh-account verification and durable Apple revocation/retry remain incomplete. The account screen states this restriction and links to support. This build is not ready for submission; logging out or contacting support is not evidence of account deletion.
 
 Before submission, provide working review access (a real dedicated test account or another Apple-accepted path), support contact, content-rights evidence if requested, and current production examples. Never put TestLogin smoke credentials or server secrets in review notes.
 

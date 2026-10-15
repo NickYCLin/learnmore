@@ -103,6 +103,19 @@ builder.Services
     .AddControllersWithViews()
     .AddRazorRuntimeCompilation();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<MobileSessionService>();
+builder.Services.AddSingleton<IAccountSessionValidator, AccountSessionValidator>();
+builder.Services.AddScoped<MobileLibraryService>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("mobile", context => System.Threading.RateLimiting.RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new System.Threading.RateLimiting.FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 120, Window = TimeSpan.FromMinutes(1), QueueLimit = 0
+        }));
+});
 builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
@@ -225,20 +238,6 @@ app.Use(async (context, next) =>
     if (!context.Request.Path.StartsWithSegments("/api/mobile"))
     {
         await context.RequestServices.GetRequiredService<PersistentLoginSessionService>().RestoreSessionAsync(context);
-        // Revokes old website sessions too after an account is deleted, including a reused email address.
-        if (context.Session.GetString("Email") is string email)
-        {
-            await using var db = new SqlConnection(app.Configuration.GetConnectionString("DefaultConnection"));
-            await db.OpenAsync(context.RequestAborted);
-            using var check = new SqlCommand("SELECT COUNT(*) FROM dbo.Users WHERE Id = @Id AND Email = @Email", db);
-            check.Parameters.AddWithValue("@Id", int.TryParse(context.Session.GetString("UserId"), out var id) ? id : -1);
-            check.Parameters.AddWithValue("@Email", email);
-            if (Convert.ToInt32(await check.ExecuteScalarAsync(context.RequestAborted)) != 1)
-            {
-                context.Session.Clear();
-                context.RequestServices.GetRequiredService<PersistentLoginSessionService>().ClearPersistentCookie(context);
-            }
-        }
     }
     await next();
 });
@@ -253,7 +252,7 @@ app.UseResponseCompression();
 
 app.Use(async (context, next) =>
 {
-    ApplySecurityHeaders(context.Response.Headers);
+    ApplySecurityHeaders(context.Response.Headers, app.Configuration);
 
     if (IsBlockedPublicAsset(context.Request.Path))
     {
@@ -278,7 +277,7 @@ app.UseStaticFiles(new StaticFileOptions
         ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=2592000, immutable";
         ctx.Context.Response.Headers.Remove("Pragma");
         ctx.Context.Response.Headers.Remove("Expires");
-        ApplySecurityHeaders(ctx.Context.Response.Headers);
+        ApplySecurityHeaders(ctx.Context.Response.Headers, app.Configuration);
     }
 });
 
@@ -290,7 +289,7 @@ app.Use(async (context, next) =>
     context.Response.Headers["Pragma"] = "no-cache";
     context.Response.Headers["Expires"] = "0";
 
-    ApplySecurityHeaders(context.Response.Headers);
+    ApplySecurityHeaders(context.Response.Headers, app.Configuration);
 
     await next();
 });
@@ -299,7 +298,11 @@ app.UseRouting();
 app.UseRateLimiter();
 app.Use(async (context, next) =>
 {
-    if (!context.Request.Path.StartsWithSegments("/api/mobile")) { await next(); return; }
+    if (!context.Request.Path.StartsWithSegments("/api/mobile/v2") &&
+        !context.Request.Path.StartsWithSegments("/api/mobile/v1/auth") &&
+        !context.Request.Path.StartsWithSegments("/api/mobile/v1/account") &&
+        !context.Request.Path.StartsWithSegments("/api/mobile/v1/favorites"))
+    { await next(); return; }
     try { await next(); }
     catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) { }
     catch (Exception exception) when (!context.Response.HasStarted)
@@ -403,8 +406,12 @@ static bool IsBlockedPublicAsset(PathString path)
         extension.Equals(".config", StringComparison.OrdinalIgnoreCase);
 }
 
-static void ApplySecurityHeaders(IHeaderDictionary headers)
+static void ApplySecurityHeaders(IHeaderDictionary headers, IConfiguration configuration)
 {
+    var avatarOrigin = Uri.TryCreate(configuration["MikaAvatar:BaseUrl"], UriKind.Absolute, out var avatarUri) && avatarUri.Scheme == "https"
+        ? avatarUri.GetLeftPart(UriPartial.Authority) : "https://ycspace.myvnc.com";
+    var avatarSocketOrigin = Uri.TryCreate(configuration["MikaAvatar:WebSocketUrl"], UriKind.Absolute, out var socketUri) && socketUri.Scheme == "wss"
+        ? socketUri.GetLeftPart(UriPartial.Authority) : avatarOrigin.Replace("https://", "wss://");
     headers["X-Content-Type-Options"] = "nosniff";
     headers["X-Frame-Options"] = "SAMEORIGIN";
     headers["X-XSS-Protection"] = "1; mode=block";
@@ -416,8 +423,8 @@ static void ApplySecurityHeaders(IHeaderDictionary headers)
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " +
         "img-src 'self' data: https: blob:; " +
-        "frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com https://ycspace.myvnc.com; " +
-        "connect-src 'self' https://www.youtube.com https://www.google-analytics.com https://www.google.com https://*.googleapis.com https://accounts.google.com https://ycspace.myvnc.com wss://ycspace.myvnc.com; " +
+        $"frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://accounts.google.com {avatarOrigin}; " +
+        $"connect-src 'self' https://www.youtube.com https://www.google-analytics.com https://www.google.com https://*.googleapis.com https://accounts.google.com {avatarOrigin} {avatarSocketOrigin}; " +
         "media-src 'self' https: blob:; " +
         "object-src 'none'; " +
         "base-uri 'self'; " +
