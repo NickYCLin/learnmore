@@ -1,6 +1,5 @@
 import SwiftUI
 import GoogleSignIn
-import PlaybackCore
 
 enum Server {
     // Keep the deployment subpath and trailing slash. No database credentials belong in the app.
