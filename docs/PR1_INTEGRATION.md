@@ -59,64 +59,74 @@ PR1 保留原 identity linking、帳號刪除與 file-deletion-outbox，沒有�
   PR1 已連結 provider subject 的保護邏輯一併保留。
 - 音軌發布先鎖定存在的歌曲，再複製公開檔案；不存在時仍保留 PR1 的 durable cleanup。
 
-## 尚未開放的帳號操作
+## 帳號安全與驗收界線（2026-10-15 續作）
 
-`MobileAccountMutationGate` 在 controller 與 store 的 link／delete 入口均固定回應 503，
-沒有可直接解鎖的設定旗標；原本的刪除、revoke、outbox 與 SQL migration 原始碼均保留。
-`auth/providers` 明確回應 `accountMutations: false`。不能把原生 UI 中的按鈕當成已驗收功能。
+本次已移除固定 503 gate；link / delete 會執行實際的 proof、ownership 與 SQL 流程。
+連結要求原帳號與目標 provider 各一份已驗證的 proof，auth_time 限五分鐘內、未來容許
+三十秒；沒有 auth_time 就拒絕，不用 iat、電子郵件或 UI 取得授權的時間代替。
+SwiftUI 先取得原帳號授權，再取得目標授權，一起交給伺服器驗證；關閉或失敗即清除。
+原生 SDK 是否實際提供新鮮 auth_time 尚無真 OAuth 證據，不能聲稱實際帳號流程已驗收。
 
-既有 email 不能用來自動建立 provider ownership，包含已驗證的 Gmail／Workspace email。
-既有網站帳號若尚無 provider identity，原生登入將回應 409；需另做以原帳號新鮮驗證
-引導的 migration／link 流程，不自行重新命名或合併帳號。
+刪除交易只寫入本地 SQL 與 outbox，不做外部 revoke。Apple 舊、新 refresh token 均由
+Data Protection 加密後入列，與資料刪除同時提交；SQL rollback 不會造成外部授權先失效。
+worker 以 READ COMMITTED 交易領取五分鐘租約，再在交易外呼叫 Apple；成功後依租約
+刪除工作，失敗保留、最長每六十分鐘重試，不記錄 token 或外部錯誤內容。
+中斷或成功後 acknowledgement 遺失會在租約到期後重做，屬 at-least-once 而非 exactly-once。
+尚有撤銷工作時禁止相同 Apple subject 重新建立帳號或連結，避免舊工作影響新授權。
+HTTP 202 表示 LearnMore 資料已提交刪除、背景清理已排入，不代表 Apple 已完成撤銷。
+佇列不依賴被刪除的 Users FK；正式環境必須保留既有 Data Protection key ring 才能重試。
+沒有設定 Apple 撤銷憑證、key 遺失或外部長期失敗時工作會保留，需營運處理，不能假報完成。
 
-解除阻礙仍需要原帳號重新驗證與目標 provider 驗證的實際 OAuth／UI 流程，以及
-legacy identity migration。伺服器現在要求兩份 proof 的已驗證 `auth_time` 在五分鐘內；
-缺少該 claim、過期、超過三十秒的未來時間或原 provider 不屬於目前帳號都拒絕。
-不能用 token 的 `iat` 或同 email 代替重新驗證。SwiftUI 不會送出舊版單 proof link。
+Capacitor code exchange / Read 與網站 restore / renew 每次檢查 user Id 存活；網站另比對
+email。刪除後不能恢復舊 persistent cookie 或快取 token，DB 失敗也不退回 cache。
+SwiftUI SQL session 透過 Users join 失效；合成 SQL 測試涵蓋多裝置與同 email 新帳號。
 
-Apple revoke 仍在 SQL transaction 中，缺少 durable revoke／retry 狀態；SQL rollback
-不能撤回成功的外部 HTTP 請求。因此本輪不開 gate，也不能把停用按鈕當作功能已完成。
-帳號 UI、網站隱私頁與商店文案明示限制，登出或聯絡支援不代表資料已刪除。
+## 舊帳號遷移
 
-先前本機 .NET Release 測試 602 項通過，0 失敗、0 跳過。測試包含實際 MVC action discovery、
-兩層 mutation gate、email 拒絕，以及合成檔案／outbox acknowledgement 重試與 late-worker。
-這些是隔離單元與檔案測試；SQL 鎖定 source 檢查不是 SQL Server 並行驗證，fake OAuth
-不是真實 Google／Apple 登入。最終 CI 與合併狀態以 GitHub 的實際 head/run 為準。
+沒有 provider subject 的舊網站帳號不能以相同 email 自動接管。MobileAuth 開啟時網站
+也拒絕既有帳號的未連結 Google subject；新建立的網站帳號在同一交易寫入 verified subject。
+支援人員必須先以既有可信紀錄獨立確認原帳號所有權，並確認目標 provider 的穩定 subject。
+只有 email 相同、收到 email 截圖或使用者自行聲稱擁有帳號都不足以核准。
+確認後才可由有權限的管理者在資料庫使用 docs/sql/002-reviewed-legacy-identity.sql，
+填入確切 UserId、provider、subject 及可追溯的證據編號；預設空值會拒絕執行。
+核准只存活十分鐘，原生重新驗證後才能在交易中消耗一次，保留原 Id / 收藏 / 歌曲。
+過期、缺少 auth_time、已連結或 subject 不相符都拒絕，不覆寫任何既有 provider identity。
+本次未操作正式資料庫或核准任何真實帳號；無獨立所有權證據的舊帳號仍需人工處理。
 
-Apple 匯出日誌、真機音訊中斷／耳機／自動鎖定與 TestFlight 均仍待驗證。
-診斷功能預設關閉，沒有新增正式曲庫內容、簽署憑證或部署操作。
+## 隔離驗證
 
-## 2026-10-15 隔離驗證與尚未提交範圍
+使用既有 SQL Server 2022 Developer image，新容器只綁 127.0.0.1:15439，
+每項測試建立與刪除專屬 LearnMoreAudit_ 合成 DB，不讀寫正式資料。
+SQL 測試直接執行公開 store 方法，另有 controller + fake verifier + 真 SQL 測試，
+不再以 reflection 繞過 gate。涵蓋 schema / FK / migration 重入、跨帳號與過期 proof、
+多 session 撤銷、outbox rollback / retry / restart、租約交錯與 late-worker / delete 阻塞。
+OAuth 隔離測試用臨時合成簽章與攔截 HTTP，測試真 verifier 的 auth_time、code replay
+及 revoke failure；不是真實 Google / Apple OAuth，也沒有建立 Apple 開發者簽署憑證。
+重複交換測試發現短生命週期 ECDsa 被 JWT signature provider cache 重用後已釋放；
+Apple client secret 現在關閉該 key 的簽章 provider 快取，實際重複簽章與撤銷測試通過。
 
-本輪在既有 `/tmp/learnmore-audit/pr1` 快照修改，未寫入 GitLab checkout，沒有 clone。
-遠端同步使用 GitHub MCP 讀取 main／PR1 的 SHA；不是 `git pull`。
-main 為 `eded4ffd0917dc84051336b70ca53a328acd7256`，PR1 head 為
-`2ccf024da439eabb6ef482fe011254b3bb8b9e86`。下列結果屬本機快照，不是最終提交 SHA 驗證。
+本輪重新編譯 .NET Release：624 pass / 0 fail / 0 skip，包含 12 項真 SQL 測試與
+3 項簽章 OAuth 隔離案例；不是前輪 617 項 binary 的重跑。
+Capacitor Node：49 pass / 1 skip（本機無 Swift）；WebKit：9 pass / 1 conditional skip；
+TypeScript / Vite build 通過。Python API：55 pass。SQL 另重跑五輪與 publish 結果保存在
+本機 audit 證據中；這些測試不冒充真實 OAuth 或真機結果。
 
-- 完整 .NET Release 重編譯測試 617 項通過，0 失敗、0 跳過。
-- 8 項 SQL integration tests 使用本機既有 SQL Server 2022 Developer image，
-  新容器僅綁 `127.0.0.1:15439`，每項建立／刪除獨立合成 DB，不連正式 DB。
-  migration 跑兩次、preflight、FK rollback／刪除重試、雙 proof ownership／過期拒絕、
-  Capacitor 多 token／pending code、Swift SQL session、web active／persistent cookie
-  與同 email 新帳號，以及 outbox failure／retry、late-worker 交錯均在真 SQL engine 執行。
-  同一組 SQL 測試另外連續重跑五輪，每輪 8 項全數通過。
-- 測試以 reflection 呼叫固定 gate 後方的 private core；沒有開放正式 link／delete endpoint。
-  OAuth verifier 拒絕所有 network／Apple revoke。這不是 Apple revoke 或真登入驗收。
-- SQL DMV 實測發現發布與刪除跨索引鎖定造成 deadlock 1205；兩路現在於其他 SQL 鎖之前
-  取得 transaction-owned `LearnMore.AudioStemPublication` exclusive app lock。
-  鎖定採全曲庫序列化，降低並行吞吐以避免反向鎖定；十五秒逾時拒絕，不重試發布。
-  保證只涵蓋遵守同協定的程式路徑，不保證未知直接 SQL writer、檔案／SQL 原子交易。
-- Capacitor Read／code exchange 與網站 cookie restore／renew 每次檢查 user Id 存活；
-  網站另檢查 email，刪除後新帳號重用 email 不能恢復舊 session。DB 失敗不回退 cache。
-- mobile Node 49 pass／1 skip（本機無 Swift），WebKit 9 pass／1 conditional skip，build 成功。
-  診斷旗標 on／off 的 WebKit 測試 2 pass／2 conditional skip；Python API 55 pass，publish 成功。
-  SwiftUI member restriction UI test 已加入，但本機無 macOS／Xcode，尚未編譯與執行。
-- CI 保留 Windows／API、Capacitor 與 SwiftUI 兩路，另加合成 SQL audit job，沒有正式 DB secrets。
-  本輪修改尚未取得最終遠端 SHA，因此沒有本輪 CI 通過或 main 包含修改的證據。
+SQL DMV 先前發現發布與刪除跨索引鎖定的 deadlock 1205。兩路現在先取得交易專屬
+LearnMore.AudioStemPublication app lock；十五秒逾時拒絕，以全曲庫序列化換取鎖順序一致。
+這不保證直接 SQL writer 或檔案與 SQL 的原子回滾。
+本輪 SQL 實測另發現 pooled connection 保留 SERIALIZABLE 造成 READPAST 拒絕；
+撤銷 worker 現在明確用 READ COMMITTED 短交易領取租約，提交後才進行外部 HTTP。
 
-GitHub MCP 傳輸間歇失敗，部分 blob／小型 tree 寫入成功，但後續批次 tree 與 blob
-又出現 transport error。遠端 readback 確認仍有必要 blob 不存在，尚不能建立完整提交。
-提交前須以本機 blob hash 與遠端 tree 逐檔核對；推送前重新讀取 refs，使用
-`expected_sha`／`force:false`，不改用 Git／REST 寫入、不 force push、不重寫原九筆歷史。
-本輪尚無新 commit／分支 ref 更新／最終 SHA CI，不把已上傳物件當成已推送的程式碼。
-安全功能阻礙未解除之前，PR1 必須保持 Draft／open，不合併 main。
+## 同步與交付
+
+已在既有 /tmp/learnmore-audit/pr1 快照內初始化 Git metadata 並 fetch GitHub 歷史，
+不是 clone，也未寫入原 GitLab checkout。這是使用者續作時新增的正常 Git 授權，
+取代前輪 MCP-only 限制。部分歷史 MCP blob / tree 未曾更新任何 branch，不當成已提交。
+整合提交保留 PR1 與 main 兩個 parent，原九筆歷史不 squash、不重寫，推送前會實際 pull。
+
+CI 保留 Windows / API、Capacitor、SwiftUI，另有獨立合成 SQL job；兩路 iOS 也在 PR 分支
+push 執行，避免僅因 path filter 而缺少最終 head 的驗證。只做無簽章 simulator build，
+沒有 TestFlight、正式部署、Apple 帳號操作、新權限或付費 runner。
+最終測試數、提交 SHA、CI run 與 readback 以本輪實測紀錄與完成回報為準，不沿用舊 binary。
+尚缺真 OAuth / 原生重新驗證與舊帳號人工所有權證據、原始 Apple export 日誌、
+真機 30 / 60 秒鎖定、耳機與中斷驗收。這些限制存在時 PR 保持 open，不因 CI 綠就宣稱交付完成。
