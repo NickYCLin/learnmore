@@ -57,8 +57,7 @@ public interface IMobileAccountStore
     Task LinkAsync(int userId, ProviderIdentity identity, CancellationToken ct);
     Task LinkWithProofAsync(int userId, ProviderIdentity currentProof, ProviderIdentity targetProof, CancellationToken ct)
     {
-        MobileAccountMutationGate.RequireAvailable();
-        return Task.CompletedTask;
+        throw new MobileAuthException("此帳號儲存實作不支援雙重驗證連結。", 400);
     }
     Task DeleteAsync(int userId, ProviderIdentity proof, CancellationToken ct);
 }

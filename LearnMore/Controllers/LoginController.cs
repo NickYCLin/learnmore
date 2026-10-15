@@ -122,13 +122,12 @@ WHERE I.Provider = 'google' AND I.Subject = @Subject", connection, transaction))
                     using var identityCheck = new SqlCommand(@"
 SELECT COUNT(*) FROM dbo.Users U WITH (UPDLOCK, HOLDLOCK)
 WHERE U.Email = @Email
-AND EXISTS (SELECT 1 FROM dbo.MobileIdentities I WHERE I.UserId = U.Id)
 AND NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities I WHERE I.UserId = U.Id AND I.Provider = 'google' AND I.Subject = @Subject)
 ", connection, transaction);
                     identityCheck.Parameters.AddWithValue("@Email", accountEmail);
                     identityCheck.Parameters.AddWithValue("@Subject", payload.Subject);
                     if (Convert.ToInt32(await identityCheck.ExecuteScalarAsync()) > 0)
-                        return StatusCode(409, "此帳號尚未連結此 Google 登入方式；安全連結功能尚未開放，請聯絡支援。");
+                        return StatusCode(409, "此帳號尚未連結此 Google 識別碼。請以原登入方式連結，或聯絡支援核准一次性遷移；不會僅憑電子郵件合併。");
                 }
 
                 var query = @"
@@ -173,6 +172,16 @@ END";
                         uploadedAvatar = reader.IsDBNull(1) ? null : reader.GetString(1);
                         googlePicture = reader.IsDBNull(2) ? payload.Picture : reader.GetString(2);
                     }
+                }
+                if (_configuration.GetValue<bool>("MobileAuth:Enabled"))
+                {
+                    using var bind = new SqlCommand(@"
+IF NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities WHERE Provider = 'google' AND Subject = @Subject)
+    INSERT dbo.MobileIdentities (Provider, Subject, UserId) VALUES ('google', @Subject, @UserId)
+", connection, transaction);
+                    bind.Parameters.AddWithValue("@Subject", payload.Subject);
+                    bind.Parameters.AddWithValue("@UserId", int.Parse(userId!));
+                    await bind.ExecuteNonQueryAsync();
                 }
                 await transaction.CommitAsync();
             }

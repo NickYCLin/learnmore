@@ -34,7 +34,7 @@ public sealed class MobileAuthorizeFilter(IMobileAccountStore accounts, IConfigu
 public sealed class MobileAuthController(IMobileAccountStore accounts, IMobileIdentityVerifier verifier) : ControllerBase
 {
     [HttpGet("providers")]
-    public IActionResult Providers() => Ok(new { google = verifier.GoogleEnabled, apple = verifier.AppleEnabled, accountMutations = false });
+    public IActionResult Providers() => Ok(new { google = verifier.GoogleEnabled, apple = verifier.AppleEnabled, accountMutations = true });
 
     [HttpPost]
     [RequestSizeLimit(16384)]
@@ -64,7 +64,6 @@ public sealed class MobileAccountController(IMobileAccountStore accounts, IMobil
     [RequestSizeLimit(16384)]
     public async Task<IActionResult> Link(MobileLinkRequest proof, CancellationToken ct)
     {
-        MobileAccountMutationGate.RequireAvailable();
         await accounts.LinkWithProofAsync(CurrentUser.Id,
             await verifier.VerifyAsync(proof.CurrentProof, ct), await verifier.VerifyAsync(proof.TargetProof, ct), ct);
         return NoContent();
@@ -74,8 +73,7 @@ public sealed class MobileAccountController(IMobileAccountStore accounts, IMobil
     [RequestSizeLimit(16384)]
     public async Task<IActionResult> Delete(MobileLoginRequest proof, CancellationToken ct)
     {
-        MobileAccountMutationGate.RequireAvailable();
         await accounts.DeleteAsync(CurrentUser.Id, await verifier.VerifyAsync(proof, ct), ct);
-        return NoContent();
+        return Accepted(new { accountDeleted = true, fileCleanup = "queued", appleRevocation = CurrentUser.Providers.Contains("apple") ? "queued" : "notRequired" });
     }
 }

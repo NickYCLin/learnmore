@@ -121,7 +121,7 @@ public sealed class MobileIdentityVerifier(IConfiguration config, IHttpClientFac
             new[] { new Claim("sub", Setting("AppleBundleId")),
                 new Claim("iat", new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64) },
             now, now.AddMinutes(5), new SigningCredentials(new ECDsaSecurityKey(ec)
-            { KeyId = Setting("AppleKeyId") }, SecurityAlgorithms.EcdsaSha256));
+            { KeyId = Setting("AppleKeyId"), CryptoProviderFactory = new CryptoProviderFactory { CacheSignatureProviders = false } }, SecurityAlgorithms.EcdsaSha256));
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 
@@ -135,7 +135,7 @@ public sealed class MobileIdentityVerifier(IConfiguration config, IHttpClientFac
             ["client_id"] = Setting("AppleBundleId"), ["client_secret"] = CreateAppleSecret(),
             ["token"] = refreshToken, ["token_type_hint"] = "refresh_token"
         }), ct);
-        if (!response.IsSuccessStatusCode) throw new MobileAuthException("Apple 授權撤銷失敗，帳號尚未刪除，請稍後重試。", 503);
+        if (!response.IsSuccessStatusCode) throw new MobileAuthException("Apple 授權撤銷尚未完成，背景工作將重試。", 503);
     }
 
     private async Task<JsonDocument> PostAsync(string url, Dictionary<string, string> form, CancellationToken ct)

@@ -6,8 +6,7 @@ using Microsoft.AspNetCore.DataProtection;
 
 namespace LearnMore.Services.Mobile;
 
-public sealed partial class MobileAccountStore(IConfiguration configuration, IDataProtectionProvider protection,
-    IMobileIdentityVerifier verifier) : IMobileAccountStore
+public sealed partial class MobileAccountStore(IConfiguration configuration, IDataProtectionProvider protection) : IMobileAccountStore
 {
     private readonly string connectionString = configuration.GetConnectionString("DefaultConnection") ?? "";
     private readonly IDataProtector protector = protection.CreateProtector("LearnMore.Mobile.AppleRefresh.v1");
@@ -19,6 +18,24 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
         await db.OpenAsync(ct);
         using var tx = db.BeginTransaction(IsolationLevel.Serializable);
         var userId = await FindIdentityAsync(db, tx, identity, ct);
+        using var pending = Command(db, tx, "SELECT COUNT(*) FROM dbo.MobileAppleRevocationJobs WITH (UPDLOCK, HOLDLOCK) WHERE Subject = @Subject", ("@Subject", identity.Subject));
+        if (identity.Provider == "apple" && Convert.ToInt32(await pending.ExecuteScalarAsync(ct)) > 0)
+            throw new MobileAuthException("先前帳號的 Apple 授權仍在撤銷，請稍後再登入。", 409);
+        if (userId is null)
+        {
+            using var approval = Command(db, tx, """
+                DELETE FROM dbo.MobileIdentityMigrationApprovals
+                OUTPUT DELETED.UserId
+                WHERE Provider = @Provider AND Subject = @Subject AND ExpiresAt > SYSUTCDATETIME()
+                """, ("@Provider", identity.Provider), ("@Subject", identity.Subject));
+            var approvedUser = await approval.ExecuteScalarAsync(ct);
+            if (approvedUser is not null)
+            {
+                MobileMutationProofPolicy.RequireFresh(identity, DateTimeOffset.UtcNow);
+                userId = Convert.ToInt32(approvedUser);
+                await InsertIdentityAsync(db, tx, userId.Value, identity, ct);
+            }
+        }
         if (userId is null)
         {
             using var find = Command(db, tx, "SELECT Id FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Email = @Email", ("@Email", identity.Email));
@@ -77,13 +94,12 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
 
     public async Task LinkAsync(int userId, ProviderIdentity identity, CancellationToken ct)
     {
-        MobileAccountMutationGate.RequireAvailable();
         await Task.CompletedTask;
+        throw new MobileAuthException("連結需要原帳號與目標登入方式的兩份新鮮驗證。", 400);
     }
 
     public async Task LinkWithProofAsync(int userId, ProviderIdentity currentProof, ProviderIdentity identity, CancellationToken ct)
     {
-        MobileAccountMutationGate.RequireAvailable();
         await LinkCoreAsync(userId, currentProof, identity, ct);
     }
 
@@ -97,6 +113,9 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
         using var user = Command(db, tx, "SELECT Id FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Id = @Id", ("@Id", userId));
         if (await user.ExecuteScalarAsync(ct) is null) throw new MobileAuthException("帳號已不存在。", 403);
         MobileMutationProofPolicy.RequireOwner(userId, await FindIdentityAsync(db, tx, currentProof, ct));
+        using var revoking = Command(db, tx, "SELECT COUNT(*) FROM dbo.MobileAppleRevocationJobs WITH (UPDLOCK, HOLDLOCK) WHERE Subject = @Subject", ("@Subject", identity.Subject));
+        if (identity.Provider == "apple" && Convert.ToInt32(await revoking.ExecuteScalarAsync(ct)) > 0)
+            throw new MobileAuthException("此 Apple 授權仍在撤銷，請稍後再連結。", 409);
         var owner = await FindIdentityAsync(db, tx, identity, ct);
         if (owner.HasValue && owner != userId)
             throw new MobileAuthException("這個登入方式已連結其他帳號，無法自動合併。", 409);
@@ -111,7 +130,6 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
 
     public async Task DeleteAsync(int userId, ProviderIdentity proof, CancellationToken ct)
     {
-        MobileAccountMutationGate.RequireAvailable();
         await DeleteCoreAsync(userId, proof, ct);
     }
 
@@ -127,14 +145,28 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
         // Fresh provider proof must belong to this account. Never accept an arbitrary email as confirmation.
         if (await FindIdentityAsync(db, tx, proof, ct) != userId)
             throw new MobileAuthException("請使用此帳號已連結的登入方式確認刪除。", 403);
-        using (var apple = Command(db, tx, "SELECT ProtectedRefreshToken FROM dbo.MobileIdentities WITH (UPDLOCK, HOLDLOCK) WHERE UserId = @Id AND Provider = 'apple'", ("@Id", userId)))
+        using (var apple = Command(db, tx, "SELECT Subject, ProtectedRefreshToken FROM dbo.MobileIdentities WITH (UPDLOCK, HOLDLOCK) WHERE UserId = @Id AND Provider = 'apple'", ("@Id", userId)))
         {
-            if (await apple.ExecuteScalarAsync(ct) is string protectedToken)
-                await verifier.RevokeAppleAsync(protector.Unprotect(protectedToken), ct);
+            string? subject = null;
+            string? protectedToken = null;
+            using (var rows = await apple.ExecuteReaderAsync(ct))
+            {
+                if (await rows.ReadAsync(ct))
+                {
+                    subject = rows.GetString(0);
+                    protectedToken = rows.IsDBNull(1) ? null : rows.GetString(1);
+                }
+            }
+            if (subject is not null)
+            {
+                if (protectedToken is null && (proof.Provider != "apple" || proof.RefreshToken is null))
+                    throw new MobileAuthException("缺少 Apple 撤銷憑證，請改用已連結的 Apple 帳號重新驗證。", 409);
+                if (protectedToken is not null)
+                    await QueueRevocationAsync(db, tx, subject, protectedToken, ct);
+            }
         }
-        // A fresh Apple proof may have issued another refresh token; revoke that as well.
         if (proof.Provider == "apple" && proof.RefreshToken is not null)
-            await verifier.RevokeAppleAsync(proof.RefreshToken, ct);
+            await QueueRevocationAsync(db, tx, proof.Subject, protector.Protect(proof.RefreshToken), ct);
 
         using var userQuery = Command(db, tx, "SELECT Email, Avatar FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Id = @Id", ("@Id", userId));
         string email;
@@ -158,6 +190,7 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
             DELETE M FROM dbo.SongGroupMapping M INNER JOIN dbo.SongGroup G ON G.GroupId = M.GroupId WHERE G.UserId = @TextId;
             DELETE FROM dbo.SongGroup WHERE UserId = @TextId;
             DELETE FROM dbo.MobileSessions WHERE UserId = @Id;
+            DELETE FROM dbo.MobileIdentityMigrationApprovals WHERE UserId = @Id;
             DELETE FROM dbo.MobileIdentities WHERE UserId = @Id;
             DELETE FROM dbo.Users WHERE Id = @Id;
             """, ("@Email", email), ("@Id", userId), ("@TextId", userId.ToString()));
@@ -173,6 +206,15 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
             }
         }
         await tx.CommitAsync(ct);
+    }
+
+    private static async Task QueueRevocationAsync(SqlConnection db, SqlTransaction tx, string subject, string protectedToken, CancellationToken ct)
+    {
+        using var queue = Command(db, tx, """
+            INSERT INTO dbo.MobileAppleRevocationJobs (Subject, ProtectedRefreshToken)
+            VALUES (@Subject, @Token)
+            """, ("@Subject", subject), ("@Token", protectedToken));
+        await queue.ExecuteNonQueryAsync(ct);
     }
 
     private static async Task<int?> FindIdentityAsync(SqlConnection db, SqlTransaction? tx, ProviderIdentity identity, CancellationToken ct)

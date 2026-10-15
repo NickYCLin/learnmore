@@ -139,7 +139,7 @@ public sealed class MobileAccountSecurityTests
         { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
         controller.HttpContext.Items[typeof(MobileUser)] = new MobileUser(7, "Member", "member@example.com", new[] { "apple" });
         var error = await Assert.ThrowsAsync<MobileAuthException>(() => controller.Delete(new() { Provider = "apple", Code = "replayed-code" }, default));
-        Assert.Equal(503, error.Status);
+        Assert.Equal(401, error.Status);
         Assert.False(store.Deleted);
     }
 

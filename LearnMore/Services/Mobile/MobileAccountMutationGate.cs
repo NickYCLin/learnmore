@@ -1,11 +1,5 @@
 namespace LearnMore.Services.Mobile;
 
-public static class MobileAccountMutationGate
-{
-    public static void RequireAvailable() => throw new MobileAuthException(
-        "帳號連結與刪除尚待安全驗證，目前無法使用。", 503);
-}
-
 public static class MobileIdentityPolicy
 {
     public static void RequireNewAccountEmail(bool emailExists)

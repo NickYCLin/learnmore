@@ -1,16 +1,19 @@
 using System.Data.SqlClient;
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using LearnMore.Options;
 using LearnMore.Services;
 using LearnMore.Services.Mobile;
+using LearnMore.Controllers.API;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace LearnMore.Tests;
@@ -33,7 +36,7 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
     private readonly string files = Path.Combine(Path.GetTempPath(), "learnmore-sql-audit-" + Guid.NewGuid().ToString("N"));
     private IConfiguration Configuration => new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         { ["ConnectionStrings:DefaultConnection"] = connection }).Build();
-    private MobileAccountStore Store => new(Configuration, new EphemeralDataProtectionProvider(), new NoNetworkVerifier());
+    private MobileAccountStore Store => new(Configuration, new EphemeralDataProtectionProvider());
     private AudioStemJobService Stems => new(Configuration, Microsoft.Extensions.Options.Options.Create(new AudioStemProcessingOptions()));
     private static ProviderIdentity Proof(string subject = "owner") => new("google", subject, "test@example.invalid", "Test", true,
         AuthenticatedAt: DateTimeOffset.UtcNow);
@@ -212,8 +215,128 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
     }
 
     private Task PublishAsync(Action publish) => Stems.RegisterCompletedStemsAsync("audit-song", Path.Combine(files,"instrumental.flac"), Path.Combine(files,"vocals.flac"), "synthetic", "audit", publish);
+
+    [SqlAuditFact]
+    public async Task DeleteQueuesBothAppleTokensAtomicallyAndWorkerRetriesAfterRestart()
+    {
+        var protection = new EphemeralDataProtectionProvider();
+        var store = new MobileAccountStore(Configuration, protection);
+        await store.LinkWithProofAsync(1, Proof(), Proof("apple-owner") with { Provider = "apple", RefreshToken = "synthetic-original" }, default);
+        var proof = Proof("apple-owner") with { Provider = "apple", RefreshToken = "synthetic-fresh" };
+        await SqlAsync("CREATE TABLE dbo.UnknownDependency (UserId int REFERENCES dbo.Users(Id)); INSERT dbo.UnknownDependency VALUES(1);");
+        await Assert.ThrowsAsync<SqlException>(() => store.DeleteAsync(1, proof, default));
+        Assert.Equal(0, await CountAsync("MobileAppleRevocationJobs"));
+        Assert.Equal(1, await CountAsync("Users"));
+        await SqlAsync("DELETE dbo.UnknownDependency;");
+        await store.DeleteAsync(1, proof, default);
+        await store.DeleteAsync(1, proof, default);
+        Assert.Equal(0, await CountAsync("Users"));
+        Assert.Equal(2, await CountAsync("MobileAppleRevocationJobs"));
+        await Assert.ThrowsAsync<MobileAuthException>(() => store.SignInAsync(proof, default));
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var verifier = new SyntheticVerifier { FailRevocation = true };
+        var worker = new MobileAppleRevocationService(Configuration, protection, services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MobileAppleRevocationService>.Instance);
+        Assert.True(await worker.ProcessNextAsync(verifier, default));
+        Assert.Equal(2, await CountAsync("MobileAppleRevocationJobs"));
+        Assert.Equal(1, await ScalarAsync("SELECT SUM(Attempts) FROM dbo.MobileAppleRevocationJobs"));
+        await SqlAsync("UPDATE dbo.MobileAppleRevocationJobs SET NextAttemptAt = DATEADD(minute,-1,SYSUTCDATETIME());");
+        verifier.FailRevocation = false;
+        var restarted = new MobileAppleRevocationService(Configuration, protection, services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MobileAppleRevocationService>.Instance);
+        Assert.True(await restarted.ProcessNextAsync(verifier, default));
+        Assert.True(await restarted.ProcessNextAsync(verifier, default));
+        Assert.False(await restarted.ProcessNextAsync(verifier, default));
+        Assert.Equal(0, await CountAsync("MobileAppleRevocationJobs"));
+        Assert.Contains("synthetic-original", verifier.Revoked);
+        Assert.Contains("synthetic-fresh", verifier.Revoked);
+    }
+
+    [SqlAuditFact]
+    public async Task RevocationLeaseExcludesConcurrentWorkerAndRecoversUnknownAcknowledgement()
+    {
+        var protection = new EphemeralDataProtectionProvider();
+        var store = new MobileAccountStore(Configuration, protection);
+        await store.LinkWithProofAsync(1, Proof(), Proof("apple-owner") with { Provider = "apple", RefreshToken = "synthetic-original" }, default);
+        await store.DeleteAsync(1, Proof(), default);
+        using var services = new ServiceCollection().BuildServiceProvider();
+        var worker = new MobileAppleRevocationService(Configuration, protection, services.GetRequiredService<IServiceScopeFactory>(), NullLogger<MobileAppleRevocationService>.Instance);
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellation = new CancellationTokenSource();
+        var verifier = new SyntheticVerifier { BeforeRevoke = async () => { entered.SetResult(); await release.Task; cancellation.Cancel(); } };
+        var first = worker.ProcessNextAsync(verifier, cancellation.Token);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(await worker.ProcessNextAsync(new SyntheticVerifier(), default));
+        release.SetResult();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        Assert.Equal(1, await CountAsync("MobileAppleRevocationJobs"));
+        await SqlAsync("UPDATE dbo.MobileAppleRevocationJobs SET LeaseUntil = DATEADD(minute,-1,SYSUTCDATETIME());");
+        var retry = new SyntheticVerifier();
+        Assert.True(await worker.ProcessNextAsync(retry, default));
+        Assert.Single(retry.Revoked);
+        Assert.Equal(0, await CountAsync("MobileAppleRevocationJobs"));
+    }
+
+    [SqlAuditFact]
+    public async Task LegacyMigrationRequiresExactApprovedSubjectAndFreshProofAndConsumesGrantOnce()
+    {
+        await SqlAsync("DELETE dbo.MobileIdentities; INSERT dbo.MobileIdentityMigrationApprovals(Provider,Subject,UserId,EvidenceReference,ExpiresAt) VALUES ('google','approved-owner',1,'synthetic-ownership-review',DATEADD(minute,5,SYSUTCDATETIME()));");
+        await Assert.ThrowsAsync<MobileAuthException>(() => Store.SignInAsync(Proof("unapproved-same-email"), default));
+        await Assert.ThrowsAsync<MobileAuthException>(() => Store.SignInAsync(Proof("approved-owner") with { AuthenticatedAt = null }, default));
+        Assert.Equal(1, await CountAsync("MobileIdentityMigrationApprovals"));
+        var sessions = await Task.WhenAll(Store.SignInAsync(Proof("approved-owner"), default), Store.SignInAsync(Proof("approved-owner"), default));
+        Assert.All(sessions, session => Assert.Equal(1, session.User.Id));
+        Assert.Equal(0, await CountAsync("MobileIdentityMigrationApprovals"));
+        Assert.Equal(1, await CountAsync("MobileIdentities"));
+        Assert.Equal(1, await CountAsync("Users"));
+        Assert.Equal(1, await CountAsync("Songs"));
+        await Assert.ThrowsAsync<MobileAuthException>(() => Store.SignInAsync(Proof("another-same-email"), default));
+    }
+
+    [SqlAuditFact]
+    public async Task PublicAccountActionsVerifyBothProofsAndPersistDeletionOutbox()
+    {
+        var verifier = new SyntheticVerifier();
+        var store = new MobileAccountStore(Configuration, new EphemeralDataProtectionProvider());
+        var controller = new MobileAccountController(store, verifier)
+        { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
+        controller.HttpContext.Items[typeof(MobileUser)] = new MobileUser(1,"Test","test@example.invalid",["google","apple"]);
+        await controller.Link(new MobileLinkRequest
+        {
+            CurrentProof = new() { Provider = "google", Code = "owner" },
+            TargetProof = new() { Provider = "apple", Code = "target" }
+        }, default);
+        Assert.Equal(new[] { "owner", "target" }, verifier.Verified);
+        Assert.Equal(2, await CountAsync("MobileIdentities"));
+        Assert.IsType<AcceptedResult>(await controller.Delete(new() { Provider = "google", Code = "owner" }, default));
+        Assert.Equal(1, await CountAsync("MobileAppleRevocationJobs"));
+        Assert.Empty(verifier.Revoked);
+        Assert.Equal(0, await CountAsync("Users"));
+    }
+
+    private sealed class SyntheticVerifier : IMobileIdentityVerifier
+    {
+        public bool GoogleEnabled => true;
+        public bool AppleEnabled => true;
+        public bool FailRevocation { get; set; }
+        public Func<Task>? BeforeRevoke { get; set; }
+        public List<string> Verified { get; } = new();
+        public List<string> Revoked { get; } = new();
+        public Task<ProviderIdentity> VerifyAsync(MobileLoginRequest request, CancellationToken ct)
+        {
+            Verified.Add(request.Code);
+            return Task.FromResult(Proof(request.Code) with { Provider = request.Provider, RefreshToken = request.Provider == "apple" ? "synthetic-target" : null });
+        }
+        public async Task RevokeAppleAsync(string refreshToken, CancellationToken ct)
+        {
+            if (BeforeRevoke is not null) await BeforeRevoke();
+            if (FailRevocation) throw new HttpRequestException("synthetic transient failure");
+            Revoked.Add(refreshToken);
+        }
+    }
     private Task CoreAsync(string name, params object[] arguments)
-        => (Task)typeof(MobileAccountStore).GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(Store, arguments)!;
+        => name == "DeleteCoreAsync"
+            ? Store.DeleteAsync((int)arguments[0], (ProviderIdentity)arguments[1], (CancellationToken)arguments[2])
+            : Store.LinkWithProofAsync((int)arguments[0], (ProviderIdentity)arguments[1], (ProviderIdentity)arguments[2], (CancellationToken)arguments[3]);
     private Task SqlAsync(string sql) => ExecuteAsync(connection!, sql);
     private Task<int> CountAsync(string table) => ScalarAsync($"SELECT COUNT(*) FROM dbo.[{table}]");
     private async Task<int> ScalarAsync(string sql)

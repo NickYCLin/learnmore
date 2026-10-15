@@ -53,14 +53,14 @@ public class MobileCompatibilityTests
     [InlineData("google", "expired-or-replayed", 7)]
     public async Task MutationRetriesFailClosedWithoutOAuthOrDatabase(string provider, string subject, int userId)
     {
-        var store = new MobileAccountStore(new ConfigurationBuilder().Build(), new EphemeralDataProtectionProvider(), new UnexpectedVerifier());
+        var store = new MobileAccountStore(new ConfigurationBuilder().Build(), new EphemeralDataProtectionProvider());
         var identity = new ProviderIdentity(provider, subject, "same@example.com", "Test", true);
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var linkError = await Assert.ThrowsAsync<MobileAuthException>(() => store.LinkAsync(userId, identity, default));
             var deleteError = await Assert.ThrowsAsync<MobileAuthException>(() => store.DeleteAsync(userId, identity, default));
-            Assert.Equal(503, linkError.Status);
-            Assert.Equal(503, deleteError.Status);
+            Assert.Equal(400, linkError.Status);
+            Assert.Equal(403, deleteError.Status);
         }
         var controller = new MobileAccountController(store, new UnexpectedVerifier())
         {
@@ -68,8 +68,8 @@ public class MobileCompatibilityTests
         };
         controller.HttpContext.Items[typeof(MobileUser)] = new MobileUser(userId, "Test", identity.Email, [provider]);
         var proof = new MobileLoginRequest { Provider = provider, Code = subject };
-        Assert.Equal(503, (await Assert.ThrowsAsync<MobileAuthException>(() => controller.Link(new MobileLinkRequest { CurrentProof = proof, TargetProof = proof }, default))).Status);
-        Assert.Equal(503, (await Assert.ThrowsAsync<MobileAuthException>(() => controller.Delete(proof, default))).Status);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.Link(new MobileLinkRequest { CurrentProof = proof, TargetProof = proof }, default));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.Delete(proof, default));
     }
 
     [Fact]

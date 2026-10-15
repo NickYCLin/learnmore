@@ -163,6 +163,7 @@ builder.Services.AddScoped<IMobileIdentityVerifier, MobileIdentityVerifier>();
 builder.Services.AddScoped<IMobileAccountStore, MobileAccountStore>();
 builder.Services.AddScoped<MobileAuthorizeFilter>();
 builder.Services.AddHostedService<MobileFileCleanupService>();
+builder.Services.AddHostedService<MobileAppleRevocationService>();
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
