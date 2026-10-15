@@ -2,10 +2,9 @@ name: iOS
 
 on:
   pull_request:
-    paths: ['ios/**', '.github/workflows/ios.yml']
+    paths: ['ios/**', 'LearnMore/**', 'docs/sql/**', '.github/workflows/ios.yml']
   push:
     branches: [main, codex/ios-app-store]
-    paths: ['ios/**', '.github/workflows/ios.yml']
   workflow_dispatch:
 
 permissions:
