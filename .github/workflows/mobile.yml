@@ -1,9 +1,5 @@
 name: iOS 第一版檢查
 on:
-  push:
-    branches: [main, codex/ios-app-store]
-  pull_request:
-    paths: ['mobile/**', 'LearnMore/**', 'docs/sql/**', '.github/workflows/mobile.yml']
   workflow_dispatch:
 permissions:
   contents: read
