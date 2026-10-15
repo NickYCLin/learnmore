@@ -100,9 +100,35 @@ namespace LearnMore.Controllers
             string? userId = null;
             string? uploadedAvatar = null;
             string? googlePicture = payload.Picture;
+            var accountEmail = payload.Email;
             using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync();
+
+                using var transaction = connection.BeginTransaction(System.Data.IsolationLevel.Serializable);
+
+                if (_configuration.GetValue<bool>("MobileAuth:Enabled"))
+                {
+                    using (var linked = new SqlCommand(@"
+SELECT U.Email FROM dbo.MobileIdentities I
+INNER JOIN dbo.Users U ON U.Id = I.UserId
+WHERE I.Provider = 'google' AND I.Subject = @Subject", connection, transaction))
+                    {
+                        linked.Parameters.AddWithValue("@Subject", payload.Subject);
+                        if (await linked.ExecuteScalarAsync() is string linkedEmail) accountEmail = linkedEmail;
+                    }
+                    // An Apple-created account must be explicitly linked before Google can access it.
+                    // Never merge an Apple identity into a website account merely because emails match.
+                    using var identityCheck = new SqlCommand(@"
+SELECT COUNT(*) FROM dbo.Users U WITH (UPDLOCK, HOLDLOCK)
+WHERE U.Email = @Email
+AND NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities I WHERE I.UserId = U.Id AND I.Provider = 'google' AND I.Subject = @Subject)
+", connection, transaction);
+                    identityCheck.Parameters.AddWithValue("@Email", accountEmail);
+                    identityCheck.Parameters.AddWithValue("@Subject", payload.Subject);
+                    if (Convert.ToInt32(await identityCheck.ExecuteScalarAsync()) > 0)
+                        return StatusCode(409, "此帳號尚未連結此 Google 識別碼。請以原登入方式連結，或聯絡支援核准一次性遷移；不會僅憑電子郵件合併。");
+                }
 
                 var query = @"
 IF EXISTS (SELECT 1 FROM Users WHERE Email = @Email)
@@ -126,19 +152,19 @@ BEGIN
            ,1)
 END";
 
-                using (var command = new SqlCommand(query, connection))
+                using (var command = new SqlCommand(query, connection, transaction))
                 {
                     command.Parameters.AddWithValue("@Name", payload.Name ?? (object)DBNull.Value);
-                    command.Parameters.AddWithValue("@Email", payload.Email);
+                    command.Parameters.AddWithValue("@Email", accountEmail);
                     command.Parameters.AddWithValue("@Picture", payload.Picture ?? (object)DBNull.Value);
 
                     await command.ExecuteNonQueryAsync();
                 }
 
                 var getIdQuery = @"SELECT Id, Avatar, Picture FROM Users WHERE Email = @Email";
-                using (var getIdCommand = new SqlCommand(getIdQuery, connection))
+                using (var getIdCommand = new SqlCommand(getIdQuery, connection, transaction))
                 {
-                    getIdCommand.Parameters.AddWithValue("@Email", payload.Email);
+                    getIdCommand.Parameters.AddWithValue("@Email", accountEmail);
                     using var reader = await getIdCommand.ExecuteReaderAsync();
                     if (await reader.ReadAsync())
                     {
@@ -147,12 +173,23 @@ END";
                         googlePicture = reader.IsDBNull(2) ? payload.Picture : reader.GetString(2);
                     }
                 }
+                if (_configuration.GetValue<bool>("MobileAuth:Enabled"))
+                {
+                    using var bind = new SqlCommand(@"
+IF NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities WHERE Provider = 'google' AND Subject = @Subject)
+    INSERT dbo.MobileIdentities (Provider, Subject, UserId) VALUES ('google', @Subject, @UserId)
+", connection, transaction);
+                    bind.Parameters.AddWithValue("@Subject", payload.Subject);
+                    bind.Parameters.AddWithValue("@UserId", int.Parse(userId!));
+                    await bind.ExecuteNonQueryAsync();
+                }
+                await transaction.CommitAsync();
             }
 
             string displayPicture = UserAvatarUrlResolver.Resolve(uploadedAvatar, googlePicture, Request.PathBase);
             await _persistentLoginSessionService.PersistAsync(
                 HttpContext,
-                payload.Email ?? "None",
+                accountEmail ?? "None",
                 userId ?? string.Empty,
                 payload.Name ?? "None",
                 displayPicture);

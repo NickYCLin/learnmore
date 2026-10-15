@@ -73,6 +73,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  sql-audit:
+    name: 隔離 SQL Server 並行驗證
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 8.0.x
+      - name: 啟動僅供合成資料的 SQL Server
+        shell: bash
+        run: |
+          password="$(openssl rand -base64 24)Aa1!"
+          echo "::add-mask::$password"
+          docker run -d --name learnmore-sql-audit -e ACCEPT_EULA=Y -e MSSQL_PID=Developer \
+            -e MSSQL_SA_PASSWORD="$password" -p 127.0.0.1:15439:1433 \
+            mcr.microsoft.com/mssql/server:2022-latest
+          echo "LEARNMORE_SQL_AUDIT=Server=127.0.0.1,15439;Database=master;User Id=sa;Password=$password;TrustServerCertificate=true" >> "$GITHUB_ENV"
+          ready=false
+          for attempt in {1..60}; do
+            if docker exec learnmore-sql-audit bash -c 'SQLCMDPASSWORD="$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -Q "SELECT 1"' >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+      - name: 執行真實 SQL 與鎖定交錯測試
+        run: dotnet test LearnMore.Tests/LearnMore.Tests.csproj --configuration Release --filter FullyQualifiedName~SqlAccountIntegrationTests --logger "trx;LogFileName=sql-audit.trx"
+      - name: 保留 SQL 測試結果
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: LearnMore-SQL-Audit
+          path: LearnMore.Tests/TestResults/sql-audit.trx
+          if-no-files-found: error
+      - name: 移除隔離資料庫容器
+        if: always()
+        run: docker rm -f learnmore-sql-audit
+
   api-test:
     name: API 與維運腳本檢查
     runs-on: ubuntu-latest

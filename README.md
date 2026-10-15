@@ -84,6 +84,41 @@ LearnMore 是以日文歌曲為素材的網頁學習工具。播放 YouTube 影�
 
 ### 技術概覽
 
+| 修改入口 | 程式位置 |
+| --- | --- |
+| 啟動、DI、Middleware、背景服務 | [`LearnMore/Program.cs`](LearnMore/Program.cs) |
+| 首頁、搜尋與歌曲清單 | [`LearnMore/Controllers/HomeController.cs`](LearnMore/Controllers/HomeController.cs) |
+| 同步歌詞與練習模式 | [`LearnMore/Controllers/LyricsController.cs`](LearnMore/Controllers/LyricsController.cs) |
+| 上傳、編修、審核與轉錄流程 | [`LearnMore/Controllers/MediaController.cs`](LearnMore/Controllers/MediaController.cs) |
+| Whisper 工作流程 | [`LearnMore/Services/WhisperTranscribeWorkflowService.cs`](LearnMore/Services/WhisperTranscribeWorkflowService.cs) |
+| 日文 Ruby 產生與清理 | [`LearnMore/Services/JapaneseRubyGeneratorService.cs`](LearnMore/Services/JapaneseRubyGeneratorService.cs) |
+| 音軌分離背景工作 | [`LearnMore/Services/AudioStemProcessingHostedService.cs`](LearnMore/Services/AudioStemProcessingHostedService.cs) |
+| 測試案例 | [`LearnMore.Tests`](LearnMore.Tests) |
+
+更完整的模組、資料流與修改入口整理在 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
+## iOS App（開發中）
+
+本輪以 [`mobile/`](mobile/README.md) 的 Capacitor 客戶端為交付路線，保留 [`ios/`](ios/README.md) 的 SwiftUI 客戶端與各自的 CI。Capacitor 使用 `/api/mobile/v1/songs` 陣列契約及 8 小時登入；SwiftUI 使用 `/api/mobile/v2/songs` 分頁契約，以及獨立的 30 天 hashed session／Keychain。
+
+SwiftUI 的帳號連結與刪除原始碼仍保留，但 API 與 store 均回應 503，避免在重新驗證、跨 session 撤銷和 SQL 並行測試尚未完成時執行破壞性操作。不能僅因電子郵件相同就自動合併登入方式；既有網站帳號的原生登入遷移仍需獨立驗證。詳見 [整合紀錄](docs/PR1_INTEGRATION.md)。簽章、真機整合、內容授權及 TestFlight 尚未驗收，目前不能送審。
+
+## 專案結構
+
+```text
+LearnMore/
+├─ Controllers/       MVC 頁面與 API 入口
+├─ Services/          歌詞、轉錄、日文處理與背景工作
+├─ Models/            頁面與流程資料模型
+├─ Views/             Razor Views
+├─ Scripts/           Whisper / WhisperX 輔助程式
+└─ wwwroot/           JavaScript、CSS、圖示與前端套件
+LearnMore.Tests/      xUnit 與畫面契約測試
+docs/                 架構與程式碼導覽
+```
+
+### 使用技術
+
 | 層次 | 使用技術 |
 | --- | --- |
 | 網站 | .NET 8、ASP.NET Core MVC、Razor、JavaScript、Bootstrap |

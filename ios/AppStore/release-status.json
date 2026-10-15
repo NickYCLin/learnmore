@@ -1,0 +1,16 @@
+{
+  "contentRightsConfirmed": false,
+  "privacyOperationsConfirmed": false,
+  "databaseMigrationVerified": false,
+  "realDeviceOAuthVerified": false,
+  "crossPlatformFavoritesVerified": false,
+  "accountDeletionVerified": false,
+  "testFlightVerified": false,
+  "screenshotsReady": false,
+  "reviewAccessReady": false,
+  "ageRatingCompleted": false,
+  "appPrivacyCompleted": false,
+  "supportEmail": "",
+  "operatorName": "",
+  "notes": "Mark items true only after completing and documenting the actual checks. Current source implementation is not submission approval."
+}

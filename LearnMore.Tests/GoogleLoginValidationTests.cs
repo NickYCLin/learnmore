@@ -113,7 +113,7 @@ public sealed class GoogleLoginValidationTests
 
         public TestController(string? clientId) : base(
             new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["GoogleApiClientId"] = clientId }).Build(),
-            new PersistentLoginSessionService(new EphemeralDataProtectionProvider()))
+            new PersistentLoginSessionService(new EphemeralDataProtectionProvider(), new SessionValidatorFake()))
         {
             ControllerContext = new ControllerContext
             {

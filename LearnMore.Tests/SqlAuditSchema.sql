@@ -1,0 +1,10 @@
+CREATE TABLE dbo.Users (Id int IDENTITY PRIMARY KEY, Email nvarchar(255) NOT NULL UNIQUE, Name nvarchar(100), NickName nvarchar(100), Avatar nvarchar(255), EnableRoman bit, Producer nvarchar(max), Collaboration nvarchar(max));
+CREATE TABLE dbo.Songs (SongID int IDENTITY PRIMARY KEY, SongUid nvarchar(100) NOT NULL UNIQUE, AddedByUserId int REFERENCES dbo.Users(Id), ChannelThumbnailUrl nvarchar(100), YouTubeVideoUrl nvarchar(100));
+CREATE TABLE dbo.SongGroup (GroupId int IDENTITY PRIMARY KEY, GroupUid nvarchar(100), GroupName nvarchar(100), UserId nvarchar(100), CreateTime datetime2);
+CREATE TABLE dbo.SongGroupMapping (GroupId int REFERENCES dbo.SongGroup(GroupId), SongUid nvarchar(100) REFERENCES dbo.Songs(SongUid));
+CREATE TABLE dbo.Comments (CommentId int PRIMARY KEY, UserEmail nvarchar(255), SongUid nvarchar(100) REFERENCES dbo.Songs(SongUid));
+CREATE TABLE dbo.CommentReplies (CommentId int REFERENCES dbo.Comments(CommentId), AdminEmail nvarchar(255));
+CREATE TABLE dbo.Wish (Id int PRIMARY KEY, UserId int REFERENCES dbo.Users(Id));
+CREATE TABLE dbo.WishReply (WishId int REFERENCES dbo.Wish(Id), UserId int REFERENCES dbo.Users(Id));
+CREATE TABLE dbo.Feedbacks (Email nvarchar(255));
+CREATE TABLE dbo.ErrorReports (UserEmail nvarchar(255), ErrorSongUid nvarchar(100));
