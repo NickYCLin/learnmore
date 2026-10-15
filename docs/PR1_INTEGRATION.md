@@ -129,8 +129,11 @@ CI 保留 Windows / API、Capacitor、SwiftUI，另有獨立合成 SQL job。依
 所有 jobs、測試、逾時與 artifacts 設定不變，不以略過測試或假綠燈代替驗證。
 平常先累積同目的修改並做本機檢查；必要時先確認費用範圍，再於 Actions 手動選擇
 所需 workflow 與 codex/ios-app-store 分支，只執行必要的一次驗證。不自動重跑失敗工作。
-此設定尚未合併 main，主線仍有舊自動觸發規則。本次批次提交使用 [skip ci] 避免 PR
-舊規則額外執行；略過或 pending 狀態不代表成功，也不移除既有失敗紀錄或 required checks。
+main 已於 61743b7 將原有 ci.yml / mobile.yml 改為只接受手動觸發，原 jobs 完全保留；
+未帶入 PR1 功能或新增 SwiftUI workflow。PR1 於 91a3b25 合併此主線歷史，保留
+608924d 的相同 tree 與三個手動 workflow。這些是設定／同步提交，不是新的測試結果。
+本次後續提交仍使用 [skip ci]；略過或 pending 狀態不代表成功，
+也不移除既有失敗紀錄或 required checks。
 若略過使必要檢查維持 pending，仍不得據此宣稱驗收或合併；後續按需驗證須記錄實際 SHA。
 沒有變更 Actions 權限、預算、付款或 runner，也沒有 TestFlight、正式部署或 Apple 帳號操作。
 
@@ -140,7 +143,9 @@ Release build 與 build-for-testing 成功，但 UI tests 未執行。不能聲�
 修正已通過 UI 驗證，也沒有資源耗盡的證據。本機是 Linux，沒有 xcodebuild / xcrun；
 既有 Mac 連線未成功，尚無已確認可用的免費 Mac 重現環境。待必要且費用範圍確定時，
 先取得 CoreSimulator / BackBoard 診斷，再安排最少一次驗證，不沿用相同方式無限重跑。
-本次僅驗證 YAML 與非觸發內容保持不變，沒有為設定更新重新執行遠端 CI。
+608924d、main 61743b7 與 PR1 91a3b25 僅核對 YAML、jobs 不變與遠端 readback，
+沒有為這些設定／同步提交重新執行遠端 CI；ed8809a 的成功紀錄不能冒充新 SHA 驗證。
+後續只讀診斷、單次本機重現與使用者驗收步驟見 [PR1 驗收](PR1_ACCEPTANCE.md)。
 最終測試數、提交 SHA、CI run 與 readback 以本輪實測紀錄與完成回報為準，不沿用舊 binary。
 尚缺真 OAuth / 原生重新驗證與舊帳號人工所有權證據、原始 Apple export 日誌、
 真機 30 / 60 秒鎖定、耳機與中斷驗收。這些限制存在時 PR 保持 open，不因 CI 綠就宣稱交付完成。
