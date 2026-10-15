@@ -68,13 +68,14 @@ final class LearnMoreUITests: XCTestCase {
         XCTAssertTrue(app.buttons["登入或建立帳號"].waitForExistence(timeout: 10))
     }
 
-    func testMemberSeesExplicitMutationRestrictionWithoutOAuth() {
+    func testMemberMustStartWithOriginalAccountProofWithoutOAuth() {
         let app = launch(["--ui-test-member"])
         app.tabBars.buttons["帳號"].tap()
         XCTAssertTrue(app.staticTexts["隔離測試帳號"].waitForExistence(timeout: 10))
-        XCTAssertFalse(app.buttons["連結其他登入方式"].isEnabled)
-        XCTAssertFalse(app.buttons["刪除帳號"].isEnabled)
+        XCTAssertTrue(app.buttons["連結其他登入方式"].isEnabled)
+        XCTAssertTrue(app.buttons["刪除帳號"].isEnabled)
         XCTAssertTrue(app.buttons["登出"].isEnabled)
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "尚待安全驗證")).firstMatch.exists)
+        app.buttons["連結其他登入方式"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "步驟 1/2")).firstMatch.waitForExistence(timeout: 5))
     }
 }

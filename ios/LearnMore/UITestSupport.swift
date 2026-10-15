@@ -11,7 +11,9 @@ final class UITestURLProtocol: URLProtocol {
         var status = 200
         let payload: String
         if path.hasSuffix("/auth/providers") {
-            payload = #"{"google":false,"apple":false}"#
+            payload = ProcessInfo.processInfo.arguments.contains("--ui-test-member")
+                ? #"{"google":true,"apple":true,"accountMutations":true}"#
+                : #"{"google":false,"apple":false,"accountMutations":true}"#
         } else if path.hasSuffix("/lyrics") {
             payload = #"[{"id":1,"seconds":0,"japanese":"こんにちは","chinese":"你好","roman":"konnichiwa"},{"id":2,"seconds":5,"japanese":"また明日","chinese":"明天見","roman":"mata ashita"}]"#
         } else if path.hasSuffix("/songs") {

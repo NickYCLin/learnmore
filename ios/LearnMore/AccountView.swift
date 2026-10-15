@@ -25,10 +25,11 @@ struct AccountView: View {
                         Button("刪除帳號", role: .destructive) { confirmDelete = true }
                             .disabled(account.busy || !account.providers.accountMutations)
                     } footer: {
-                        Text("此帳號與網站共用。帳號連結與刪除尚待安全驗證，目前無法使用；登出仍可使用。這些功能尚未完成，不代表你的資料已刪除。")
+                        Text("此帳號與網站共用。連結須先驗證原帳號，再驗證目標登入方式；刪除須重新驗證已連結的帳號。服務商未提供新鮮驗證時間時會拒絕操作，不會以電子郵件代替身分證明。")
                         Link("帳號與隱私問題", destination: Server.url("Mobile/Support"))
                     }
                 } else {
+                    if let notice = account.deletionNotice { Section { Text(notice) } }
                     Section {
                         Label("把喜歡的歌曲帶著走", systemImage: "heart.text.clipboard")
                             .font(.headline)
@@ -53,7 +54,7 @@ struct AccountView: View {
                 }
             }
             .navigationTitle("帳號與設定")
-            .sheet(item: $action) { LoginView(action: $0) }
+            .sheet(item: $action, onDismiss: { account.resetProofs() }) { LoginView(action: $0) }
             .confirmationDialog("要登出這台裝置嗎？", isPresented: $confirmLogout, titleVisibility: .visible) {
                 Button("登出", role: .destructive) { Task { await account.logout() } }
             }
@@ -79,7 +80,9 @@ struct LoginView: View {
     private func allows(_ provider: String) -> Bool {
         switch action {
         case .login: return true
-        case .link: return !(account.member?.providers.contains(provider) ?? false)
+        case .link:
+            let linked = account.member?.providers.contains(provider) ?? false
+            return account.awaitingTargetProof ? !linked : linked
         case .delete: return account.member?.providers.contains(provider) ?? false
         }
     }
@@ -92,8 +95,8 @@ struct LoginView: View {
                         .font(.system(size: 48)).foregroundStyle(.indigo).accessibilityHidden(true)
                     Text(action.title).font(.largeTitle.bold())
                     Text(action == .delete ? "請以此帳號已連結的登入方式重新驗證。驗證成功後，帳號與收藏將永久刪除。" :
-                         action == .link ? "連結後可用另一種登入方式存取同一帳號。已有其他 LearnMore 帳號的登入方式無法自動合併。" :
-                         "原網站會員請選擇原本的 Google 帳號，以保留收藏。之後可在帳號頁連結 Apple。")
+                         action == .link ? (account.awaitingTargetProof ? "步驟 2/2：已取得原帳號授權，尚待伺服器驗證。請取得目標登入方式的授權。" : "步驟 1/2：先使用此帳號已連結的登入方式重新驗證。") :
+                         "舊網站帳號若尚無服務商識別碼，需由支援確認原帳號所有權並核准一次性遷移；相同電子郵件不會自動合併。")
                         .foregroundStyle(.secondary)
                     if account.providers.apple && allows("apple") {
                         SignInWithAppleButton(.continue) { request in
@@ -167,7 +170,7 @@ struct PrivacyView: View {
                 Link("Apple 隱私權政策", destination: URL(string: "https://www.apple.com/legal/privacy/")!)
             }
             Section("刪除與聯絡") {
-                Text("App 內的帳號連結與刪除尚待安全驗證，目前無法使用。若需要處理帳號或資料，請透過支援頁聯絡；聯絡或登出不等於資料已刪除。")
+                Text("帳號連結與刪除需要服務商提供新鮮的重新驗證證明；缺少證明時會拒絕操作。刪除成功後，Apple 授權撤銷與檔案清理由背景佇列重試，不代表第三方已即時完成。若遇到限制請聯絡支援；聯絡或登出不等於資料已刪除。")
                 Link("完整隱私權政策", destination: Server.url("Mobile/Privacy"))
                 Link("支援與隱私問題", destination: Server.url("Mobile/Support"))
             }

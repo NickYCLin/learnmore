@@ -33,6 +33,11 @@ struct LoginProof: Encodable {
     var name: String? = nil
 }
 
+private struct LinkProofs: Encodable {
+    let currentProof: LoginProof
+    let targetProof: LoginProof
+}
+
 private struct LoginSession: Decodable {
     let token: String
     let user: Member
@@ -98,7 +103,11 @@ final class AccountModel {
     var restoring = true
     var error: String?
     var revision = UUID()
+    var awaitingTargetProof = false
+    var deletionNotice: String?
     @ObservationIgnored private var token: String?
+    @ObservationIgnored private var currentProof: LoginProof?
+    @ObservationIgnored private var proofStartedAt: Date?
     @ObservationIgnored private let network = URLSession(configuration: AppNetwork.configuration(), delegate: NoRedirects(), delegateQueue: nil)
 
     func start() async {
@@ -154,10 +163,6 @@ final class AccountModel {
 
     func complete(_ proof: LoginProof, action: AccountAction) async -> Bool {
         guard !busy else { return false }
-        guard action == .login else {
-            error = "帳號連結與刪除尚待安全驗證，目前無法使用。"
-            return false
-        }
         busy = true; error = nil
         defer { busy = false }
         do {
@@ -175,16 +180,42 @@ final class AccountModel {
                 }
                 token = session.token; member = session.user
             case .link:
-                try await send("account/link", method: "POST", body: data)
+                if currentProof == nil {
+                    guard member?.providers.contains(proof.provider) == true else {
+                        throw MemberError.message("請先選擇此帳號已連結的登入方式。")
+                    }
+                    currentProof = proof
+                    proofStartedAt = Date()
+                    awaitingTargetProof = true
+                    return false
+                }
+                guard let currentProof, let proofStartedAt, Date().timeIntervalSince(proofStartedAt) < 240 else {
+                    resetProofs()
+                    throw MemberError.message("驗證已逾時，請重新取得兩份授權。")
+                }
+                let proofs = try JSONEncoder().encode(LinkProofs(currentProof: currentProof, targetProof: proof))
+                try await send("account/link", method: "POST", body: proofs)
+                resetProofs()
                 member = try await request("account")
             case .delete:
                 try await send("account/delete", method: "POST", body: data)
                 try? await GIDSignIn.sharedInstance.disconnect()
                 clear()
+                deletionNotice = "LearnMore 帳號已刪除，所有登入已失效。檔案清理與 Apple 授權撤銷由背景工作重試；此回應不代表第三方撤銷已完成。"
             }
             revision = UUID()
             return true
-        } catch { self.error = error.localizedDescription; return false }
+        } catch {
+            resetProofs()
+            self.error = error.localizedDescription
+            return false
+        }
+    }
+
+    func resetProofs() {
+        currentProof = nil
+        proofStartedAt = nil
+        awaitingTargetProof = false
     }
 
     func googleProof() async throws -> LoginProof {
@@ -214,6 +245,7 @@ final class AccountModel {
     }
 
     private func clear() {
+        resetProofs()
         token = nil; member = nil; SessionKeychain.clear(); GIDSignIn.sharedInstance.signOut(); revision = UUID()
     }
 }
