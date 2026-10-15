@@ -72,6 +72,7 @@ final class LearnMoreUITests: XCTestCase {
         let app = launch(["--ui-test-member"])
         app.tabBars.buttons["帳號"].tap()
         XCTAssertTrue(app.staticTexts["隔離測試帳號"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["無法讀取安全登入資料，請解鎖裝置後重試。"].exists)
         XCTAssertTrue(app.buttons["連結其他登入方式"].isEnabled)
         XCTAssertTrue(app.buttons["刪除帳號"].isEnabled)
         XCTAssertTrue(app.buttons["登出"].isEnabled)

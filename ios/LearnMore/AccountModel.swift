@@ -116,9 +116,13 @@ final class AccountModel {
         error = nil
         do {
             #if DEBUG
-            if UITestURLProtocol.enabled { SessionKeychain.clear() }
-            if UITestURLProtocol.enabled && ProcessInfo.processInfo.arguments.contains("--ui-test-member") {
-                member = Member(id: 1, name: "隔離測試帳號", email: "test@example.invalid", providers: ["google"])
+            if UITestURLProtocol.enabled {
+                token = nil
+                member = ProcessInfo.processInfo.arguments.contains("--ui-test-member")
+                    ? Member(id: 1, name: "隔離測試帳號", email: "test@example.invalid", providers: ["google"])
+                    : nil
+                providers = try await request("auth/providers", authenticated: false)
+                return
             }
             #endif
             token = try SessionKeychain.read()
