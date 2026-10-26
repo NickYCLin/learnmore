@@ -72,7 +72,9 @@ public sealed class AudioStemPublicationGuardTests
             .ReplaceLineEndings(lineEnding).ReplaceLineEndings("\n");
         Assert.Contains("dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", service);
         Assert.Contains("existsCommand.ExecuteScalarAsync(cancellationToken)", service);
-        Assert.Contains("connection, transaction);\n            existsCommand", service);
+        var transactionLock = service.IndexOf("await AudioStemPublicationGuard.AcquireTransactionLockAsync", StringComparison.Ordinal);
+        var songCheck = service.IndexOf("existsCommand.ExecuteScalarAsync", StringComparison.Ordinal);
+        Assert.True(transactionLock >= 0 && songCheck > transactionLock);
         var guard = service.IndexOf("AudioStemPublicationGuard.PublishAsync", StringComparison.Ordinal);
         Assert.True(service.IndexOf("DELETE FROM dbo.SongAudioStems", guard, StringComparison.Ordinal) > guard);
         foreach (var processor in new[] { "DemucsAudioStemProcessor.cs", "RemoteApiAudioStemProcessor.cs" })

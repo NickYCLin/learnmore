@@ -182,11 +182,25 @@ WHERE Id = @Id", connection);
         try
         {
             await using var existsCommand = new SqlCommand("SELECT COUNT(*) FROM dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid = @SongUid", connection, transaction);
+            await AudioStemPublicationGuard.AcquireTransactionLockAsync(connection, transaction, cancellationToken);
             existsCommand.Parameters.AddWithValue("@SongUid", songUid);
             if (!await AudioStemPublicationGuard.PublishAsync(
                 async () => Convert.ToInt32(await existsCommand.ExecuteScalarAsync(cancellationToken)) > 0,
                 publishFiles, cancellationToken))
             {
+                await using var cleanup = new SqlCommand(@"
+IF OBJECT_ID('dbo.MobileFileDeletionJobs', 'U') IS NOT NULL
+BEGIN
+    INSERT INTO dbo.MobileFileDeletionJobs (FileName, Kind) VALUES (@SongUid, 'song');
+    SELECT 1;
+END
+ELSE SELECT 0;", connection, transaction);
+                cleanup.Parameters.AddWithValue("@SongUid", songUid);
+                if (Convert.ToInt32(await cleanup.ExecuteScalarAsync(cancellationToken)) == 0)
+                {
+                    File.Delete(instrumentalPath);
+                    File.Delete(vocalsPath);
+                }
                 await transaction.CommitAsync(cancellationToken);
                 return;
             }

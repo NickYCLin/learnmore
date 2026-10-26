@@ -20,7 +20,7 @@ public class MobileSessionTests
     public void CodeRequiresProofAndCanOnlyBeExchangedOnce()
     {
         using var cache = new MemoryCache(new MemoryCacheOptions());
-        var service = new MobileSessionService(cache);
+        var service = new MobileSessionService(cache, new SessionValidatorFake());
         var code = service.IssueCode(new(42, "測試者"), Challenge);
         Assert.Null(service.Exchange(code, new string('x', 43)));
         var result = service.Exchange(code, Verifier);
@@ -36,7 +36,7 @@ public class MobileSessionTests
     public void ConcurrentCodeExchangeHasOneWinner()
     {
         using var cache = new MemoryCache(new MemoryCacheOptions());
-        var service = new MobileSessionService(cache);
+        var service = new MobileSessionService(cache, new SessionValidatorFake());
         var code = service.IssueCode(new(42, "測試者"), Challenge);
         var winners = 0;
         Parallel.For(0, 12, _ => { if (service.Exchange(code, Verifier) is not null) Interlocked.Increment(ref winners); });
@@ -54,7 +54,7 @@ public class MobileSessionTests
     {
         using var cache = new MemoryCache(new MemoryCacheOptions());
         var configuration = new ConfigurationBuilder().Build();
-        var controller = new MobileApiController(new(configuration), new(cache), configuration)
+        var controller = new MobileApiController(new(configuration), new(cache, new SessionValidatorFake()), configuration)
         { ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() } };
         Assert.IsType<UnauthorizedResult>(controller.GetGroups());
         Assert.IsType<UnauthorizedResult>(controller.CreateGroup(new("收藏")));

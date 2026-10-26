@@ -7,7 +7,7 @@ namespace LearnMore.Controllers;
 [Route("Mobile")]
 [EnableRateLimiting("mobile")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-public sealed class MobileController(MobileSessionService sessions) : Controller
+public sealed class MobileController(MobileSessionService sessions, IConfiguration configuration) : Controller
 {
     public record ConnectRequest(string Challenge, string State);
 
@@ -44,5 +44,25 @@ public sealed class MobileController(MobileSessionService sessions) : Controller
         // 固定回呼避免任意 redirect；一次性 code 還需要 App 持有的 PKCE verifier。
         ViewBag.Callback = $"learnmore://auth?code={Uri.EscapeDataString(code)}&state={Uri.EscapeDataString(request.State)}";
         return View("Connected");
+    }
+
+    [HttpGet("Privacy")]
+    public IActionResult Privacy() => Page("Privacy");
+    [HttpGet("Support")]
+    public IActionResult Support() => Page("Support");
+
+    private IActionResult Page(string view)
+    {
+        var email = configuration["MobilePublication:SupportEmail"];
+        var name = configuration["MobilePublication:OperatorName"];
+        var logs = configuration.GetValue<int?>("MobilePublication:LogRetentionDays");
+        var backups = configuration.GetValue<int?>("MobilePublication:BackupRetentionDays");
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(name) || logs is null or < 0 || backups is null or < 0)
+            return StatusCode(503, "此頁面暫時無法使用，請稍後再試。");
+        ViewBag.SupportEmail = email;
+        ViewBag.OperatorName = name;
+        ViewBag.LogRetentionDays = logs;
+        ViewBag.BackupRetentionDays = backups;
+        return View(view);
     }
 }

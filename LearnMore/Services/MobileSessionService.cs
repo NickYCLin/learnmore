@@ -8,7 +8,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace LearnMore.Services;
 
 // 第一版使用單站記憶體工作階段；站台重啟後需重新登入。
-public sealed class MobileSessionService(IMemoryCache cache)
+public sealed class MobileSessionService(IMemoryCache cache, IAccountSessionValidator accounts)
 {
     private readonly object gate = new();
     public record User(
@@ -33,6 +33,11 @@ public sealed class MobileSessionService(IMemoryCache cache)
         lock (gate)
         {
             if (!cache.TryGetValue<Grant>("mobile-code:" + code, out var grant) || grant is null) return null;
+            if (!accounts.Exists(grant.User.Id))
+            {
+                cache.Remove("mobile-code:" + code);
+                return null;
+            }
             if (!CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(challenge), Encoding.ASCII.GetBytes(grant.Challenge))) return null;
             cache.Remove("mobile-code:" + code);
             var token = WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(32));
@@ -44,7 +49,12 @@ public sealed class MobileSessionService(IMemoryCache cache)
     public User? Read(string? authorization)
     {
         var token = TokenFromHeader(authorization);
-        return token is null ? null : cache.Get<User>("mobile-token:" + token);
+        if (token is null) return null;
+        var user = cache.Get<User>("mobile-token:" + token);
+        if (user is null) return null;
+        if (accounts.Exists(user.Id)) return user;
+        cache.Remove("mobile-token:" + token);
+        return null;
     }
 
     public void Revoke(string? authorization)
