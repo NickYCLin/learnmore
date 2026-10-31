@@ -824,7 +824,11 @@ namespace LearnMore.Controllers
                             try
                             {
                                 _logger.LogInformation("Step 1D: 呼叫本機 faster-whisper 初始分句 fallback...");
-                                timestampSegments = await _vocalOnsetService.TranscribeInitialSegmentsAsync(audioFilePath, ct);
+                                var initialAttempt = await _vocalOnsetService.TranscribeInitialSegmentsWithDiagnosticsAsync(
+                                    audioFilePath, localModelOverride: null, allowOpenAiFallback: true, ct);
+                                timestampSegments = initialAttempt.Segments;
+                                if (timestampSegments.Count == 0)
+                                    _logger.LogWarning("Initial transcription unavailable: {Reason}", initialAttempt.FailureReason);
                                 _logger.LogInformation("Step 1D: 初始分句得到 {Count} 個 segments",
                                     timestampSegments?.Count ?? 0);
 
@@ -849,6 +853,7 @@ namespace LearnMore.Controllers
                             }
                         }
                     }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "Whisper fallback failed");
@@ -858,11 +863,11 @@ namespace LearnMore.Controllers
 
                 ct.ThrowIfCancellationRequested();
 
-                // 完全沒有時間戳 → 仍建立空白歌曲，讓使用者手動填
+                // 保留最後一次正式歌詞比對機會；沒有原文時不可建立翻譯工作。
                 if (timestampSegments == null || !timestampSegments.Any())
                 {
-                    _logger.LogWarning("WebTranscribe: 無法取得時間戳，將建立空白歌詞供手動編輯");
-                    await SendEvent("progress", new { message = "⚠️ 未取得可用時間戳，將建立空白歌詞供手動編輯" });
+                    _logger.LogWarning("WebTranscribe: 無法取得時間戳，最後比對正式歌詞");
+                    await SendEvent("progress", new { message = "🔍 尚未取得可用歌詞，最後比對正式歌詞來源..." });
                     timestampSegments = new List<LyricSegment>();
                 }
 
@@ -962,6 +967,16 @@ namespace LearnMore.Controllers
                 // 決定要寫入 DB 的 segments
                 List<LyricSegment> segmentsToInsert = preAlignedSegments ?? timestampSegments ?? new List<LyricSegment>();
                 var stableSegmentsToInsert = segmentsToInsert ?? new List<LyricSegment>();
+
+                if (stableSegmentsToInsert.Count == 0 || stableSegmentsToInsert.Any(segment => string.IsNullOrWhiteSpace(segment.Japanese)))
+                {
+                    await SendEvent("error", new
+                    {
+                        reason = "lyrics_unavailable",
+                        message = "未取得完整的日文歌詞，這次尚未建立歌曲。請稍後重試，或使用下方自填歌詞後再召喚。"
+                    });
+                    return new EmptyResult();
+                }
 
                 if (!fromTypingTube
                     && !fromLrcLibOrNetEase

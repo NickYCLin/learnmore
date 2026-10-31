@@ -33,7 +33,7 @@
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>wwwroot/js/node_modules/%(RecursiveDir)%(Filename)%(Extension)</Link>
     </Content>
-    <Content Update="Scripts/**/*.py">
+    <Content Include="Scripts/**/*.py">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <Link>Scripts/%(RecursiveDir)%(Filename)%(Extension)</Link>

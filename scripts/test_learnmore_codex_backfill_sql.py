@@ -127,6 +127,27 @@ print(json.dumps({'type':'turn.completed'}))
         self.assertEqual(self.run_worker()["outcome"], "idle")
         self.assertFalse(self.call.exists())
 
+    def test_empty_lyrics_stop_before_codex_and_resume_after_source_is_repaired(self):
+        self.sql(f"DELETE dbo.[Songs_{UID}]")
+        event = self.run_worker()
+        self.assertEqual(event['outcome'], 'needs_review')
+        self.assertEqual(event['error'], 'lyrics_empty')
+        self.assertEqual(self.status(), 'high_accuracy_needs_review')
+        self.assertFalse(self.call.exists())
+        self.assertFalse((self.state / UID / 'retry.json').exists())
+        self.assertEqual(self.run_worker()['outcome'], 'idle')
+        self.sql(f"INSERT dbo.[Songs_{UID}] VALUES(12.5,N'{JA}',N'',N'',N''); UPDATE dbo.Songs SET HighAccuracyStatus=N'translation_pending_codex'")
+        self.assertEqual(self.run_worker()['outcome'], 'applied')
+
+    def test_missing_japanese_keeps_existing_fields_without_calling_codex(self):
+        self.sql(f"UPDATE dbo.[Songs_{UID}] SET Japanese=NULL WHERE LyricID=1")
+        before = self.rows()
+        event = self.run_worker()
+        self.assertEqual(event['error'], 'missing_japanese')
+        self.assertEqual(event['outcome'], 'needs_review')
+        self.assertEqual(self.rows(), before)
+        self.assertFalse(self.call.exists())
+
     def test_explicit_unvalidated_timing_goes_to_existing_recovery_queue(self):
         self.sql("UPDATE dbo.Songs SET HighAccuracyStatusReason=N'timing_validation_pending: 尚待校正'")
         self.run_worker()

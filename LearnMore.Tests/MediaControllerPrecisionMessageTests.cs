@@ -16,11 +16,11 @@ public class MediaControllerPrecisionMessageTests
             "Controllers",
             "MediaController.cs"));
 
-        Assert.Contains("_vocalOnsetService.TranscribeInitialSegmentsAsync", source);
+        Assert.Contains("_vocalOnsetService.TranscribeInitialSegmentsWithDiagnosticsAsync", source);
     }
 
     [Fact]
-    public void WebTranscribe_ShouldCreateEditableSongEvenWhenFallbackSegmentsAreEmpty()
+    public void WebTranscribe_ShouldStopBeforePersistenceWhenNoOriginalLyricsAreAvailable()
     {
         var source = File.ReadAllText(Path.Combine(
             AppContext.BaseDirectory,
@@ -30,7 +30,10 @@ public class MediaControllerPrecisionMessageTests
             "MediaController.cs"));
 
         Assert.DoesNotContain("await SendEvent(\"done\", new { songUid = string.Empty });", source);
-        Assert.Contains("未取得可用時間戳，將建立空白歌詞供手動編輯", source);
+        Assert.DoesNotContain("將建立空白歌詞供手動編輯", source);
+        var guard = source.IndexOf("reason = \"lyrics_unavailable\"", StringComparison.Ordinal);
+        var persistence = source.IndexOf("_songPersistence.CreateSongWithPlaceholdersAsync", StringComparison.Ordinal);
+        Assert.True(guard >= 0 && guard < persistence);
     }
 
     [Fact]
