@@ -3082,8 +3082,6 @@ def is_reliable_latin_alignment_source(source: str) -> bool:
         "whisperx_word_match",
         "whisper_local_asr_anchor_match",
         "whisperx_local_asr_anchor_match",
-        "whisper_contextual_timestamp_bridge",
-        "whisperx_contextual_timestamp_bridge",
         "whisper_lyric_forced_alignment_asr_verified",
         "whisperx_lyric_forced_alignment_asr_verified",
     }

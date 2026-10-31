@@ -1160,11 +1160,12 @@ def test_promote_low_score_internal_forced_alignment_as_context_bridge(client) -
     assert all(main.is_reliable_audio_alignment(line) for line in promoted[10:13])
 
 
-def test_stabilize_unreliable_lines_uses_current_timeline_when_verified_deltas_match(client) -> None:
+@pytest.mark.parametrize("text_prefix", ["歌詞", "Line "])
+def test_stabilize_unreliable_lines_uses_current_timeline_when_verified_deltas_match(client, text_prefix) -> None:
     _, main = client
 
     lyric_lines = [
-        main.HighAccuracyLyricLine(lyricId=index + 1, japanese=f"Line {index + 1}", currentStart=float(index * 3))
+        main.HighAccuracyLyricLine(lyricId=index + 1, japanese=f"{text_prefix}{index + 1}", currentStart=float(index * 3))
         for index in range(20)
     ]
     aligned = []
@@ -1190,7 +1191,8 @@ def test_stabilize_unreliable_lines_uses_current_timeline_when_verified_deltas_m
     stabilized = main.stabilize_unreliable_lines_with_current_start_context(lyric_lines, aligned, 80.0)
 
     assert [line.source for line in stabilized[6:14]] == ["whisper_contextual_timestamp_bridge"] * 8
-    assert all(main.is_reliable_audio_alignment(line) for line in stabilized)
+    for index, line in enumerate(stabilized):
+        assert main.is_reliable_audio_alignment(line) == (text_prefix == "歌詞" or not 6 <= index <= 13)
 
 
 def test_stabilize_unreliable_lines_ignores_current_timeline_when_verified_deltas_are_large(client) -> None:
@@ -1382,7 +1384,9 @@ def test_latin_asr_verified_alignment_remains_reliable(client) -> None:
     assert main.is_reliable_audio_alignment(line)
 
 
-def test_latin_contextual_timestamp_bridge_is_reliable(client) -> None:
+@pytest.mark.parametrize("source", ["whisper_contextual_timestamp_bridge", "whisperx_contextual_timestamp_bridge"])
+@pytest.mark.parametrize("score", [0.85, 1.0])
+def test_latin_contextual_timestamp_bridge_requires_audio_evidence(client, source, score) -> None:
     _, main = client
 
     line = main.AlignedLyricLine(
@@ -1390,11 +1394,48 @@ def test_latin_contextual_timestamp_bridge_is_reliable(client) -> None:
         japanese="Time to go!",
         start=80.0,
         end=81.0,
-        source="whisperx_contextual_timestamp_bridge",
-        score=0.85,
+        source=source,
+        score=score,
     )
 
-    assert main.is_reliable_audio_alignment(line)
+    assert not main.is_reliable_audio_alignment(line)
+    labeled = main.label_low_confidence_latin_alignments([line])[0]
+    assert labeled.source == source + "_unverified_latin"
+    assert not main.is_reliable_audio_alignment(labeled)
+
+
+def test_high_accuracy_response_does_not_count_latin_timestamp_bridges(client, monkeypatch) -> None:
+    test_client, main = client
+    lines = [
+        main.AlignedLyricLine(lyricId=1, japanese="Stand by", start=3.0, end=4.0,
+                              source="whisper_contextual_timestamp_bridge", score=0.85),
+        main.AlignedLyricLine(lyricId=2, japanese="君が好き", start=5.0, end=6.0,
+                              source="whisper_contextual_timestamp_bridge", score=0.85),
+    ]
+
+    def fake_transcribe(request, settings, lyric_lines=None):
+        return main.TranscribeYouTubeResponse(
+            songUid=request.songUid, youtubeUrl=request.youtubeUrl, language=request.language,
+            model="test+vocals-stem+whisperx-lyrics", durationSeconds=10.0, segments=[],
+        )
+
+    monkeypatch.setattr(main, "transcribe_youtube_for_high_accuracy_sync", fake_transcribe)
+    monkeypatch.setattr(main, "align_high_accuracy_lyrics_to_whisperx_lyrics", lambda *args: lines)
+
+    response = test_client.post(
+        "/v1/high-accuracy-align",
+        headers={"Authorization": "Bearer test-token"},
+        json={"songUid": "song-1", "youtubeUrl": "https://www.youtube.com/watch?v=test",
+              "lyrics": [{"lyricId": x.lyricId, "japanese": x.japanese, "currentStart": x.start}
+                         for x in lines]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["matchedCount"] == 1
+    assert body["totalCount"] == 2
+    assert body["alignedLines"][0]["source"] == "whisperx_contextual_timestamp_bridge_unverified_latin"
+    assert body["alignedLines"][1]["source"] == "whisperx_contextual_timestamp_bridge"
 
 
 def test_high_accuracy_align_splits_merged_internal_forced_lyric_alignment(client, monkeypatch: pytest.MonkeyPatch) -> None:
