@@ -326,3 +326,170 @@ main.pb-3 > .card {
         padding: 0 0.5rem;
     }
 }
+
+.container:has(> main .lm-manage-table) {
+    width: 100%;
+    max-width: none;
+    padding-inline: clamp(0.75rem, 2vw, 2rem);
+}
+
+main.pb-3:has(.lm-manage-table) {
+    width: 100%;
+    max-width: none;
+    padding-inline: 0;
+}
+
+.row.lm-page-shell:has(.lm-manage-table) {
+    --bs-gutter-x: 0;
+    row-gap: 1.5rem;
+}
+
+.row.lm-page-shell:has(.lm-manage-table) > .col-md-6 {
+    min-width: 0;
+}
+
+@media (min-width: 768px) {
+    .row.lm-page-shell:has(.lm-manage-table) {
+        --bs-gutter-x: 1.5rem;
+    }
+}
+
+.row.lm-page-shell:has(.lm-manage-table) .card-header {
+    background: linear-gradient(135deg, #4338ca, #3730a3) !important;
+}
+
+.row.lm-page-shell:has(.lm-manage-table) .card-header h3 {
+    color: #ffffff !important;
+}
+
+.row.lm-page-shell:has(.lm-manage-table) .table-responsive {
+    width: 100%;
+    max-width: 100%;
+    margin-inline: 0;
+    padding-inline: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-color: #64748b #e2e8f0;
+}
+
+.row.lm-page-shell .lm-manage-table {
+    width: 100%;
+    min-width: 1180px;
+}
+
+.row.lm-page-shell .lm-manage-table :is(th, td) {
+    overflow-wrap: normal;
+    word-break: normal;
+}
+
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(1) { min-width: 112px; }
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(2) { min-width: 200px; }
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(3),
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(4) { min-width: 144px; }
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(5) {
+    min-width: 260px;
+    max-width: 460px;
+    overflow-wrap: anywhere;
+}
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(6) { min-width: 152px; }
+.row.lm-page-shell .lm-manage-table :is(th, td):last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    min-width: 180px;
+    background-color: var(--bg-primary, #ffffff);
+    box-shadow: -1px 0 0 var(--border-color, #cbd5e1);
+}
+
+.row.lm-page-shell .lm-manage-table tbody tr:nth-of-type(odd) td:last-child {
+    background-color: var(--bg-secondary, #f8fafc);
+}
+
+.row.lm-page-shell .lm-manage-table .img-thumbnail {
+    width: 96px;
+    min-width: 96px;
+    max-width: none;
+    height: 54px;
+    object-fit: cover;
+}
+
+.row.lm-page-shell:has(.lm-manage-table) .text-muted {
+    color: var(--text-secondary, #475569) !important;
+}
+
+.lm-manage-table .badge {
+    font-size: 0.8125rem;
+    color: #334155;
+    background-color: #e2e8f0;
+    white-space: nowrap;
+}
+
+.lm-manage-table .badge.bg-success-subtle {
+    color: #14532d !important;
+    background-color: #dcfce7 !important;
+    border-color: #86efac !important;
+}
+.lm-manage-table .badge.bg-warning-subtle {
+    color: #78350f !important;
+    background-color: #fef3c7 !important;
+    border-color: #fcd34d !important;
+}
+.lm-manage-table .badge.bg-info-subtle {
+    color: #164e63 !important;
+    background-color: #cffafe !important;
+    border-color: #67e8f9 !important;
+}
+.lm-manage-table .badge.bg-danger-subtle {
+    color: #7f1d1d !important;
+    background-color: #fee2e2 !important;
+    border-color: #fca5a5 !important;
+}
+.lm-manage-table .badge.bg-secondary-subtle {
+    color: #334155 !important;
+    background-color: #e2e8f0 !important;
+    border-color: #cbd5e1 !important;
+}
+.lm-manage-table .badge.bg-primary {
+    color: #ffffff !important;
+    background-color: #3730a3 !important;
+    border-color: #312e81 !important;
+}
+.lm-manage-table .badge.bg-dark {
+    color: #ffffff !important;
+    background-color: #1e293b !important;
+}
+
+main.pb-3:has(.lm-manage-table) .btn-outline-warning {
+    color: #9a3412;
+    border-color: #9a3412;
+}
+main.pb-3:has(.lm-manage-table) .btn-outline-warning:hover {
+    color: #ffffff;
+    background: #9a3412;
+    border-color: #9a3412;
+}
+.dark-theme main.pb-3:has(.lm-manage-table) .btn-outline-warning {
+    color: #fcd34d;
+    border-color: #fcd34d;
+}
+.dark-theme main.pb-3:has(.lm-manage-table) .btn-outline-warning:hover {
+    color: #451a03;
+    background: #fcd34d;
+}
+.lm-manage-table .btn-warning {
+    color: #78350f;
+    background: #fef3c7;
+    border-color: #d97706;
+}
+.lm-manage-table .btn-warning:hover {
+    color: #451a03;
+    background: #fcd34d;
+}
+.lm-manage-table .btn-danger {
+    color: #ffffff;
+    background: #991b1b;
+    border-color: #991b1b;
+}
+.lm-manage-table .btn-danger:hover {
+    background: #7f1d1d;
+}
