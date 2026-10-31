@@ -345,10 +345,13 @@ main.pb-3:has(.lm-manage-table) {
 }
 
 .row.lm-page-shell:has(.lm-manage-table) > .col-md-6 {
-    flex: 0 0 100%;
-    width: 100%;
-    max-width: 100%;
     min-width: 0;
+}
+
+@media (min-width: 768px) {
+    .row.lm-page-shell:has(.lm-manage-table) {
+        --bs-gutter-x: 1.5rem;
+    }
 }
 
 .row.lm-page-shell:has(.lm-manage-table) .card-header {
