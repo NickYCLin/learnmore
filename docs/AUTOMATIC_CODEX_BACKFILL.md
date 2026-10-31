@@ -17,7 +17,8 @@
 
 ## 安裝與啟用
 
-需在可讀取網站設定檔的 Windows 主機執行，使用已登入 Codex 的帳戶。需要 Python 3.11 以上及支援 `exec --output-schema --ephemeral` 的 Codex CLI。
+需在可讀取網站設定檔的 Windows 主機執行，使用已登入 Codex 的帳戶。需要 Python 3.11 以上及支援 `exec --output-schema --ephemeral` 的 Codex CLI。本次排程身分探測使用 Codex 0.166.0 通過；舊版 CLI 的預設模型可能已不可用，登入成功仍須以實際探測確認。
+可另行安裝專用 CLI，透過 `-CodexPath` 指定原生執行檔，避免影響主機其他工作。
 不需要把 API 金鑰、Codex 登入檔或 SQL 密碼複製到儲存庫，也不更換網站執行檔。
 
 先將以下三個檔案放在同一個目錄：
