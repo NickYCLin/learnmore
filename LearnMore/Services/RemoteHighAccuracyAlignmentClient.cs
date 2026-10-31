@@ -61,7 +61,8 @@ public sealed class RemoteHighAccuracyAlignmentClient
         }
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(Math.Max(60, _options.RemoteHighAccuracyApiTimeoutSeconds)));
+        var requestTimeout = TimeSpan.FromSeconds(Math.Max(60, _options.RemoteHighAccuracyApiTimeoutSeconds));
+        timeoutCts.CancelAfter(requestTimeout);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, BuildRemoteUri("v1/high-accuracy-align"))
         {
@@ -69,7 +70,9 @@ public sealed class RemoteHighAccuracyAlignmentClient
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.RemoteHighAccuracyApiToken);
 
-        var client = _httpClientFactory.CreateClient();
+        using var client = _httpClientFactory.CreateClient();
+        // 校準耗時可能超過 HttpClient 預設的 100 秒，兩層逾時需使用同一設定。
+        client.Timeout = requestTimeout;
         using var response = await client.SendAsync(request, timeoutCts.Token);
         var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
         if (!response.IsSuccessStatusCode)
