@@ -1,0 +1,4 @@
+interface:
+  display_name: "LearnMore 音樂秒數校正"
+  short_description: "透過 MCP 處理日文歌曲、驗證逐行秒數並安全套用校正結果"
+  default_prompt: "使用 $learnmore-music-alignment 分析指定歌曲，先回報逐行驗證與秒數差異。"
