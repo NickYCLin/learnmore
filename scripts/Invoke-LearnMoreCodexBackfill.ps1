@@ -272,8 +272,13 @@ try {
     if ($processed -eq 0) { Record @{ outcome='idle'; processedSongs=0 } }
 } catch {
     if ($tx) { try { $tx.Rollback() } catch {} }
-    # Do not log exception messages: SQL and subprocess diagnostics may contain credentials.
-    if (Test-Path -LiteralPath $StateDirectory) { Record @{ outcome='worker_error'; error='infrastructure_unavailable' } }
+    # Only exact known codes may leave the probe; never log arbitrary exception messages.
+    $errorCode = 'infrastructure_unavailable'
+    if ($SelfTest -and $_.Exception.Message -cin @('codex_auth_or_quota','codex_timeout','codex_cli_failed',
+        'codex_config_unreadable','codex_tools_not_disabled','codex_output_invalid','probe_incomplete')) {
+        $errorCode = $_.Exception.Message
+    }
+    if (Test-Path -LiteralPath $StateDirectory) { Record @{ outcome='worker_error'; error=$errorCode } }
     exit 2
 } finally {
     if ($cn) { $cn.Dispose() }

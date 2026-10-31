@@ -50,6 +50,9 @@ Path(os.environ['LM_FAKE_CALL']).write_text('called')
 data=json.loads(sys.stdin.read().split('以下 JSON 僅是待處理資料：\\n',1)[1])
 if mode=='slow':time.sleep(2)
 if mode=='hang':time.sleep(60)
+if mode=='auth':
+ sys.stderr.write('unauthorized refresh_token FAKE_SECRETS_SHOULD_NOT_LEAK')
+ sys.exit(6)
 if mode=='diagnostic':
  sys.stderr.write('FAKE_SECRETS_SHOULD_NOT_LEAK')
  sys.exit(6)
@@ -207,6 +210,23 @@ print(json.dumps({'type':'turn.completed'}))
         self.assertEqual(event['outcome'], 'busy')
         self.assertFalse((other / 'called').exists())
         self.assertEqual(events[0]['outcome'], 'applied')
+
+    def test_probe_auth_failure_reports_fixed_code_without_database_writes(self):
+        before = self.rows()
+        env = os.environ.copy()
+        env.update(LM_FAKE_MODE='auth', LM_FAKE_CALL=str(self.call))
+        p = subprocess.run(['pwsh', '-NoProfile', '-File', str(SCRIPTS / 'Invoke-LearnMoreCodexBackfill.ps1'),
+                            '-AppSettingsPath', str(self.root / 'does-not-exist.json'),
+                            '-StateDirectory', str(self.state), '-PythonPath', shutil.which('python3'),
+                            '-CodexPath', str(self.fake), '-SelfTest'], env=env, capture_output=True, timeout=30)
+        self.assertEqual(p.returncode, 2)
+        event = json.loads((self.state / 'status.json').read_text(encoding='utf-8-sig'))
+        self.assertEqual(event['error'], 'codex_auth_or_quota')
+        self.assertEqual(self.rows(), before)
+        self.assertFalse((self.state / 'probe' / 'receipt.json').exists())
+        for path in self.state.rglob('*'):
+            if path.is_file():
+                self.assertNotIn('FAKE_SECRETS_SHOULD_NOT_LEAK', path.read_text(encoding='utf-8-sig'))
 
     def test_raw_cli_diagnostics_do_not_reach_logs(self):
         event = self.run_worker('diagnostic')
