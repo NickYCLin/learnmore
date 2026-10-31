@@ -211,6 +211,9 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby, @Roman)";
 
     public async Task<SongPlaceholderCreationResult> CreateSongWithPlaceholdersAsync(TranscribeRequest request, IReadOnlyCollection<LyricSegment> segments, CancellationToken cancellationToken = default)
     {
+        if (segments.Count == 0 || segments.Any(segment => string.IsNullOrWhiteSpace(segment.Japanese)))
+            throw new ArgumentException("自動建檔需要完整的日文歌詞。", nameof(segments));
+
         var songUid = Guid.NewGuid().ToString();
         var lyricIds = new List<int>();
         var connectionString = _configuration.GetConnectionString("DefaultConnection");

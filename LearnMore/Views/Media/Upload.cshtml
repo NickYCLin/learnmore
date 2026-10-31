@@ -36,6 +36,7 @@
     </div>
 </div>
 
+<div id="uploadError" class="alert alert-danger d-none" role="alert"></div>
 <div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex align-items-center justify-content-center text-white fw-bold fs-4 d-none">
     <div class="bg-secondary p-3 rounded text-center">
         <div>✨ 魔法施展中，請稍候...</div>
@@ -150,6 +151,9 @@
         document.getElementById("transcribeForm").addEventListener("submit", async (event) => {
             event.preventDefault();
 
+            const errorEl = document.getElementById("uploadError");
+            errorEl.textContent = '';
+            errorEl.classList.add("d-none");
             const loadingEl = document.getElementById("loading");
             const progressMsg = document.getElementById("progress-msg");
             loadingEl.classList.remove("d-none");
@@ -236,7 +240,8 @@
 
             } catch (error) {
                 console.error("錯誤發生:", error);
-                alert(error.message);
+                errorEl.textContent = error.message;
+                errorEl.classList.remove("d-none");
                 loadingEl.classList.add("d-none");
             }
         });
