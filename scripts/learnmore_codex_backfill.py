@@ -203,8 +203,11 @@ def cli_arguments(binary: Path, directory: Path, schema: Path, output: Path) -> 
         names = set(settings.get("mcp_servers", {}))
         for profile in settings.get("profiles", {}).values():
             names.update(profile.get("mcp_servers", {}))
-        for name in sorted(names):
-            args += ["-c", f'mcp_servers.{json.dumps(name)}.enabled=false']
+        if names:
+            # CLI dotted override paths do not parse quoted key components. A TOML
+            # inline table preserves literal server names, including names with dots.
+            disabled = ",".join(json.dumps(name) + "={enabled=false}" for name in sorted(names))
+            args += ["-c", "mcp_servers={" + disabled + "}"]
     return args + ["-"]
 
 

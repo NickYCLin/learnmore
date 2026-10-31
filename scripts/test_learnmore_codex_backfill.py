@@ -131,12 +131,12 @@ class ValidationTests(unittest.TestCase):
 
 class RunnerTests(unittest.TestCase):
     def test_argv_disables_tools_and_all_configured_mcp_servers(self):
-        settings = '[mcp_servers.external]\ncommand="secret-path"\n[profiles.other.mcp_servers.extra]\ncommand="other-secret"\n'
+        settings = '[mcp_servers.external]\ncommand="secret-path"\n[profiles.other.mcp_servers."extra.server"]\ncommand="other-secret"\n'
         with patch.object(Path, "exists", return_value=True), patch.object(Path, "read_text", return_value=settings):
             args = b.cli_arguments(Path("codex"), Path("job"), Path("schema"), Path("out"))
         for value in ["features.shell_tool=false", "features.apps=false", "features.hooks=false",
                       "features.multi_agent=false", 'web_search="disabled"',
-                      'mcp_servers."external".enabled=false', 'mcp_servers."extra".enabled=false']:
+                      'mcp_servers={"external"={enabled=false},"extra.server"={enabled=false}}']:
             self.assertIn(value, args)
         self.assertNotIn("secret-path", " ".join(args))
         self.assertEqual(args[args.index("--sandbox") + 1], "read-only")
