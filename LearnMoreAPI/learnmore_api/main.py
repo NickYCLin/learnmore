@@ -237,14 +237,14 @@ class Settings(BaseModel):
     codex_model: str | None = None
     codex_timeout_seconds: float = 180.0
     codex_workdir: str = "/tmp/learnmore-api-codex"
-    whisper_model: str = "medium"
+    whisper_model: str = "kotoba-tech/kotoba-whisper-v2.0-faster"
     whisper_device: str = "auto"
     whisper_compute_type: str = "auto"
     whisper_download_dir: str = "/tmp/learnmore-api-whisper"
     whisper_timeout_seconds: float = 1800.0
     ytdlp_bin: str = "yt-dlp"
     shazam_timeout_seconds: float = 30.0
-    uvr_command_template: str = ""
+    uvr_command_template: str = "python -m learnmore_api.demucs_pcm --two-stems vocals --name htdemucs --jobs 0 --shifts 0 --out {output_dir} {input}"
     uvr_output_dir: str = "/tmp/learnmore-api-uvr"
     uvr_timeout_seconds: float = 1800.0
     high_accuracy_use_vocals_stem: bool = True
@@ -256,13 +256,13 @@ def load_settings() -> Settings:
     codex_bin = os.getenv("CODEX_BIN", "codex").strip() or "codex"
     codex_model = os.getenv("CODEX_MODEL", "").strip() or None
     codex_workdir = os.getenv("CODEX_WORKDIR", "/tmp/learnmore-api-codex").strip()
-    whisper_model = os.getenv("WHISPER_MODEL", "medium").strip() or "medium"
+    whisper_model = os.getenv("WHISPER_MODEL", "").strip() or Settings.model_fields["whisper_model"].default
     whisper_device = os.getenv("WHISPER_DEVICE", "auto").strip() or "auto"
     whisper_compute_type = os.getenv("WHISPER_COMPUTE_TYPE", "auto").strip() or "auto"
     whisper_download_dir = os.getenv("WHISPER_DOWNLOAD_DIR", "/tmp/learnmore-api-whisper").strip()
     ytdlp_bin = os.getenv("YTDLP_BIN", "yt-dlp").strip() or "yt-dlp"
     shazam_timeout_raw = os.getenv("SHAZAM_TIMEOUT_SECONDS", "30").strip()
-    uvr_command_template = os.getenv("UVR_COMMAND_TEMPLATE", "").strip()
+    uvr_command_template = os.getenv("UVR_COMMAND_TEMPLATE", "").strip() or Settings.model_fields["uvr_command_template"].default
     uvr_output_dir = os.getenv("UVR_OUTPUT_DIR", "/tmp/learnmore-api-uvr").strip()
     high_accuracy_use_vocals_stem = parse_bool_env("HIGH_ACCURACY_USE_VOCALS_STEM", True)
     whisperx_align_enabled = parse_bool_env("WHISPERX_ALIGN_ENABLED", True)
@@ -406,6 +406,9 @@ async def health(settings: Settings = Depends(get_settings)) -> dict[str, object
         "whisperDevice": settings.whisper_device,
         "whisperComputeType": settings.whisper_compute_type,
         "highAccuracyAlignmentEngine": "whisperx",
+        "whisperxAlignEnabled": settings.whisperx_align_enabled,
+        "vocalsStemEnabled": settings.high_accuracy_use_vocals_stem and bool(settings.uvr_command_template),
+        "sourceCommit": os.getenv("LEARNMORE_SOURCE_COMMIT", ""),
     }
 
 
@@ -708,14 +711,18 @@ def transcribe_youtube_sync(request: TranscribeYouTubeRequest, settings: Setting
 
 def transcribe_audio_file(audio_path: Path, language: str, settings: Settings) -> tuple[list[WhisperSegment], float | None]:
     model = get_whisper_model(settings)
+    # Distilled Kotoba has no compatible Whisper timestamp alignment heads.
+    # Use its text decoder, then obtain independent acoustic word times from CTC.
+    kotoba = "kotoba-whisper" in settings.whisper_model.lower()
     segments_iter, info = model.transcribe(
         str(audio_path),
         language=language,
         task="transcribe",
         beam_size=5,
         vad_filter=False,
-        word_timestamps=True,
+        word_timestamps=not kotoba,
         condition_on_previous_text=False,
+        **({"chunk_length": 15} if kotoba else {}),
     )
     segments: list[WhisperSegment] = []
     word_index = 1
@@ -747,6 +754,8 @@ def transcribe_audio_file(audio_path: Path, language: str, settings: Settings) -
             )
         )
     duration = round(float(info.duration), 3) if getattr(info, "duration", None) else None
+    if kotoba and segments:
+        segments = align_transcribed_segments_with_whisperx(audio_path, language, settings, segments)
     return segments, duration
 
 
@@ -754,6 +763,14 @@ def transcribe_audio_file_with_whisperx(audio_path: Path, language: str, setting
     segments, duration = transcribe_audio_file(audio_path, language, settings)
     if not segments:
         return segments, duration
+    if "kotoba-whisper" in settings.whisper_model.lower():
+        return segments, duration
+    return align_transcribed_segments_with_whisperx(audio_path, language, settings, segments), duration
+
+
+def align_transcribed_segments_with_whisperx(
+    audio_path: Path, language: str, settings: Settings, segments: list[WhisperSegment],
+) -> list[WhisperSegment]:
 
     try:
         import whisperx
@@ -772,7 +789,7 @@ def transcribe_audio_file_with_whisperx(audio_path: Path, language: str, setting
         if segment.text.strip()
     ]
     if not transcript:
-        return segments, duration
+        return segments
 
     try:
         aligned = whisperx.align(
@@ -781,7 +798,7 @@ def transcribe_audio_file_with_whisperx(audio_path: Path, language: str, setting
             align_metadata,
             str(audio_path),
             device,
-            return_char_alignments=False,
+            return_char_alignments=True,
             print_progress=False,
         )
     except Exception as exc:
@@ -794,7 +811,7 @@ def transcribe_audio_file_with_whisperx(audio_path: Path, language: str, setting
     converted = convert_whisperx_segments(aligned_segments_raw)
     if not converted:
         raise RuntimeError("WhisperX alignment returned no usable segments.")
-    return converted, duration
+    return converted
 
 
 def convert_whisperx_segments(aligned_segments_raw: list[Any]) -> list[WhisperSegment]:
@@ -882,7 +899,7 @@ def align_lyric_lines_audio_file_with_whisperx(
             align_metadata,
             audio,
             device,
-            return_char_alignments=False,
+            return_char_alignments=True,
             print_progress=False,
         )
     except Exception as exc:
@@ -1754,6 +1771,9 @@ def transcribe_youtube_vocals_stem_sync(
             segments, duration = align_lyric_lines_audio_file_with_whisperx(vocals_path, lyric_lines, language, settings)
             model = f"{settings.whisper_model}+vocals-stem+whisperx-lyrics+asr-refined"
         except RuntimeError:
+            if "kotoba-whisper" in settings.whisper_model.lower():
+                # Kotoba must never fall back to incompatible Whisper timestamp heads.
+                raise
             segments, duration = transcribe_audio_file(vocals_path, language, settings)
             model = f"{settings.whisper_model}+vocals-stem+faster-whisper-words+whisperx-fallback"
     else:

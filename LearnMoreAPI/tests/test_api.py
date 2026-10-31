@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("LEARNMORE_API_TOKEN", "test-token")
     monkeypatch.setenv("CODEX_BIN", "codex")
+    monkeypatch.setenv("WHISPER_MODEL", "medium")
 
     from learnmore_api import main
 
@@ -1964,3 +1965,53 @@ def test_ctc_onset_confidence_alone_does_not_create_asr_evidence(client) -> None
         [main.WhisperSegment(index=1, start=8.0, end=12.0, text="不同的辨識內容")], [],
     )
     assert refined[0]._asr_anchor_source is None
+
+
+def test_default_pipeline_enables_kotoba_and_demucs(monkeypatch):
+    from learnmore_api import main
+    for name in ("WHISPER_MODEL", "UVR_COMMAND_TEMPLATE", "WHISPERX_ALIGN_ENABLED"):
+        monkeypatch.delenv(name, raising=False)
+    settings = main.load_settings()
+    assert settings.whisper_model == "kotoba-tech/kotoba-whisper-v2.0-faster"
+    assert settings.whisperx_align_enabled
+    assert "learnmore_api.demucs_pcm" in settings.uvr_command_template
+
+
+@pytest.mark.parametrize("model_name,kotoba", [("medium", False), ("kotoba-tech/kotoba-whisper-v2.0-faster", True)])
+def test_transcription_uses_safe_decoder_and_acoustic_word_times(client, monkeypatch, tmp_path, model_name, kotoba):
+    from types import SimpleNamespace
+    _, main = client
+    def transcribe(path, **kwargs):
+        assert kwargs["word_timestamps"] is (not kotoba)
+        if kotoba:
+            assert kwargs["chunk_length"] == 15
+        else:
+            assert "chunk_length" not in kwargs
+        return iter([SimpleNamespace(start=1.0, end=2.0, text="光る", words=[])]), SimpleNamespace(duration=3.0)
+    monkeypatch.setattr(main, "get_whisper_model", lambda settings: SimpleNamespace(transcribe=transcribe))
+    calls = []
+    def ctc(path, language, settings, segments):
+        calls.append(segments)
+        assert segments[0].text == "光る"
+        return [main.WhisperSegment(index=1, start=1.1, end=1.9, text="光る", words=[main.WhisperWord(index=1, start=1.1, end=1.9, text="光る")])]
+    monkeypatch.setattr(main, "align_transcribed_segments_with_whisperx", ctc)
+    settings = main.Settings(api_token="test-token", whisper_model=model_name)
+    result, duration = main.transcribe_audio_file(tmp_path / "vocals.wav", "ja", settings)
+    assert duration == 3.0
+    assert len(calls) == int(kotoba)
+    if kotoba:
+        assert result[0].words[0].start == 1.1
+
+
+def test_kotoba_alignment_failure_never_retries_unsafe_timestamp_decoder(client, monkeypatch, tmp_path):
+    _, main = client
+    settings = main.Settings(api_token="test-token")
+    monkeypatch.setattr(main, "separate_youtube_sync", lambda *args: main.SeparateYouTubeResponse(songUid="s", youtubeUrl="https://www.youtube.com/watch?v=LjuJgrdh5eY", model="htdemucs", outputDir=str(tmp_path), stems=[main.AudioStem(kind="vocals", path=str(tmp_path / "vocals.wav"), fileName="vocals.wav", sizeBytes=10, downloadPath="unused")]))
+    def fail(*args):
+        raise RuntimeError("CTC unavailable")
+    monkeypatch.setattr(main, "align_lyric_lines_audio_file_with_whisperx", fail)
+    def forbidden(*args):
+        pytest.fail("Kotoba must not enter the legacy timestamp fallback")
+    monkeypatch.setattr(main, "transcribe_audio_file", forbidden)
+    with pytest.raises(RuntimeError, match="CTC unavailable"):
+        main.transcribe_youtube_vocals_stem_sync("s", "https://www.youtube.com/watch?v=LjuJgrdh5eY", "ja", settings, [main.HighAccuracyLyricLine(lyricId=1, japanese="光る", currentStart=1.0)])

@@ -18,27 +18,38 @@ CODEX_BIN=codex
 CODEX_MODEL=
 CODEX_TIMEOUT_SECONDS=180
 CODEX_WORKDIR=/tmp/learnmore-api-codex
-WHISPER_MODEL=medium
+WHISPER_MODEL=kotoba-tech/kotoba-whisper-v2.0-faster
 WHISPER_DEVICE=cuda
 WHISPER_COMPUTE_TYPE=float16
 WHISPER_DOWNLOAD_DIR=/tmp/learnmore-api-whisper
 WHISPER_TIMEOUT_SECONDS=1800
-WHISPERX_ALIGN_ENABLED=false
+WHISPERX_ALIGN_ENABLED=true
 YTDLP_BIN=yt-dlp
 SHAZAM_TIMEOUT_SECONDS=30
-UVR_COMMAND_TEMPLATE='demucs --mp3 --two-stems vocals -n htdemucs -o {output_dir} {input}'
+UVR_COMMAND_TEMPLATE='python -m learnmore_api.demucs_pcm --two-stems vocals -n htdemucs --jobs 0 --shifts 0 -o {output_dir} {input}'
 UVR_OUTPUT_DIR=/tmp/learnmore-api-uvr
 UVR_TIMEOUT_SECONDS=1800
 HIGH_ACCURACY_USE_VOCALS_STEM=true
 ```
 
-High-accuracy lyric alignment uses the vocals stem plus WhisperX forced
-alignment against the submitted formal lyric lines when `WHISPERX_ALIGN_ENABLED`
-is true, then refines line starts with a vocals-only ASR word anchor pass. Set
-`WHISPERX_ALIGN_ENABLED=false` when the WhisperX alignment model is not already
-cached; the API will use vocals-stem faster-whisper word timestamps instead of
-blocking on model download. A successful WhisperX response model is reported as
-`<WHISPER_MODEL>+vocals-stem+whisperx-lyrics+asr-refined+high-accuracy-align`.
+日文高精度流程預設採用 Demucs `htdemucs` 分離的無損 PCM WAV 人聲，
+再以 `kotoba-tech/kotoba-whisper-v2.0-faster` 辨識文字，最後交由 WhisperX
+產生 ASR 字詞時間並對齊正式歌詞，保留原有網站逐行驗證門檻。
+Kotoba 使用 15 秒辨識片段，關閉 faster-whisper 的 `word_timestamps`，
+避免蒸餾模型不相容的時間戳頭造成原生程序崩潰。
+
+`WHISPERX_ALIGN_ENABLED=true` 是 Kotoba 流程的必要條件；WhisperX 失敗時
+回報失敗，保留歌曲待校正狀態，不改用不相容的時間戳頭或宣告完成。
+既有明確設定 `WHISPER_MODEL=medium` 的服務仍可沿用舊流程。
+Docker image 內建 NLTK `punkt_tab`；部署時須預熱 Kotoba、日文 WhisperX
+及 Demucs 模型快取，確認 GPU 可用後再切換網站高精度 API 位址。
+若有 compose 的 `environment` 區塊，須一併更新其中模型、WhisperX 開關
+與 `UVR_COMMAND_TEMPLATE`，否則會蓋過 `.env`。
+
+成功回應的模型名稱包含
+`<WHISPER_MODEL>+vocals-stem+whisperx-lyrics+asr-refined+high-accuracy-align`。
+`/health` 回報設定的模型、裝置、WhisperX 開關與部署提交編號；
+健康檢查不代表模型已載入或所有歌曲皆可命中，仍須以實際音訊請求驗收。
 
 Endpoints:
 
