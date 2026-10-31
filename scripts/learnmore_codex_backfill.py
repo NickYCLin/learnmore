@@ -204,14 +204,16 @@ def list_mcp(binary: Path, directory: Path, overrides: list[str]) -> list[dict]:
     """Read effective metadata, including project/managed layers; never start servers."""
     try:
         p = subprocess.run([str(binary), *overrides, "mcp", "list", "--json"],
-                           cwd=directory, capture_output=True, timeout=15)
+                           cwd=directory, capture_output=True, timeout=60)
         if p.returncode or len(p.stdout) > 2_000_000:
             raise BackfillError("codex_config_unreadable")
         data = json.loads(p.stdout)
         if not isinstance(data, list) or not all(isinstance(v.get("name"), str) for v in data):
             raise BackfillError("codex_config_unreadable")
         return data
-    except (OSError, ValueError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired:
+        raise BackfillError("codex_config_timeout") from None
+    except (OSError, ValueError):
         raise BackfillError("codex_config_unreadable") from None
 
 

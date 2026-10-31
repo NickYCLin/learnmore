@@ -177,6 +177,27 @@ class RunnerTests(unittest.TestCase):
             with self.assertRaisesRegex(b.BackfillError, 'codex_tools_not_disabled'):
                 b.verified_cli_arguments(Path('codex'), Path('job'), Path('schema'), Path('out'))
 
+    def test_metadata_check_allows_observed_windows_cold_start(self):
+        def cold_start(command, **options):
+            if options['timeout'] < 16.25:
+                raise b.subprocess.TimeoutExpired(command, options['timeout'])
+            return b.subprocess.CompletedProcess(command, 0, b'[]\n', b'')
+
+        with patch.object(b.subprocess, 'run', side_effect=cold_start):
+            self.assertEqual(b.list_mcp(Path('codex'), Path('job'), []), [])
+
+    def test_metadata_timeout_is_distinct_from_unreadable_configuration(self):
+        with patch.object(b.subprocess, 'run', side_effect=b.subprocess.TimeoutExpired('codex', 60)):
+            with self.assertRaisesRegex(b.BackfillError, '^codex_config_timeout$'):
+                b.list_mcp(Path('codex'), Path('job'), [])
+
+    def test_metadata_failure_still_blocks_inference(self):
+        for result in [b.subprocess.CompletedProcess('codex', 1, b'', b'private diagnostic'),
+                       b.subprocess.CompletedProcess('codex', 0, b'invalid json', b'')]:
+            with self.subTest(exit_code=result.returncode), patch.object(b.subprocess, 'run', return_value=result):
+                with self.assertRaisesRegex(b.BackfillError, '^codex_config_unreadable$'):
+                    b.verified_cli_arguments(Path('codex'), Path('job'), Path('schema'), Path('out'))
+
 
 if __name__ == "__main__":
     unittest.main()
