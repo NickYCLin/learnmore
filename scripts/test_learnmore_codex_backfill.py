@@ -131,9 +131,7 @@ class ValidationTests(unittest.TestCase):
 
 class RunnerTests(unittest.TestCase):
     def test_argv_disables_tools_and_all_configured_mcp_servers(self):
-        settings = '[mcp_servers.external]\ncommand="secret-path"\n[profiles.other.mcp_servers."extra.server"]\ncommand="other-secret"\n'
-        with patch.object(Path, "exists", return_value=True), patch.object(Path, "read_text", return_value=settings):
-            args = b.cli_arguments(Path("codex"), Path("job"), Path("schema"), Path("out"))
+        args = b.cli_arguments(Path("codex"), Path("job"), Path("schema"), Path("out"), ("external", "extra.server"))
         for value in ["features.shell_tool=false", "features.apps=false", "features.hooks=false",
                       "features.multi_agent=false", 'web_search="disabled"',
                       'mcp_servers={"external"={command="__learnmore_backfill_disabled__",enabled=false},"extra.server"={command="__learnmore_backfill_disabled__",enabled=false}}']:
@@ -147,7 +145,7 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fake = root / "fake-codex"
-            fake.write_text("#!/usr/bin/env python3\nimport json,sys\nfrom pathlib import Path\nsys.stdin.read()\nPath(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(" + repr(json.dumps(answer())) + ")\nprint(json.dumps({'type':'turn.completed'}))\n")
+            fake.write_text("#!/usr/bin/env python3\nimport json,sys\nfrom pathlib import Path\nif 'mcp' in sys.argv: print('[]');sys.exit(0)\nsys.stdin.read()\nPath(sys.argv[sys.argv.index('--output-last-message')+1]).write_text(" + repr(json.dumps(answer())) + ")\nprint(json.dumps({'type':'turn.completed'}))\n")
             fake.chmod(0o700)
             result = b.run_codex(fake, source(), 10, root)
             self.assertEqual(b.validate_rows(source(), result)[0]["lyricId"], 8)
@@ -158,7 +156,7 @@ class RunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             fake = root / "fake-codex"
-            fake.write_text('#!/usr/bin/env python3\nimport sys\nsys.stdin.read()\nprint(\'{"item":{"type":"command_execution"}}\')\n')
+            fake.write_text('#!/usr/bin/env python3\nimport sys\nif "mcp" in sys.argv: print("[]");sys.exit(0)\nsys.stdin.read()\nprint(\'{"item":{"type":"command_execution"}}\')\n')
             fake.chmod(0o700)
             with self.assertRaisesRegex(b.BackfillError, "unexpected_tool_use"):
                 b.run_codex(fake, source(), 10, root)
@@ -173,6 +171,11 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(result["sourceSha256"], b.hashlib.sha256(snapshot.read_bytes()).hexdigest())
             self.assertNotIn("TimeStamp", result["patches"][0])
             self.assertFalse(result["needsReview"])
+
+    def test_effective_managed_server_must_be_disabled_before_inference(self):
+        with patch.object(b, 'list_mcp', side_effect=[[{'name':'managed','enabled':True}], [{'name':'managed','enabled':True}]]):
+            with self.assertRaisesRegex(b.BackfillError, 'codex_tools_not_disabled'):
+                b.verified_cli_arguments(Path('codex'), Path('job'), Path('schema'), Path('out'))
 
 
 if __name__ == "__main__":

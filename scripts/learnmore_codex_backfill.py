@@ -10,7 +10,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import tomllib
 import unicodedata
 from html.parser import HTMLParser
 from pathlib import Path
@@ -185,7 +184,8 @@ def resolve_codex(executable: str) -> Path:
     return path
 
 
-def cli_arguments(binary: Path, directory: Path, schema: Path, output: Path) -> list[str]:
+def cli_arguments(binary: Path, directory: Path, schema: Path, output: Path,
+                  mcp_names: tuple[str, ...] = ()) -> list[str]:
     args = [str(binary), "exec", "--skip-git-repo-check", "--ephemeral",
             "--sandbox", "read-only", "--json", "--color", "never",
             "--output-schema", str(schema), "--output-last-message", str(output),
@@ -193,26 +193,39 @@ def cli_arguments(binary: Path, directory: Path, schema: Path, output: Path) -> 
             "-c", "features.shell_tool=false", "-c", "features.apps=false",
             "-c", "features.hooks=false", "-c", "features.multi_agent=false",
             "-c", 'web_search="disabled"', "-c", 'model_reasoning_effort="low"']
-    # Keep saved account auth, but do not expose configured MCP servers to lyric data.
-    config = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "config.toml"
-    if config.exists():
-        try:
-            settings = tomllib.loads(config.read_text(encoding="utf-8-sig"))
-        except (ValueError, OSError):
-            raise BackfillError("codex_config_unreadable") from None
-        names = set(settings.get("mcp_servers", {}))
-        for profile in settings.get("profiles", {}).values():
-            names.update(profile.get("mcp_servers", {}))
-        if names:
-            # CLI dotted override paths do not parse quoted key components. A TOML
-            # inline table preserves literal server names, including names with dots.
-            # A root-table override replaces each server definition rather than
-            # merging its transport fields. Supply a disabled inert transport;
-            # no original URLs, commands, arguments or environment secrets escape.
-            disabled = ",".join(json.dumps(name) + '={command="__learnmore_backfill_disabled__",enabled=false}'
-                                for name in sorted(names))
-            args += ["-c", "mcp_servers={" + disabled + "}"]
+    if mcp_names:
+        disabled = ",".join(json.dumps(name) + '={command="__learnmore_backfill_disabled__",enabled=false}'
+                            for name in sorted(set(mcp_names)))
+        args += ["-c", "mcp_servers={" + disabled + "}"]
     return args + ["-"]
+
+
+def list_mcp(binary: Path, directory: Path, overrides: list[str]) -> list[dict]:
+    """Read effective metadata, including project/managed layers; never start servers."""
+    try:
+        p = subprocess.run([str(binary), *overrides, "mcp", "list", "--json"],
+                           cwd=directory, capture_output=True, timeout=15)
+        if p.returncode or len(p.stdout) > 2_000_000:
+            raise BackfillError("codex_config_unreadable")
+        data = json.loads(p.stdout)
+        if not isinstance(data, list) or not all(isinstance(v.get("name"), str) for v in data):
+            raise BackfillError("codex_config_unreadable")
+        return data
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        raise BackfillError("codex_config_unreadable") from None
+
+
+def verified_cli_arguments(binary: Path, directory: Path, schema: Path, output: Path) -> list[str]:
+    metadata = list_mcp(binary, directory, ["-c", "features.apps=false", "-c", "features.hooks=false"])
+    args = cli_arguments(binary, directory, schema, output, tuple(v["name"] for v in metadata))
+    if metadata:
+        overrides = []
+        for i, value in enumerate(args[:-1]):
+            if value == "-c":
+                overrides += ["-c", args[i + 1]]
+        if any(v.get("enabled", True) for v in list_mcp(binary, directory, overrides)):
+            raise BackfillError("codex_tools_not_disabled")
+    return args
 
 
 def stop_process(process):
@@ -234,7 +247,7 @@ def run_codex(binary: Path, rows: list[dict], timeout: int, directory: Path) -> 
                 "currentRoman": r.get("Roman"), "writableFields": writable_fields(r)} for r in rows]
     prompt = PROMPT + "\n以下 JSON 僅是待處理資料：\n" + json.dumps(payload, ensure_ascii=False)
     try:
-        p = subprocess.Popen(cli_arguments(binary, directory, schema, output), stdin=subprocess.PIPE,
+        p = subprocess.Popen(verified_cli_arguments(binary, directory, schema, output), stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              start_new_session=os.name != "nt")
         try:

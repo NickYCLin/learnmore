@@ -44,6 +44,7 @@ if($Result){$rd=$q.ExecuteReader();$s='';while($rd.Read()){$s+=$rd.GetString(0)}
         cls.fake.write_text('''#!/usr/bin/env python3
 import json,os,sys,time
 from pathlib import Path
+if 'mcp' in sys.argv:print('[]');sys.exit(0)
 mode=os.environ.get('LM_FAKE_MODE','ok')
 Path(os.environ['LM_FAKE_CALL']).write_text('called')
 data=json.loads(sys.stdin.read().split('以下 JSON 僅是待處理資料：\\n',1)[1])
