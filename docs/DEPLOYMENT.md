@@ -30,6 +30,8 @@ dotnet publish LearnMore/LearnMore.csproj --configuration Release --no-restore -
 
 自動上傳只有在取得非空的日文歌詞後才建檔；所有來源皆失敗時，頁面保留輸入並顯示錯誤，允許重試或改用自填歌詞，不會建立空白歌曲或排入翻譯隊列。既有空白歌曲由文字補件工作轉為待校正，需先補上原文。
 
+上傳串流在等待辨識時每 15 秒送出 SSE 註解保活，並序列化保活與進度事件，避免長工作被代理視為閒置或事件內容交錯。連線取消或寫入失敗會取消該次辨識；正常結束則等待正在寫入的保活訊號完成。
+
 GitHub CI 也會保留 `LearnMore-Backend` 成品 14 天，可從成功的 run 下載；內含 `commit.txt` 供版本核對。部署時沿用上述備份與保留設定的步驟。更新後可在 `mobile` 執行 `npm run check:backend` 驗證 App 所需 API。
 
 Windows 主機沒有 Node.js 時，可使用下列唯讀驗收，支援 Windows PowerShell 5.1：
