@@ -97,6 +97,7 @@ public sealed class RemoteHighAccuracyAlignmentClient
                 "remote_high_accuracy_api_empty_response"));
         }
 
+        var referenceVerified = IsReliableReference(result);
         var linesById = result.AlignedLines.ToDictionary(line => line.LyricId);
         var alignments = new List<VocalOnsetDetectionService.LyricTimingAlignment>(snapshot.Lyrics.Count);
         foreach (var lyric in snapshot.Lyrics)
@@ -115,7 +116,7 @@ public sealed class RemoteHighAccuracyAlignmentClient
                 continue;
             }
 
-            var isMatched = IsReliableRemoteMatch(line);
+            var isMatched = IsReliableRemoteMatch(line, referenceVerified);
             alignments.Add(new VocalOnsetDetectionService.LyricTimingAlignment(
                 lyric.Japanese,
                 lyric.TimeStamp,
@@ -159,9 +160,43 @@ public sealed class RemoteHighAccuracyAlignmentClient
         return value[..Math.Max(0, maxLength - 3)] + "...";
     }
 
-    private static bool IsReliableRemoteMatch(AlignedLyricLine line)
+    private static bool IsReliableReference(HighAccuracyAlignResponse response)
+    {
+        var proof = response.ReferenceEvidence;
+        if (proof == null || string.IsNullOrEmpty(response.Model)
+            || string.IsNullOrEmpty(proof.SourceUrl) || string.IsNullOrEmpty(proof.TargetVideoId)
+            || string.IsNullOrEmpty(proof.ReferenceVideoId) || string.IsNullOrEmpty(proof.SourceTimelineSha256)
+            || !response.Model.StartsWith("marumaru-timed-reference+", StringComparison.Ordinal)
+            || response.TotalCount <= 0 || proof.MatchedLineCount != response.TotalCount
+            || response.AlignedLines.Count != response.TotalCount
+            || !response.AlignedLines.All(x => x.Source == "marumaru_reference_audio_timing_verified")
+            || !Regex.IsMatch(proof.SourceUrl, @"\Ahttps://www\.marumaru-x\.com/japanese-song/play-[a-z0-9]+\z")
+            || !Regex.IsMatch(proof.ReferenceVideoId, @"\A[A-Za-z0-9_-]{11}\z")
+            || !Regex.IsMatch(proof.TargetVideoId, @"\A[A-Za-z0-9_-]{11}\z")
+            || !Regex.IsMatch(proof.SourceTimelineSha256, @"\A[0-9a-fA-F]{64}\z")
+            || !Uri.TryCreate(response.YoutubeUrl, UriKind.Absolute, out var video)
+            || video.Scheme != "https" || video.Host is not ("youtube.com" or "www.youtube.com")
+            || System.Web.HttpUtility.ParseQueryString(video.Query)["v"] != proof.TargetVideoId)
+            return false;
+        return double.IsFinite(proof.Correlation) && proof.Correlation is >= 0.95 and <= 1
+            && double.IsFinite(proof.MinimumWindowCorrelation) && proof.MinimumWindowCorrelation is >= 0.90 and <= 1
+            && proof.WindowCount == 12 && double.IsFinite(proof.OverlapFraction) && proof.OverlapFraction is >= 0.95 and <= 1
+            && double.IsFinite(proof.OffsetSeconds) && Math.Abs(proof.OffsetSeconds) <= 15
+            && double.IsFinite(proof.ReferenceDuration) && proof.ReferenceDuration is >= 30 and <= 360
+            && double.IsFinite(proof.TargetDuration) && proof.TargetDuration is >= 30 and <= 360
+            && response.DurationSeconds == proof.TargetDuration
+            && Math.Abs(proof.OverlapFraction - Math.Min(
+                proof.TargetDuration - Math.Max(proof.OffsetSeconds, 0),
+                proof.ReferenceDuration - Math.Max(-proof.OffsetSeconds, 0))
+                / Math.Max(proof.TargetDuration, proof.ReferenceDuration)) < 0.000001
+            && response.AlignedLines.All(x => Math.Abs(x.Score - Math.Min(proof.Correlation, proof.MinimumWindowCorrelation)) < 0.000001);
+    }
+
+    private static bool IsReliableRemoteMatch(AlignedLyricLine line, bool referenceVerified)
     {
         var source = line.Source ?? string.Empty;
+        if (source == "marumaru_reference_audio_timing_verified")
+            return referenceVerified && line.Score >= 0.90;
         if (string.Equals(source, "proportional_fallback", StringComparison.OrdinalIgnoreCase)
             || string.Equals(source, "current_timestamp_context", StringComparison.OrdinalIgnoreCase)
             || source.Contains("unverified", StringComparison.OrdinalIgnoreCase))
@@ -252,7 +287,12 @@ public sealed class RemoteHighAccuracyAlignmentClient
         [property: JsonPropertyName("durationSeconds")] double? DurationSeconds,
         [property: JsonPropertyName("alignedLines")] List<AlignedLyricLine> AlignedLines,
         [property: JsonPropertyName("matchedCount")] int MatchedCount,
-        [property: JsonPropertyName("totalCount")] int TotalCount);
+        [property: JsonPropertyName("totalCount")] int TotalCount,
+        [property: JsonPropertyName("referenceEvidence")] ReferenceAudioEvidence? ReferenceEvidence = null);
+
+    public sealed record ReferenceAudioEvidence(string SourceUrl, string TargetVideoId, string ReferenceVideoId,
+        string SourceTimelineSha256, double Correlation, double MinimumWindowCorrelation, int WindowCount,
+        double OverlapFraction, double OffsetSeconds, double TargetDuration, double ReferenceDuration, int MatchedLineCount);
 
     public sealed record AlignedLyricLine(
         [property: JsonPropertyName("lyricId")] int LyricId,

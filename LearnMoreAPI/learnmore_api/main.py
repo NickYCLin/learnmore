@@ -229,6 +229,7 @@ class HighAccuracyAlignResponse(BaseModel):
     alignedLines: list[AlignedLyricLine]
     matchedCount: int
     totalCount: int
+    referenceEvidence: dict[str, Any] | None = None
 
 
 class Settings(BaseModel):
@@ -1696,9 +1697,15 @@ def transcribe_align_shazam_sync(request: TranscribeAlignShazamRequest, settings
 
 
 def high_accuracy_align_sync(request: HighAccuracyAlignRequest, settings: Settings) -> HighAccuracyAlignResponse:
+    from .reference_timing import try_align_reference
+
     lyric_lines = [line for line in request.lyrics if line.japanese.strip()]
     if not lyric_lines:
         raise RuntimeError("High-accuracy alignment request did not contain usable lyrics.")
+
+    reference = try_align_reference(request, settings, download_youtube_audio)
+    if reference is not None:
+        return HighAccuracyAlignResponse(**reference)
 
     transcript = transcribe_youtube_for_high_accuracy_sync(request, settings, lyric_lines)
     if "+whisperx-lyrics" in transcript.model:
@@ -3005,6 +3012,8 @@ def is_reliable_audio_alignment(line: AlignedLyricLine) -> bool:
     source = line.source or ""
     if source in {"proportional_fallback", "current_timestamp_context"} or "unverified" in source:
         return False
+    if source == "marumaru_reference_audio_timing_verified":
+        return line.score >= 0.90
     if is_latin_dominant_lyric(line.japanese) and not is_reliable_latin_alignment_source(source):
         return False
     if source.startswith("shazam_timed_lyrics_verified"):
@@ -3075,6 +3084,8 @@ def is_latin_dominant_lyric(text: str) -> bool:
 
 
 def is_reliable_latin_alignment_source(source: str) -> bool:
+    if source == "marumaru_reference_audio_timing_verified":
+        return True
     if source.startswith("shazam_timed_lyrics_verified"):
         return True
     return source in {
