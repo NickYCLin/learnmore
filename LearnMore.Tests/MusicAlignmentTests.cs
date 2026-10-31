@@ -95,6 +95,19 @@ public sealed class MusicAlignmentSqlTests : IAsyncLifetime
         return await Store.GetAsync(job.JobId);
     }
     [SqlAuditFact]
+    public async Task ToolResponsesUseStableCamelCaseDespiteWebsiteDefaults()
+    {
+        var controller=new MusicAutomationController(Store,NullLogger<MusicAutomationController>.Instance);
+        var response=Assert.IsType<JsonResult>(await controller.Start(new MusicAutomationController.StartRequest("contract",uid),CancellationToken.None));
+        Assert.Equal(202,response.StatusCode);
+        var options=Assert.IsType<System.Text.Json.JsonSerializerOptions>(response.SerializerSettings);
+        using var json=System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(response.Value,options));
+        Assert.Equal("queued",json.RootElement.GetProperty("state").GetString());
+        Assert.True(json.RootElement.TryGetProperty("jobId",out _));
+        Assert.False(json.RootElement.TryGetProperty("JobId",out _));
+    }
+
+    [SqlAuditFact]
     public async Task DurableDeduplicationAndApplyPreserveTextAndOwnership()
     {
         var first=await Store.StartAsync("initial",uid,null);

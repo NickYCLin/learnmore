@@ -43,7 +43,7 @@ public sealed class MusicAutomationController(MusicAlignmentStore store, ILogger
     public Task<IActionResult> Start(StartRequest request, CancellationToken ct) => Safe(async () =>
     {
         var job = await store.StartAsync(request.RequestId, request.SongUid, request.YoutubeUrl, ct);
-        return Accepted(Summary(job));
+        return ResponseJson(Summary(job), 202);
     });
 
     private static object Summary(MusicAlignmentJob job) => new { job.JobId, job.SongUid, job.State,
@@ -52,13 +52,13 @@ public sealed class MusicAutomationController(MusicAlignmentStore store, ILogger
         nextPollAfterSeconds = job.State is "queued" or "processing" ? 10 : 0 };
 
     [HttpGet("jobs/{id:guid}")]
-    public Task<IActionResult> Get(Guid id, CancellationToken ct) => Safe(async () => Ok(Summary(await store.GetAsync(id, ct))));
+    public Task<IActionResult> Get(Guid id, CancellationToken ct) => Safe(async () => ResponseJson(Summary(await store.GetAsync(id, ct))));
 
     [HttpGet("jobs/{id:guid}/report")]
     public Task<IActionResult> Report(Guid id, CancellationToken ct) => Safe(async () =>
     {
         var job = await store.GetAsync(id, ct);
-        return Ok(new { job.JobId, job.State, job.FailureCode, job.Report });
+        return ResponseJson(new { job.JobId, job.State, job.FailureCode, job.Report });
     });
 
     [HttpGet("jobs/{id:guid}/preview")]
@@ -67,7 +67,7 @@ public sealed class MusicAutomationController(MusicAlignmentStore store, ILogger
         var job = await store.GetAsync(id, ct);
         if (job.Report is not { Accepted: true } report || job.State is not ("verified" or "applied"))
             throw new MusicAutomationException("verification_required");
-        return Ok(new { job.JobId, job.SongUid, job.State, report.PreviewHash,
+        return ResponseJson(new { job.JobId, job.SongUid, job.State, report.PreviewHash,
             changes = report.Lines.Select(x => new { x.LyricId, x.Japanese, x.Before, x.After }),
             requiresUnchangedSong = true, preservesTextAndOwnership = true, job.AppliedAt });
     });
@@ -75,7 +75,10 @@ public sealed class MusicAutomationController(MusicAlignmentStore store, ILogger
     [HttpPost("jobs/{id:guid}/apply")]
     [MusicAutomationWrite]
     public Task<IActionResult> Apply(Guid id, ApplyRequest request, CancellationToken ct) => Safe(async () =>
-        Ok(Summary(await store.ApplyAsync(id, request.PreviewHash, ct))));
+        ResponseJson(Summary(await store.ApplyAsync(id, request.PreviewHash, ct))));
+
+    private static JsonResult ResponseJson(object value, int status = 200) =>
+        new(value, MusicAlignmentValidation.Json) { StatusCode = status };
 
     private async Task<IActionResult> Safe(Func<Task<IActionResult>> action)
     {
