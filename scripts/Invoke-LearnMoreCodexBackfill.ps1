@@ -48,6 +48,7 @@ function Query-Json($sql, $parameters) {
         $result = ''
         try { while ($reader.Read()) { $result += $reader.GetString(0) } }
         finally { $reader.Close() }
+        if ([string]::IsNullOrWhiteSpace($result)) { return '[]' }
         return $result
     } finally { $q.Dispose() }
 }
@@ -149,6 +150,29 @@ try {
         catch {
             $null = Execute "UPDATE dbo.Songs SET HighAccuracyStatus=N'high_accuracy_needs_review',HighAccuracyStatusReason=N'歌詞資料表或欄位不完整，請確認原資料。' WHERE SongUid=@Uid AND HighAccuracyStatus=N'translation_pending_codex'" @{Uid=$uid}
             Record @{ outcome='needs_review'; songUid=$uid; error='lyrics_schema_unavailable' }
+            $processed++
+            continue
+        }
+        $sourceRows = @($lyricsJson | ConvertFrom-Json)
+        $sourceError = ''
+        if ($sourceRows.Count -eq 0) { $sourceError = 'lyrics_empty' }
+        elseif (@($sourceRows | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.Japanese) }).Count -gt 0) { $sourceError = 'missing_japanese' }
+        if ($sourceError) {
+            $tx = $cn.BeginTransaction([Data.IsolationLevel]::Serializable)
+            $lockedMaster = (Query-Json (Master-Sql $true) @{Uid=$uid}) | ConvertFrom-Json
+            $lockedLyrics = Query-Json (Lyrics-Sql $uid $true) @{}
+            if ($lockedMaster.HighAccuracyStatus -ceq 'translation_pending_codex' -and $lockedLyrics -ceq $lyricsJson) {
+                $null = Execute "UPDATE dbo.Songs SET HighAccuracyStatus=N'high_accuracy_needs_review',HighAccuracyStatusReason=N'尚未取得完整日文歌詞，無法進行文字補件；請先重新辨識或補上原文。' WHERE SongUid=@Uid AND HighAccuracyStatus=N'translation_pending_codex'" @{Uid=$uid}
+                $tx.Commit()
+                $tx.Dispose()
+                $tx = $null
+                Record @{ outcome='needs_review'; songUid=$uid; error=$sourceError }
+            } else {
+                $tx.Rollback()
+                $tx.Dispose()
+                $tx = $null
+                Record @{ outcome='skipped'; songUid=$uid; error='concurrent_lyric_change' }
+            }
             $processed++
             continue
         }
