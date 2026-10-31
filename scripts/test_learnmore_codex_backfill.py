@@ -136,7 +136,7 @@ class RunnerTests(unittest.TestCase):
             args = b.cli_arguments(Path("codex"), Path("job"), Path("schema"), Path("out"))
         for value in ["features.shell_tool=false", "features.apps=false", "features.hooks=false",
                       "features.multi_agent=false", 'web_search="disabled"',
-                      'mcp_servers={"external"={enabled=false},"extra.server"={enabled=false}}']:
+                      'mcp_servers={"external"={command="__learnmore_backfill_disabled__",enabled=false},"extra.server"={command="__learnmore_backfill_disabled__",enabled=false}}']:
             self.assertIn(value, args)
         self.assertNotIn("secret-path", " ".join(args))
         self.assertEqual(args[args.index("--sandbox") + 1], "read-only")

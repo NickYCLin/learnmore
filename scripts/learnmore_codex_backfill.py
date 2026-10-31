@@ -206,7 +206,11 @@ def cli_arguments(binary: Path, directory: Path, schema: Path, output: Path) -> 
         if names:
             # CLI dotted override paths do not parse quoted key components. A TOML
             # inline table preserves literal server names, including names with dots.
-            disabled = ",".join(json.dumps(name) + "={enabled=false}" for name in sorted(names))
+            # A root-table override replaces each server definition rather than
+            # merging its transport fields. Supply a disabled inert transport;
+            # no original URLs, commands, arguments or environment secrets escape.
+            disabled = ",".join(json.dumps(name) + '={command="__learnmore_backfill_disabled__",enabled=false}'
+                                for name in sorted(names))
             args += ["-c", "mcp_servers={" + disabled + "}"]
     return args + ["-"]
 
