@@ -40,7 +40,7 @@ foreach ($name in @($taskName,$probeName)) {
 if ($Mode -eq 'Probe') {
     $null = New-Item -ItemType Directory -Path $bin -Force
     $null = New-Item -ItemType Directory -Path $state -Force
-    & icacls.exe $InstallRoot /inheritance:r /grant:r "${sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' >$null
+    & icacls.exe $InstallRoot /inheritance:r /grant:r "*${sid}:(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' >$null
     if ($LASTEXITCODE -ne 0) { throw 'Cannot protect worker directory' }
     foreach ($name in @('Invoke-LearnMoreCodexBackfill.ps1','learnmore_codex_backfill.py')) {
         $source = Join-Path $PSScriptRoot $name
