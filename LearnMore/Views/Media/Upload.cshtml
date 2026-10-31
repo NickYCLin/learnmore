@@ -36,7 +36,10 @@
     </div>
 </div>
 
-<div id="uploadError" class="alert alert-danger d-none" role="alert"></div>
+<div id="uploadError" class="alert alert-danger d-none" role="alert">
+    <span id="uploadErrorMessage"></span>
+    <a href="@Url.Action("Manage", "Media")" class="alert-link">查看音樂管理</a>
+</div>
 <div id="loading" class="position-fixed top-0 start-0 w-100 h-100 bg-dark bg-opacity-50 d-flex align-items-center justify-content-center text-white fw-bold fs-4 d-none">
     <div class="bg-secondary p-3 rounded text-center">
         <div>✨ 魔法施展中，請稍候...</div>
@@ -128,6 +131,13 @@
             });
         }
 
+        function formatUploadErrorMessage(error) {
+            if (error instanceof TypeError && /network.?error|failed to fetch|load failed/i.test(error.message || '')) {
+                return '連線中斷，尚未取得完成結果。請先確認網路，並到音樂管理查看狀態後再重試。';
+            }
+            return error.message || '歌曲處理未完成，請稍後重試。';
+        }
+
         async function readFriendlyErrorMessage(response, fallbackMessage) {
             const contentType = response.headers.get('content-type') || '';
             const rawText = await response.text();
@@ -152,7 +162,8 @@
             event.preventDefault();
 
             const errorEl = document.getElementById("uploadError");
-            errorEl.textContent = '';
+            const errorMessageEl = document.getElementById("uploadErrorMessage");
+            errorMessageEl.textContent = '';
             errorEl.classList.add("d-none");
             const loadingEl = document.getElementById("loading");
             const progressMsg = document.getElementById("progress-msg");
@@ -240,7 +251,7 @@
 
             } catch (error) {
                 console.error("錯誤發生:", error);
-                errorEl.textContent = error.message;
+                errorMessageEl.textContent = formatUploadErrorMessage(error);
                 errorEl.classList.remove("d-none");
                 loadingEl.classList.add("d-none");
             }
