@@ -26,6 +26,10 @@ dotnet publish LearnMore/LearnMore.csproj --configuration Release --no-restore -
 
 將 `artifacts/publish` 作為部署來源。不要使用歷史提交中附帶的 `publish` 成品。Kuromoji 字典隨 npm 套件還原，不需要初始化舊的 `dict/kuromoji.js` gitlink。
 
+發布成品必須包含 `Scripts/faster_whisper_words.py`、`Scripts/openai_whisper_segments.py` 與 `Scripts/whisperx_align.py`，並與來源檔案逐一核對雜湊。這些 Python 檔案由明確的 Content 項目納入發布；僅使用 Content Update 不會將原本的 None 項目加入成品。缺少腳本時，本機語音辨識無法執行。
+
+自動上傳只有在取得非空的日文歌詞後才建檔；所有來源皆失敗時，頁面保留輸入並顯示錯誤，允許重試或改用自填歌詞，不會建立空白歌曲或排入翻譯隊列。既有空白歌曲由文字補件工作轉為待校正，需先補上原文。
+
 GitHub CI 也會保留 `LearnMore-Backend` 成品 14 天，可從成功的 run 下載；內含 `commit.txt` 供版本核對。部署時沿用上述備份與保留設定的步驟。更新後可在 `mobile` 執行 `npm run check:backend` 驗證 App 所需 API。
 
 Windows 主機沒有 Node.js 時，可使用下列唯讀驗收，支援 Windows PowerShell 5.1：
