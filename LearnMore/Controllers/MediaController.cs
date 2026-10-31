@@ -1065,10 +1065,9 @@ namespace LearnMore.Controllers
                         placeholderPersistenceResult.SongUid,
                         placeholderPersistenceResult.LyricIds.Count);
                 }
-                catch (Exception dbEx)
+                catch (Exception dbEx) when (dbEx is not DuplicateYouTubeSongException && dbEx is not OperationCanceledException)
                 {
                     _logger.LogError(dbEx, "Step 2: 資料庫操作失敗");
-                    await SendEvent("error", new { message = $"❌ 資料庫錯誤: {dbEx.Message}" });
                     throw;
                 }
 
