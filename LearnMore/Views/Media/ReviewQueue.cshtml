@@ -15,6 +15,8 @@
     <a asp-controller="Media" asp-action="Manage" class="btn btn-outline-secondary">返回音樂管理</a>
 </div>
 
+<p id="aiRetryStatus" role="status" aria-live="polite"></p>
+
 <div class="card lm-page-shell">
     <div class="card-header bg-warning text-dark">
         <h3 class="mb-0">需要確認秒數的歌曲</h3>
@@ -49,6 +51,7 @@
                                     }' />
                                 </td>
                                 <td>
+                                    <button type="button" class="btn btn-sm btn-outline-success" data-ai-retry="@song.SongUid">AI 校正秒數</button>
                                     <a asp-controller="Media" asp-action="EditLyrics" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-warning">校正歌詞秒數</a>
                                     <a asp-controller="Lyrics" asp-action="Index" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-outline-primary">查看播放頁</a>
                                 </td>
@@ -64,3 +67,35 @@
         }
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        document.querySelectorAll('[data-ai-retry]').forEach(button => {
+            button.addEventListener('click', async () => {
+                const status = document.getElementById('aiRetryStatus');
+                button.disabled = true;
+                status.textContent = '正在排入 AI 秒數校正…';
+                try {
+                    const response = await fetch('@Url.Action("RetryHighAccuracyQueue", "Media")', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ songUids: [button.dataset.aiRetry] })
+                    });
+                    if (!response.ok) {
+                        throw new Error(response.status === 401 ? '請重新登入後再試。' : '無法排入校正，請稍後再試。');
+                    }
+                    const result = await response.json();
+                    if (!result.success || result.queued !== 1) {
+                        throw new Error('這首歌目前無法重新排入校正，請重新整理確認狀態。');
+                    }
+                    button.textContent = '已排入 AI 校正';
+                    status.textContent = '已排入這首歌的 AI 秒數校正，稍後請重新整理查看結果；目前尚未完成驗證。';
+                } catch (error) {
+                    status.textContent = error.message || '無法排入校正，請稍後再試。';
+                    button.disabled = false;
+                }
+            });
+        });
+    </script>
+}
