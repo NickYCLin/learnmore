@@ -100,6 +100,7 @@ class WhisperSegment(BaseModel):
     _asr_anchor_score: float | None = PrivateAttr(default=None)
     _asr_anchor_source: str | None = PrivateAttr(default=None)
     _forced_lyric_alignment: bool = PrivateAttr(default=False)
+    _onset_confidence: float | None = PrivateAttr(default=None)
 
 
 class WhisperWord(BaseModel):
@@ -808,6 +809,7 @@ def convert_whisperx_segments(aligned_segments_raw: list[Any]) -> list[WhisperSe
         start = safe_float(raw_segment.get("start"), 0.0)
         end = safe_float(raw_segment.get("end"), start + 0.5)
         words: list[WhisperWord] = []
+        onset_confidence = None
         for raw_word in raw_segment.get("words") or []:
             if not isinstance(raw_word, dict):
                 continue
@@ -818,6 +820,10 @@ def convert_whisperx_segments(aligned_segments_raw: list[Any]) -> list[WhisperSe
             word_end = safe_float(raw_word.get("end"), word_start + 0.05)
             if word_end <= word_start:
                 continue
+            if not words:
+                confidence = safe_float(raw_word.get("score"), -1.0)
+                if math.isfinite(confidence) and 0.0 <= confidence <= 1.0:
+                    onset_confidence = confidence
             words.append(
                 WhisperWord(
                     index=word_index,
@@ -830,15 +836,15 @@ def convert_whisperx_segments(aligned_segments_raw: list[Any]) -> list[WhisperSe
         if words:
             start = words[0].start
             end = words[-1].end
-        converted.append(
-            WhisperSegment(
-                index=index,
-                start=round(start, 3),
-                end=round(max(end, start + 0.25), 3),
-                text=text,
-                words=words,
-            )
+        converted_segment = WhisperSegment(
+            index=index,
+            start=round(start, 3),
+            end=round(max(end, start + 0.25), 3),
+            text=text,
+            words=words,
         )
+        converted_segment._onset_confidence = onset_confidence
+        converted.append(converted_segment)
     return converted
 
 
@@ -967,10 +973,18 @@ def refine_lyric_segments_with_asr_word_anchors(
         if match is None:
             asr_aligned = asr_aligned_by_id.get(line.lyricId) if line is not None else None
             if asr_aligned is not None:
+                # Global sequence matches estimate the onset from character
+                # coverage. Keep a strong acoustic CTC onset when they disagree.
+                keep_acoustic_onset = (
+                    segment._onset_confidence is not None
+                    and segment._onset_confidence >= 0.80
+                    and asr_aligned.source.endswith("_global_sequence_match")
+                    and abs(float(asr_aligned.start) - float(segment.start)) > 0.5
+                )
                 refined_segment = segment.model_copy(
                     update={
-                        "start": round(float(asr_aligned.start), 3),
-                        "end": round(max(float(asr_aligned.end), float(asr_aligned.start) + 0.25), 3),
+                        "start": segment.start if keep_acoustic_onset else round(float(asr_aligned.start), 3),
+                        "end": segment.end if keep_acoustic_onset else round(max(float(asr_aligned.end), float(asr_aligned.start) + 0.25), 3),
                     }
                 )
                 refined_segment._asr_anchor_score = asr_aligned.score
@@ -1025,6 +1039,23 @@ def find_asr_word_anchor_for_lyric_line(
     if not stream or not char_to_word:
         return None
 
+    # A trailing English phrase or backing-vocal annotation must not become
+    # the onset of a line whose main vocal starts in Japanese.
+    latin_start = re.search(r"[A-Za-z]", lyric_text)
+    if latin_start is not None:
+        lead = lyric_text[: latin_start.start()].rstrip(" (（[【")
+        if len(normalize_for_alignment(lead)) >= 8 and re.search(r"[\u3040-\u30ff\u3400-\u9fff]", lead):
+            lead_match = find_asr_word_anchor_for_lyric_line(
+                lead, word_alignment, approximate_start, previous_start, next_start,
+                current_start, next_current_start,
+            )
+            if lead_match is not None:
+                return lead_match
+            return find_japanese_lead_anchor(
+                lead, word_alignment, approximate_start, previous_start,
+                current_start, next_current_start if next_current_start is not None else next_start,
+            )
+
     if is_latin_dominant_lyric(lyric_text) or latin_target:
         latin_match = find_latin_fuzzy_asr_word_anchor_for_lyric_line(
             lyric_text,
@@ -1068,6 +1099,47 @@ def find_asr_word_anchor_for_lyric_line(
         return None
     start = first_word.start
     return start, end, first_word, last_word, score
+
+
+def find_japanese_lead_anchor(
+    lead: str,
+    word_alignment: dict[str, Any],
+    approximate_start: float,
+    previous_start: float,
+    current_start: float | None,
+    next_start: float | None,
+) -> tuple[float, float, WhisperWord, WhisperWord, float] | None:
+    expected = normalize_for_alignment(lead)
+    if len(expected) < 10:
+        return None
+    stream = word_alignment["stream"]
+    mapped = word_alignment["charToWord"]
+    hint = float(current_start if current_start is not None else approximate_start)
+    minimum = max(0.0, hint - 2.0)
+    if previous_start <= hint + 1.0:
+        minimum = max(minimum, previous_start - 0.1)
+    maximum = min(hint + 2.0, next_start + 0.25) if next_start is not None else hint + 2.0
+    best = None
+    best_rank = None
+    for start, first in enumerate(mapped):
+        if not minimum <= first.start <= maximum:
+            continue
+        if start and mapped[start - 1].index == first.index:
+            continue
+        if stream[start : start + 4] != expected[:4]:
+            continue
+        for end in range(start + len(expected) - 2, min(len(stream), start + len(expected) + 2) + 1):
+            if end <= start or (end < len(mapped) and mapped[end - 1].index == mapped[end].index):
+                continue
+            score = difflib.SequenceMatcher(None, expected, stream[start:end], autojunk=False).ratio()
+            if score < 0.90:
+                continue
+            last = mapped[end - 1]
+            rank = (score, -abs(first.start - hint), -first.index)
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
+                best = (first.start, last.end, first, last, score)
+    return best
 
 
 def find_latin_fuzzy_asr_word_anchor_for_lyric_line(
@@ -3151,7 +3223,7 @@ def find_best_segment(
 
 def normalize_for_alignment(value: str) -> str:
     reading = japanese_reading(value)
-    return re.sub(r"[\s　、。,.!?！？「」『』（）()・…ー~〜\\-\\[\\]]+", "", reading).lower()
+    return re.sub(r"[\s　、。,.!?！？「」『』（）()・…ー~〜\-\[\]]+", "", reading).lower()
 
 
 def japanese_reading(value: str) -> str:

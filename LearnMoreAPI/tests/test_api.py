@@ -1892,3 +1892,75 @@ def test_reject_duration_mismatched_timed_lyrics(client) -> None:
 
     with pytest.raises(RuntimeError):
         main.reject_duration_mismatched_timed_lyrics(lines, 90.0)
+
+
+def test_alignment_normalization_removes_spaces_long_marks_and_brackets(client) -> None:
+    _, main = client
+    assert main.normalize_for_alignment("あー　い！[う]（え）- お") == "あいうえお"
+
+
+def test_japanese_lead_is_anchored_before_trailing_english(client) -> None:
+    _, main = client
+    lyric = "今日は図書館で資料を調べます (yeah yeah yeah)"
+    segments = [main.WhisperSegment(index=1, start=10.0, end=16.0, text="今日は図書館で資料を調べます yeah", words=[
+        main.WhisperWord(index=1, start=10.0, end=14.0, text="今日は図書館で資料を調べます"),
+        main.WhisperWord(index=2, start=15.0, end=16.0, text="yeah"),
+    ])]
+    match = main.find_asr_word_anchor_for_lyric_line(lyric, main.build_word_alignment_index(segments), 10.0, 0.0, 18.0)
+    assert match is not None
+    assert match[0] == 10.0
+    assert match[1] == 14.0
+    assert match[4] == 1.0
+    assert lyric.endswith("(yeah yeah yeah)")
+
+
+@pytest.mark.parametrize("observed,start,accepted", [
+    ("明日の会議で資料を見せまず", 10.0, True),
+    ("今日は公園で犬と散歩しました", 10.0, False),
+    ("明日の会議で資料を見せます", 30.0, False),
+])
+def test_japanese_lead_fuzzy_anchor_requires_nearby_high_similarity_speech(client, observed, start, accepted) -> None:
+    _, main = client
+    segments = [main.WhisperSegment(index=1, start=start, end=start + 4.0, text=observed + " yeah", words=[
+        main.WhisperWord(index=1, start=start, end=start + 3.0, text=observed),
+        main.WhisperWord(index=2, start=start + 3.0, end=start + 4.0, text="yeah"),
+    ])]
+    match = main.find_asr_word_anchor_for_lyric_line(
+        "明日の会議で資料を見せます (yeah yeah)", main.build_word_alignment_index(segments), 10.0, 0.0, 18.0,
+    )
+    assert (match is not None) is accepted
+    if accepted:
+        assert match[0] == 10.0
+        assert match[4] >= 0.90
+
+
+@pytest.mark.parametrize("confidence,expected_start", [(0.92, 10.0), (0.20, 8.0)])
+def test_strong_ctc_onset_is_not_replaced_by_coarse_sequence_time(client, confidence, expected_start) -> None:
+    _, main = client
+    text = "今日は図書館に行きます"
+    converted = main.convert_whisperx_segments([{
+        "text": text, "start": 10.0, "end": 12.0,
+        "words": [{"word": text, "start": 10.0, "end": 12.0, "score": confidence}],
+    }])
+    asr = [main.WhisperSegment(index=1, start=8.0, end=12.0, text="図書館")]
+    anchors = [main.AlignedLyricLine(lyricId=1, japanese=text, start=8.0, end=12.0,
+                                   source="whisper_global_sequence_match", score=0.85)]
+    refined = main.refine_lyric_segments_with_asr_word_anchors(
+        converted, [main.HighAccuracyLyricLine(lyricId=1, japanese=text, currentStart=10.0)], asr, anchors,
+    )
+    assert refined[0].start == expected_start
+    assert refined[0]._asr_anchor_score == 0.85
+
+
+def test_ctc_onset_confidence_alone_does_not_create_asr_evidence(client) -> None:
+    _, main = client
+    text = "今日は図書館に行きます"
+    converted = main.convert_whisperx_segments([{
+        "text": text, "start": 10.0, "end": 12.0,
+        "words": [{"word": text, "start": 10.0, "end": 12.0, "score": 0.99}],
+    }])
+    refined = main.refine_lyric_segments_with_asr_word_anchors(
+        converted, [main.HighAccuracyLyricLine(lyricId=1, japanese=text, currentStart=10.0)],
+        [main.WhisperSegment(index=1, start=8.0, end=12.0, text="不同的辨識內容")], [],
+    )
+    assert refined[0]._asr_anchor_source is None
