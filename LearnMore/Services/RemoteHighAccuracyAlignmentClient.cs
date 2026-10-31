@@ -34,13 +34,17 @@ public sealed class RemoteHighAccuracyAlignmentClient
     public async Task<VocalOnsetDetectionService.AlignmentAttemptResult> AlignAsync(
         SongLyricsProcessingSnapshot snapshot,
         CancellationToken cancellationToken = default)
+        => (await AlignWithReportAsync(snapshot, cancellationToken)).Attempt;
+
+    public async Task<RemoteAlignmentReport> AlignWithReportAsync(
+        SongLyricsProcessingSnapshot snapshot, CancellationToken cancellationToken = default)
     {
         if (!IsConfigured)
         {
-            return new VocalOnsetDetectionService.AlignmentAttemptResult(
+            return new RemoteAlignmentReport(new VocalOnsetDetectionService.AlignmentAttemptResult(
                 false,
                 new List<VocalOnsetDetectionService.LyricTimingAlignment>(),
-                "remote_high_accuracy_api_not_configured");
+                "remote_high_accuracy_api_not_configured"));
         }
 
         var requestBody = new HighAccuracyAlignRequest(
@@ -54,10 +58,10 @@ public sealed class RemoteHighAccuracyAlignmentClient
 
         if (requestBody.Lyrics.Count == 0)
         {
-            return new VocalOnsetDetectionService.AlignmentAttemptResult(
+            return new RemoteAlignmentReport(new VocalOnsetDetectionService.AlignmentAttemptResult(
                 false,
                 new List<VocalOnsetDetectionService.LyricTimingAlignment>(),
-                "remote_high_accuracy_lyrics_empty");
+                "remote_high_accuracy_lyrics_empty"));
         }
 
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -77,20 +81,20 @@ public sealed class RemoteHighAccuracyAlignmentClient
         var body = await response.Content.ReadAsStringAsync(timeoutCts.Token);
         if (!response.IsSuccessStatusCode)
         {
-            return new VocalOnsetDetectionService.AlignmentAttemptResult(
+            return new RemoteAlignmentReport(new VocalOnsetDetectionService.AlignmentAttemptResult(
                 false,
                 new List<VocalOnsetDetectionService.LyricTimingAlignment>(),
                 "remote_high_accuracy_api_failed",
-                $"HTTP {(int)response.StatusCode}: {Truncate(body, 1000)}");
+                $"HTTP {(int)response.StatusCode}: {Truncate(body, 1000)}"));
         }
 
         var result = JsonSerializer.Deserialize<HighAccuracyAlignResponse>(body, JsonOptions);
         if (result == null)
         {
-            return new VocalOnsetDetectionService.AlignmentAttemptResult(
+            return new RemoteAlignmentReport(new VocalOnsetDetectionService.AlignmentAttemptResult(
                 false,
                 new List<VocalOnsetDetectionService.LyricTimingAlignment>(),
-                "remote_high_accuracy_api_empty_response");
+                "remote_high_accuracy_api_empty_response"));
         }
 
         var linesById = result.AlignedLines.ToDictionary(line => line.LyricId);
@@ -130,12 +134,12 @@ public sealed class RemoteHighAccuracyAlignmentClient
             result.MatchedCount,
             result.TotalCount);
 
-        return new VocalOnsetDetectionService.AlignmentAttemptResult(
+        return new RemoteAlignmentReport(new VocalOnsetDetectionService.AlignmentAttemptResult(
             alignments.Count == snapshot.Lyrics.Count,
             alignments,
             WordCount: 0,
             MatchedCount: alignments.Count(alignment => alignment.IsMatched),
-            CorrectionStrategy: "learnmore_api_whisper");
+            CorrectionStrategy: "learnmore_api_whisper"), result);
     }
 
     private Uri BuildRemoteUri(string relativePath)
@@ -237,7 +241,10 @@ public sealed class RemoteHighAccuracyAlignmentClient
         [property: JsonPropertyName("japanese")] string Japanese,
         [property: JsonPropertyName("currentStart")] double CurrentStart);
 
-    private sealed record HighAccuracyAlignResponse(
+    public sealed record RemoteAlignmentReport(
+        VocalOnsetDetectionService.AlignmentAttemptResult Attempt, HighAccuracyAlignResponse? Response = null);
+
+    public sealed record HighAccuracyAlignResponse(
         [property: JsonPropertyName("songUid")] string? SongUid,
         [property: JsonPropertyName("youtubeUrl")] string YoutubeUrl,
         [property: JsonPropertyName("language")] string Language,
@@ -247,7 +254,7 @@ public sealed class RemoteHighAccuracyAlignmentClient
         [property: JsonPropertyName("matchedCount")] int MatchedCount,
         [property: JsonPropertyName("totalCount")] int TotalCount);
 
-    private sealed record AlignedLyricLine(
+    public sealed record AlignedLyricLine(
         [property: JsonPropertyName("lyricId")] int LyricId,
         [property: JsonPropertyName("japanese")] string Japanese,
         [property: JsonPropertyName("start")] double Start,

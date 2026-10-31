@@ -40,4 +40,7 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="../docs/sql/005-music-automation.sql" LogicalName="LearnMore.MusicAutomation.sql" />
+  </ItemGroup>
 </Project>

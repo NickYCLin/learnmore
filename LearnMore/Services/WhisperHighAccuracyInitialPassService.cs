@@ -769,7 +769,7 @@ public class WhisperHighAccuracyInitialPassService : IWhisperHighAccuracyInitial
         return Regex.Replace(normalized, @"[\s\p{P}\p{S}]+", string.Empty).Trim();
     }
 
-    private static bool TryBuildAlignedCompleteSnapshot(
+    internal static bool TryBuildAlignedCompleteSnapshot(
         IReadOnlyList<LyricSegment> lyrics,
         IReadOnlyList<VocalOnsetDetectionService.LyricTimingAlignment> alignments,
         out List<LyricSegment> alignedSegments,
