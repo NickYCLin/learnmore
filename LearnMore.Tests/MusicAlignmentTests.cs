@@ -108,6 +108,17 @@ public sealed class MusicAlignmentSqlTests : IAsyncLifetime
     }
 
     [SqlAuditFact]
+    public async Task LaterInsertedLyricsAreAlignedInPlaybackOrder()
+    {
+        await Sql($"INSERT dbo.[Songs_{uid}] VALUES(50,2.5,N'風が吹く',N'風吹過',N'<ruby>風<rt>かぜ</rt></ruby>が吹く','kaze ga fuku')");
+        var job=await Store.StartAsync("inserted-line",uid,null);
+        var claim=(await Store.ClaimAsync())!.Value;
+        Assert.Equal(job.JobId,claim.Id);
+        Assert.Equal(new[]{1,50,2},claim.Snapshot.Lyrics.Select(x=>x.LyricID));
+        Assert.Equal(new[]{1.0,2.5,4.0},claim.Snapshot.Lyrics.Select(x=>x.TimeStamp));
+    }
+
+    [SqlAuditFact]
     public async Task DurableDeduplicationAndApplyPreserveTextAndOwnership()
     {
         var first=await Store.StartAsync("initial",uid,null);

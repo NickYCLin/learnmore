@@ -72,7 +72,7 @@ public sealed class MusicAlignmentStore(IConfiguration config)
             if (await r.ReadAsync(ct)) throw new MusicAutomationException("ambiguous_song");
         }
         VideoId(url);
-        using var query = new SqlCommand($"SELECT LyricID,TimeStamp,Japanese,Chinese,JapaneseRuby,Roman FROM dbo.[Songs_{uid}] WITH(UPDLOCK,HOLDLOCK) ORDER BY LyricID", db, tx);
+        using var query = new SqlCommand($"SELECT LyricID,TimeStamp,Japanese,Chinese,JapaneseRuby,Roman FROM dbo.[Songs_{uid}] WITH(UPDLOCK,HOLDLOCK) ORDER BY TimeStamp,LyricID", db, tx);
         var lyrics = new List<LyricSegment>();
         await using var rows = await query.ExecuteReaderAsync(ct);
         while (await rows.ReadAsync(ct))
