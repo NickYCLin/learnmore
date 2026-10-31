@@ -435,7 +435,7 @@ namespace LearnMore.Controllers
         public async Task<IActionResult> WebTranscribe([FromBody] TranscribeRequest request)
         {
             // ── SSE 初始化 ──────────────────────────────────────────────────
-            var ct = Response.HttpContext.RequestAborted;
+            var requestAborted = Response.HttpContext.RequestAborted;
             Response.ContentType = "text/event-stream; charset=utf-8";
             Response.Headers["Cache-Control"] = "no-cache";
             Response.Headers["Connection"] = "keep-alive";
@@ -445,16 +445,12 @@ namespace LearnMore.Controllers
             var bodyFeature = HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
             bodyFeature?.DisableBuffering();
 
+            await using var stream = new ServerSentEventStream(Response, requestAborted);
+            var ct = stream.CancellationToken;
+
             async Task SendEvent(string eventName, object data)
             {
-                if (ct.IsCancellationRequested) return;
-                try
-                {
-                    var json = JsonSerializer.Serialize(data);
-                    await Response.WriteAsync($"event: {eventName}\ndata: {json}\n\n", ct);
-                    await Response.Body.FlushAsync(ct);
-                }
-                catch (OperationCanceledException) { /* 客戶端已斷線，靜默忽略 */ }
+                await stream.SendAsync(eventName, data);
             }
 
             // ── 前置驗證 ─────────────────────────────────────────────────────
