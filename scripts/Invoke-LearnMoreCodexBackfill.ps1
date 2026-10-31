@@ -153,7 +153,7 @@ try {
             $processed++
             continue
         }
-        $sourceRows = @($lyricsJson | ConvertFrom-Json)
+        [object[]]$sourceRows = ConvertFrom-Json -InputObject $lyricsJson
         $sourceError = ''
         if ($sourceRows.Count -eq 0) { $sourceError = 'lyrics_empty' }
         elseif (@($sourceRows | Where-Object { [string]::IsNullOrWhiteSpace([string]$_.Japanese) }).Count -gt 0) { $sourceError = 'missing_japanese' }
