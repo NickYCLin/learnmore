@@ -5,9 +5,12 @@ import argparse
 import dataclasses
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import sys
+import tempfile
+import wave
 
 MODELS = {
     "Qwen/Qwen3-ASR-1.7B": "7278e1e70fe206f11671096ffdd38061171dd6e5",
@@ -37,6 +40,45 @@ def serializable(value):
     raise TypeError("unsupported_timestamp_result")
 
 
+def chunk_audio(paths: list[Path], seconds: int, directory: Path):
+    tasks = []
+    for index, path in enumerate(paths):
+        with wave.open(str(path)) as source:
+            rate = source.getframerate()
+            for part, start in enumerate(range(0, source.getnframes(), rate * seconds)):
+                frames = min(rate * seconds, source.getnframes() - start)
+                data = source.readframes(frames)
+                target = directory / f"{index}-{part}.wav"
+                with wave.open(str(target), "wb") as output:
+                    output.setparams(source.getparams())
+                    output.writeframes(data)
+                tasks.append((index, target, start / rate, frames / rate))
+    return tasks
+
+
+def merge_chunks(paths: list[Path], tasks, results):
+    merged = [{"language": "", "text": "", "timeStamps": {"items": []}} for _ in paths]
+    if len(results) != len(tasks):
+        raise RuntimeError("chunk_result_count_mismatch")
+    for (index, _, offset, duration), result in zip(tasks, results):
+        stamps = serializable(result.time_stamps) or {"items": []}
+        previous = -1.0
+        for word in stamps["items"]:
+            start, end = word["start_time"], word["end_time"]
+            if (not math.isfinite(start) or not math.isfinite(end) or start < previous
+                    or not 0 <= start <= end <= duration):
+                raise ValueError("invalid_chunk_word_timing")
+            previous = start
+            merged[index]["timeStamps"]["items"].append(
+                dict(word, start_time=start + offset, end_time=end + offset))
+        if result.text.strip():
+            merged[index]["text"] += (" " if merged[index]["text"] else "") + result.text
+            languages = set(filter(None, merged[index]["language"].split(",")))
+            languages.add(result.language)
+            merged[index]["language"] = ",".join(sorted(languages))
+    return merged
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -47,6 +89,8 @@ def main(argv=None) -> int:
     transcribe.add_argument("--language", choices=["auto", "Japanese", "English"], default="auto")
     transcribe.add_argument("--output", type=Path, required=True)
     transcribe.add_argument("--max-new-tokens", type=int, default=512)
+    transcribe.add_argument("--chunk-seconds", type=int, default=0,
+                            help="PCM WAV 可選擇分成 5–60 秒的獨立辨識片段")
     args = parser.parse_args(argv)
     if args.command == "download":
         model_paths(download=True)
@@ -56,6 +100,8 @@ def main(argv=None) -> int:
     if args.command == "transcribe":
         if not 1 <= args.max_new_tokens <= 4096:
             parser.error("max-new-tokens 必須介於 1 與 4096")
+        if args.chunk_seconds != 0 and not 5 <= args.chunk_seconds <= 60:
+            parser.error("chunk-seconds 必須為 0 或介於 5 與 60")
         if any(not path.is_file() for path in args.audio):
             parser.error("音檔不存在或不是一般檔案")
         if args.output.exists() or args.output.is_symlink():
@@ -89,18 +135,24 @@ def main(argv=None) -> int:
         asr_path, **kwargs, max_inference_batch_size=1, max_new_tokens=args.max_new_tokens,
         forced_aligner=aligner_path, forced_aligner_kwargs=kwargs,
     )
-    results = model.transcribe(audio=[str(path) for path in args.audio],
-                               language=None if args.language == "auto" else args.language,
-                               return_time_stamps=True)
-    if len(results) != len(args.audio):
-        raise RuntimeError("transcript_count_mismatch")
+    with tempfile.TemporaryDirectory(prefix="learnmore-qwen-chunks-") as directory:
+        tasks = (chunk_audio(args.audio, args.chunk_seconds, Path(directory)) if args.chunk_seconds
+                 else [(i, path, 0, 0) for i, path in enumerate(args.audio)])
+        raw_results = model.transcribe(audio=[str(task[1]) for task in tasks],
+                                       language=None if args.language == "auto" else args.language,
+                                       return_time_stamps=True)
+        if len(raw_results) != len(tasks):
+            raise RuntimeError("transcript_count_mismatch")
+        results = (merge_chunks(args.audio, tasks, raw_results) if args.chunk_seconds else [
+            {"language": result.language, "text": result.text,
+             "timeStamps": serializable(result.time_stamps)} for result in raw_results])
     if any(file_digest(path) != digest for path, digest in zip(args.audio, digests)):
         raise RuntimeError("audio_changed_during_transcription")
     payload = {"models": MODELS, "backend": "transformers-cuda-bfloat16",
+               "chunkSeconds": args.chunk_seconds,
                "verificationStatus": "unreviewed", "results": [
                    {"file": path.name, "fileSha256": digest,
-                    "language": result.language, "text": result.text,
-                    "timeStamps": serializable(result.time_stamps)}
+                    **result}
                    for path, result, digest in zip(args.audio, results, digests)
                ]}
     # 不覆寫既有轉寫，也不將模型輸出直接當成歌詞驗收通過。

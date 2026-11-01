@@ -88,7 +88,7 @@ def transcribe(audio_path: Path, duration: float, command: list[str], timeout: f
     with tempfile.TemporaryDirectory(prefix="learnmore-qwen-evidence-") as directory:
         output = Path(directory) / "result.json"
         subprocess.run([*command, "transcribe", str(audio_path), "--language", languages[language],
-                        "--max-new-tokens", "2048", "--output", str(output)],
+                        "--max-new-tokens", "512", "--chunk-seconds", "30", "--output", str(output)],
                        check=True, timeout=timeout, capture_output=True, env=env)
         if output.stat().st_size > 12_000_000:
             raise ValueError("qwen_report_too_large")

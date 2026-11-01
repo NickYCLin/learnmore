@@ -68,3 +68,7 @@ JSON 中的 `verificationStatus: unreviewed` 表示待核對的原始轉寫，
 整首歌曲可使用 `--max-new-tokens 2048`，避免短片段預設的 512 token
 上限截斷較長的轉寫。API 選用的補充證據模式需要這一版 CLI；
 請參考 [API 設定](../README.md#選用離線-qwen-補充證據)。
+
+歌曲建議使用 `--chunk-seconds 30 --max-new-tokens 512`，
+將 PCM WAV 無損分成短段，避免整首辨識省略唱段或陷入重複文字。
+片段暫存會在結束後移除；輸出仍以原音檔名稱、雜湊和絕對秒數保存。
