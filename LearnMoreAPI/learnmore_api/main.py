@@ -1746,7 +1746,8 @@ def high_accuracy_align_sync(request: HighAccuracyAlignRequest, settings: Settin
             if transcript._vocals_path is None or transcript.durationSeconds is None:
                 raise ValueError("qwen_missing_audio_context")
             words = qwen_evidence.transcribe(transcript._vocals_path, transcript.durationSeconds,
-                                            settings.qwen_asr_command, settings.qwen_asr_timeout_seconds)
+                                            settings.qwen_asr_command, settings.qwen_asr_timeout_seconds,
+                                            request.language)
             supplemented = qwen_evidence.supplement(
                 [line.model_dump() for line in lyric_lines],
                 [line.model_dump() for line in aligned], words,

@@ -73,7 +73,11 @@ def parse_result(payload: dict, audio_path: Path, duration: float) -> list[dict]
     return words
 
 
-def transcribe(audio_path: Path, duration: float, command: list[str], timeout: float) -> list[dict]:
+def transcribe(audio_path: Path, duration: float, command: list[str], timeout: float,
+               language: str = "ja") -> list[dict]:
+    languages = {"ja": "Japanese", "en": "English", "auto": "auto"}
+    if language not in languages:
+        raise ValueError("qwen_unsupported_requested_language")
     # 不將網站 API 憑證或 Hugging Face 登入資訊傳給辨識子程序。
     allowed = {"PATH", "HOME", "LD_LIBRARY_PATH", "HF_HOME", "PYTHONPATH", "VIRTUAL_ENV",
                "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}
@@ -83,7 +87,7 @@ def transcribe(audio_path: Path, duration: float, command: list[str], timeout: f
     env.update(HF_HUB_OFFLINE="1", HF_HUB_DISABLE_IMPLICIT_TOKEN="1")
     with tempfile.TemporaryDirectory(prefix="learnmore-qwen-evidence-") as directory:
         output = Path(directory) / "result.json"
-        subprocess.run([*command, "transcribe", str(audio_path), "--language", "auto",
+        subprocess.run([*command, "transcribe", str(audio_path), "--language", languages[language],
                         "--max-new-tokens", "2048", "--output", str(output)],
                        check=True, timeout=timeout, capture_output=True, env=env)
         if output.stat().st_size > 12_000_000:

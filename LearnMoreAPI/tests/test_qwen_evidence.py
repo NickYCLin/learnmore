@@ -47,7 +47,7 @@ def test_subprocess_receives_audio_without_lyrics_or_website_credentials(tmp_pat
 
     def run(args, **kwargs):
         assert args[:2] == ["python", "local-asr.py"]
-        assert args[2:7] == ["transcribe", str(audio), "--language", "auto", "--max-new-tokens"]
+        assert args[2:7] == ["transcribe", str(audio), "--language", "Japanese", "--max-new-tokens"]
         assert "LEARNMORE_API_TOKEN" not in kwargs["env"] and "HF_TOKEN" not in kwargs["env"]
         assert "NVIDIA_API_KEY" not in kwargs["env"]
         assert kwargs["env"]["HF_HUB_OFFLINE"] == "1" and kwargs["timeout"] == 17
