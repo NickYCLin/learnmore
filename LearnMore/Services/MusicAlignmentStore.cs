@@ -222,7 +222,10 @@ public sealed class MusicAlignmentStore(IConfiguration config)
                 throw new MusicAutomationException("invalid_verified_plan");
             projected.Lyrics[i].TimeStamp = line.After.Value;
         }
-        projected = projected with { Status = "high_accuracy_completed", Reason = $"同影片音訊已完成逐句時間校正，共 {before.Lyrics.Count} 行，命中 {before.Lyrics.Count} 行。" };
+        var reason = report.ReferenceEvidence != null
+            ? $"來源同步時間校正：已核對 marumaru 同步歌詞與相同錄音，共 {before.Lyrics.Count} 行；非逐句語音辨識驗收。"
+            : $"同影片音訊已完成逐句時間校正，共 {before.Lyrics.Count} 行，命中 {before.Lyrics.Count} 行。";
+        projected = projected with { Status = "high_accuracy_completed", Reason = reason };
         using var backup = new SqlCommand("INSERT dbo.MusicAlignmentBackups(JobId,BeforeJson,AfterHash) VALUES(@id,@before,@after)", db, tx);
         backup.Parameters.AddWithValue("@id", id); backup.Parameters.AddWithValue("@before", Serialize(before)); backup.Parameters.AddWithValue("@after", Hash(projected));
         await backup.ExecuteNonQueryAsync(ct);

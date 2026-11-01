@@ -82,14 +82,15 @@ public sealed class MusicAlignmentSqlTests : IAsyncLifetime
     private Task Sql(string sql)=>Exec(connection!,sql);
     private async Task<string> Scalar(string sql){await using var d=new SqlConnection(connection);await d.OpenAsync();using var q=new SqlCommand(sql,d);return Convert.ToString(await q.ExecuteScalarAsync())!;}
 
-    private async Task<MusicAlignmentJob> Verified(string? id=null,bool valid=true)
+    private async Task<MusicAlignmentJob> Verified(string? id=null,bool valid=true,bool reference=false)
     {
         var job=await Store.StartAsync(Guid.NewGuid().ToString(),id??uid,null);
         var claim=(await Store.ClaimAsync())!.Value;
         Assert.Equal(job.JobId,claim.Id);
         var snapshot=claim.Snapshot;
-        var lines=snapshot.Lyrics.Select((l,i)=>new {lyricId=l.LyricID,japanese=l.Japanese,start=i==0?1.25:4.5,end=i==0?3.0:6.0,score=valid?0.95:0.1,source="whisperx_word_match",whisperWordStartIndex=i+1,whisperWordEndIndex=i+1}).ToArray();
-        var body=Serialize(new {songUid=snapshot.SongUid,youtubeUrl=snapshot.YoutubeUrl,language="ja",model="kotoba-whisper+vocals-stem+whisperx",durationSeconds=10,alignedLines=lines,matchedCount=2,totalCount=2});
+        var lines=snapshot.Lyrics.Select((l,i)=>new {lyricId=l.LyricID,japanese=l.Japanese,start=i==0?1.25:4.5,end=i==0?3.0:6.0,score=valid?(reference?0.97:0.95):0.1,source=reference?"marumaru_reference_audio_timing_verified":"whisperx_word_match",whisperWordStartIndex=i+1,whisperWordEndIndex=i+1}).ToArray();
+        var proof=reference?new RemoteHighAccuracyAlignmentClient.ReferenceAudioEvidence("https://www.marumaru-x.com/japanese-song/play-fixture","LjuJgrdh5eY","x-37TLZcqbQ",new('a',64),0.99,0.97,12,1,0,60,60,2):null;
+        var body=Serialize(new {songUid=snapshot.SongUid,youtubeUrl=snapshot.YoutubeUrl,language="ja",model=reference?"marumaru-timed-reference+recording-identity-12-windows":"kotoba-whisper+vocals-stem+whisperx",durationSeconds=reference?60:10,alignedLines=lines,matchedCount=2,totalCount=2,referenceEvidence=proof});
         var remote=new RemoteHighAccuracyAlignmentClient(Microsoft.Extensions.Options.Options.Create(new VocalOnsetDetectionOptions{UseRemoteHighAccuracyApi=true,RemoteHighAccuracyApiBaseUrl="https://example.invalid/",RemoteHighAccuracyApiToken="test-only"}),new Factory(body),NullLogger<RemoteHighAccuracyAlignmentClient>.Instance);
         await Store.CompleteAsync(job.JobId,Build(snapshot,await remote.AlignWithReportAsync(new SongLyricsProcessingSnapshot {SongUid=snapshot.SongUid,YouTubeUrl=snapshot.YoutubeUrl,Lyrics=snapshot.Lyrics})));
         return await Store.GetAsync(job.JobId);
@@ -135,6 +136,20 @@ public sealed class MusicAlignmentSqlTests : IAsyncLifetime
         Assert.Equal("applied",(await Store.ApplyAsync(job.JobId,job.Report.PreviewHash)).State);
         Assert.Equal("1",await Scalar("SELECT COUNT(*) FROM dbo.MusicAlignmentBackups"));
         Assert.Equal(first.JobId,(await Store.StartAsync("alias",uid,null)).JobId);
+    }
+    [SqlAuditFact]
+    public async Task ReferenceApplyRecordsItsBasisAndPreservesEnrichmentAndOwnership()
+    {
+        var job=await Verified(reference:true);
+        Assert.Equal("verified",job.State);
+        Assert.NotNull(job.Report!.ReferenceEvidence);
+        var text=await Scalar($"SELECT Japanese+Chinese+JapaneseRuby+Roman FROM dbo.[Songs_{uid}] WHERE LyricID=1");
+        var applied=await Store.ApplyAsync(job.JobId,job.Report.PreviewHash);
+        Assert.Equal("applied",applied.State);
+        Assert.StartsWith("來源同步時間校正",await Scalar($"SELECT HighAccuracyStatusReason FROM dbo.Songs WHERE SongUid='{uid}'"));
+        Assert.Equal(text,await Scalar($"SELECT Japanese+Chinese+JapaneseRuby+Roman FROM dbo.[Songs_{uid}] WHERE LyricID=1"));
+        Assert.Equal("收藏與管理權限",await Scalar("SELECT Value FROM dbo.OwnershipSentinel WHERE Id=1"));
+        Assert.Equal("1",await Scalar("SELECT COUNT(*) FROM dbo.MusicAlignmentBackups"));
     }
     [SqlAuditFact]
     public async Task ConcurrentApplyCommitsExactlyOneBackup()

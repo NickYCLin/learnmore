@@ -10,7 +10,8 @@ public sealed record MusicSongSnapshot(string SongUid, string YoutubeUrl, string
 public sealed record MusicAlignmentLine(int LyricId, string Japanese, double Before, double? After,
     double Start, double End, double Score, string Source, bool Matched);
 public sealed record MusicAlignmentReport(string Model, double? DurationSeconds, int MatchedCount,
-    int TotalCount, bool Accepted, string PreviewHash, List<MusicAlignmentLine> Lines);
+    int TotalCount, bool Accepted, string PreviewHash, List<MusicAlignmentLine> Lines,
+    RemoteHighAccuracyAlignmentClient.ReferenceAudioEvidence? ReferenceEvidence = null);
 public sealed record MusicAlignmentJob(Guid JobId, string SongUid, string State, DateTime CreatedAt,
     DateTime UpdatedAt, string? FailureCode, MusicAlignmentReport? Report, DateTime? AppliedAt);
 public sealed class MusicAutomationException(string code, int status = 409) : Exception(code)
@@ -59,8 +60,8 @@ public static class MusicAlignmentValidation
                 evidence?.Score ?? 0, evidence?.Source ?? "missing_evidence",
                 contractValid && alignment?.IsMatched == true);
         }).ToList();
-        var hash = Hash(new { snapshot, model = response?.Model, lines, accepted });
+        var hash = Hash(new { snapshot, model = response?.Model, lines, accepted, response?.ReferenceEvidence });
         return new(response?.Model ?? "unavailable", response?.DurationSeconds,
-            lines.Count(x => x.Matched), snapshot.Lyrics.Count, accepted, hash, lines);
+            lines.Count(x => x.Matched), snapshot.Lyrics.Count, accepted, hash, lines, response?.ReferenceEvidence);
     }
 }
