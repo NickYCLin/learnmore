@@ -53,34 +53,6 @@
     </p>
 </div>
 
-@if (Model.HasPendingLyricsProcessing)
-{
-    <div class="alert alert-warning lyrics-processing-alert" role="status">
-        <div class="d-flex flex-column gap-2">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-                <strong>@Model.LyricsProcessingTitle</strong>
-                <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
-                {
-                    Status = Model.HighAccuracyStatus,
-                    ReasonText = null,
-                    BadgeTitle = Model.HighAccuracyStatusReason,
-                    ContainerCssClass = "d-flex",
-                    ReasonCssClass = "d-none"
-                }' />
-            </div>
-            <span>@Model.LyricsProcessingMessage</span>
-        </div>
-    </div>
-}
-
-@if (Model.HighAccuracyStatus == "high_accuracy_completed"
-    && Model.HighAccuracyStatusReason?.StartsWith("來源同步時間校正", StringComparison.Ordinal) == true)
-{
-    <div class="alert alert-info" role="status">
-        @Model.HighAccuracyStatusReason
-    </div>
-}
-
 <div class="main-content">
     <!-- 左側：影片區 -->
     <div class="video-section">
