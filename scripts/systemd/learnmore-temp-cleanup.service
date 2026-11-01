@@ -1,0 +1,13 @@
+[Unit]
+Description=LearnMore retired local build cleanup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h
+ExecStart=/usr/bin/python3 %h/.local/libexec/learnmore-temp-cleanup.py --registry %h/.config/learnmore-temp-cleanup/registry.json --apply
+Environment=PYTHONDONTWRITEBYTECODE=1
+UMask=0077
+NoNewPrivileges=yes
+Nice=15
+IOSchedulingClass=idle
+TimeoutStartSec=10min

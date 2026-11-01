@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily LearnMore local build cleanup
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Asia/Taipei
+RandomizedDelaySec=5min
+Persistent=true
+Unit=learnmore-temp-cleanup.service
+
+[Install]
+WantedBy=timers.target
