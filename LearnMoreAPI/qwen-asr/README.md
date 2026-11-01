@@ -63,3 +63,8 @@ docker rm learnmore-qwen-asr
 目前未接替正式網站的 Demucs／Kotoba／WhisperX 流程。
 JSON 中的 `verificationStatus: unreviewed` 表示待核對的原始轉寫，
 不能改成已完成或直接匯入正式歌詞。
+
+新版 CLI 同時記錄音檔 SHA256，並在推論前後核對音檔未變動。
+整首歌曲可使用 `--max-new-tokens 2048`，避免短片段預設的 512 token
+上限截斷較長的轉寫。API 選用的補充證據模式需要這一版 CLI；
+請參考 [API 設定](../README.md#選用離線-qwen-補充證據)。

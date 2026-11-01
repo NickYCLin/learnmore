@@ -216,7 +216,7 @@ public sealed class RemoteHighAccuracyAlignmentClient
 
         return source switch
         {
-            "whisper_word_match" or "whisperx_word_match" => line.Score >= 0.70,
+            "whisper_word_match" or "whisperx_word_match" or "qwen3_asr_word_match" => line.Score >= 0.70,
             "whisper_segment_match" or "whisperx_segment_match" => line.Score >= 0.58,
             "whisper_timing_hint_match" or "whisperx_timing_hint_match" => line.Score >= 0.72,
             "whisper_global_sequence_match" or "whisperx_global_sequence_match" => line.Score >= 0.60,
@@ -258,7 +258,7 @@ public sealed class RemoteHighAccuracyAlignmentClient
 
         return source switch
         {
-            "whisper_word_match" or "whisperx_word_match" => true,
+            "whisper_word_match" or "whisperx_word_match" or "qwen3_asr_word_match" => true,
             "whisper_local_asr_anchor_match" or "whisperx_local_asr_anchor_match" => true,
             "whisper_lyric_forced_alignment_asr_verified" or "whisperx_lyric_forced_alignment_asr_verified" => true,
             _ => false

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -45,6 +46,7 @@ def main(argv=None) -> int:
     transcribe.add_argument("audio", nargs="+", type=Path)
     transcribe.add_argument("--language", choices=["auto", "Japanese", "English"], default="auto")
     transcribe.add_argument("--output", type=Path, required=True)
+    transcribe.add_argument("--max-new-tokens", type=int, default=512)
     args = parser.parse_args(argv)
     if args.command == "download":
         model_paths(download=True)
@@ -52,12 +54,15 @@ def main(argv=None) -> int:
         return 0
 
     if args.command == "transcribe":
+        if not 1 <= args.max_new_tokens <= 4096:
+            parser.error("max-new-tokens 必須介於 1 與 4096")
         if any(not path.is_file() for path in args.audio):
             parser.error("音檔不存在或不是一般檔案")
         if args.output.exists() or args.output.is_symlink():
             parser.error("輸出檔案已存在，請另選檔名以保留原紀錄")
         if not args.output.parent.is_dir():
             parser.error("輸出目錄不存在")
+        digests = [file_digest(path) for path in args.audio]
 
     # 辨識與檢查均只讀已下載模型；不使用登入資訊或自動連網補檔。
     os.environ["HF_HUB_OFFLINE"] = "1"
@@ -81,7 +86,7 @@ def main(argv=None) -> int:
     kwargs = dict(dtype=torch.bfloat16, device_map="cuda:0", attn_implementation="sdpa",
                   local_files_only=True)
     model = Qwen3ASRModel.from_pretrained(
-        asr_path, **kwargs, max_inference_batch_size=1, max_new_tokens=512,
+        asr_path, **kwargs, max_inference_batch_size=1, max_new_tokens=args.max_new_tokens,
         forced_aligner=aligner_path, forced_aligner_kwargs=kwargs,
     )
     results = model.transcribe(audio=[str(path) for path in args.audio],
@@ -89,11 +94,14 @@ def main(argv=None) -> int:
                                return_time_stamps=True)
     if len(results) != len(args.audio):
         raise RuntimeError("transcript_count_mismatch")
+    if any(file_digest(path) != digest for path, digest in zip(args.audio, digests)):
+        raise RuntimeError("audio_changed_during_transcription")
     payload = {"models": MODELS, "backend": "transformers-cuda-bfloat16",
                "verificationStatus": "unreviewed", "results": [
-                   {"file": path.name, "language": result.language, "text": result.text,
+                   {"file": path.name, "fileSha256": digest,
+                    "language": result.language, "text": result.text,
                     "timeStamps": serializable(result.time_stamps)}
-                   for path, result in zip(args.audio, results)
+                   for path, result, digest in zip(args.audio, results, digests)
                ]}
     # 不覆寫既有轉寫，也不將模型輸出直接當成歌詞驗收通過。
     with args.output.open("x", encoding="utf-8") as output:
@@ -101,6 +109,11 @@ def main(argv=None) -> int:
         output.write("\n")
     print(json.dumps({"transcribedFiles": len(results), "verificationStatus": "unreviewed"}))
     return 0
+
+
+def file_digest(path: Path) -> str:
+    with path.open("rb") as source:
+        return hashlib.file_digest(source, "sha256").hexdigest()
 
 
 if __name__ == "__main__":

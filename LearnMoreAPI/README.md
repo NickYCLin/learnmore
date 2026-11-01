@@ -51,6 +51,29 @@ Docker image 內建 NLTK `punkt_tab`；部署時須預熱 Kotoba、日文 Whispe
 `/health` 回報設定的模型、裝置、WhisperX 開關與部署提交編號；
 健康檢查不代表模型已載入或所有歌曲皆可命中，仍須以實際音訊請求驗收。
 
+## 選用離線 Qwen 補充證據
+
+安裝 [Qwen 容器工具](qwen-asr/README.md) 後，可在同時包含最新 API 程式
+與 Qwen 套件的執行環境設定：
+
+```text
+QWEN_ASR_COMMAND_JSON=["python","/opt/qwen-asr/qwen3_asr_cli.py"]
+QWEN_ASR_TIMEOUT_SECONDS=600
+```
+
+未設定時沿用原流程。已全部通過的歌曲不執行補充辨識；有未通過行時，
+才將同一份 Demucs 人聲交給 Qwen，不提供正式歌詞或候選答案作提示。
+Qwen 與逐字對齊模型須預先下載，推論子程序禁止連網補檔，
+也不繼承網站憑證。獨立容器的命令不能直接從另一個容器呼叫；
+這不是 Docker socket 或遠端 shell 的授權介面。
+
+只接受固定模型版本、原始音檔 SHA256 一致、轉寫文字完整對應時間戳，
+且整行文字逐字吻合、重複句無歧義、時間不跨越相鄰行的證據。
+`qwen3_asr_word_match` 的分數是文字吻合度，不是聲學信心機率；
+網站沿用逐字來源的 0.70 門檻與整首交易驗證，不覆蓋原已通過的行。
+補充辨識失敗時，模型標記包含 `qwen3-asr-unavailable`，保留原結果與待校正狀態。
+CLI 的原始 `unreviewed` 轉寫不能直接當作完成或正式歌詞。
+
 Endpoints:
 
 ```text
