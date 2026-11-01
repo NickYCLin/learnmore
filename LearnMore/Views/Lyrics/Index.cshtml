@@ -73,6 +73,14 @@
     </div>
 }
 
+@if (Model.HighAccuracyStatus == "high_accuracy_completed"
+    && Model.HighAccuracyStatusReason?.StartsWith("來源同步時間校正", StringComparison.Ordinal) == true)
+{
+    <div class="alert alert-info" role="status">
+        @Model.HighAccuracyStatusReason
+    </div>
+}
+
 <div class="main-content">
     <!-- 左側：影片區 -->
     <div class="video-section">
