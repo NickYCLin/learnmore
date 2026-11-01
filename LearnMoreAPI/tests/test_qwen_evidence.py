@@ -43,11 +43,13 @@ def test_subprocess_receives_audio_without_lyrics_or_website_credentials(tmp_pat
     audio.write_bytes(b"audio evidence")
     monkeypatch.setenv("LEARNMORE_API_TOKEN", "private-test-placeholder")
     monkeypatch.setenv("HF_TOKEN", "private-test-placeholder")
+    monkeypatch.setenv("NVIDIA_API_KEY", "private-test-placeholder")
 
     def run(args, **kwargs):
         assert args[:2] == ["python", "local-asr.py"]
         assert args[2:7] == ["transcribe", str(audio), "--language", "auto", "--max-new-tokens"]
         assert "LEARNMORE_API_TOKEN" not in kwargs["env"] and "HF_TOKEN" not in kwargs["env"]
+        assert "NVIDIA_API_KEY" not in kwargs["env"]
         assert kwargs["env"]["HF_HUB_OFFLINE"] == "1" and kwargs["timeout"] == 17
         from pathlib import Path
         Path(args[-1]).write_text(json.dumps(report(audio)))
@@ -111,3 +113,11 @@ def test_high_accuracy_pipeline_preserves_primary_results_and_fails_closed(tmp_p
 def test_command_configuration_is_an_argument_array(raw):
     with pytest.raises(ValueError):
         qwen.load_command(raw)
+
+
+def test_health_reports_opt_in_without_exposing_command():
+    import asyncio
+    body = asyncio.run(main.health(main.Settings(api_token="test-only",
+                                                qwen_asr_command=["python", "local-asr.py"])))
+    assert body["qwenSupplementalConfigured"] is True
+    assert "local-asr.py" not in json.dumps(body)

@@ -78,7 +78,8 @@ def transcribe(audio_path: Path, duration: float, command: list[str], timeout: f
     allowed = {"PATH", "HOME", "LD_LIBRARY_PATH", "HF_HOME", "PYTHONPATH", "VIRTUAL_ENV",
                "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}
     env = {k: v for k, v in os.environ.items()
-           if k in allowed or k.startswith(("CUDA_", "NVIDIA_", "TORCH_"))}
+           if (k in allowed or k.startswith(("CUDA_", "NVIDIA_", "TORCH_")))
+           and not any(marker in k.upper() for marker in ("TOKEN", "SECRET", "PASSWORD", "API_KEY"))}
     env.update(HF_HUB_OFFLINE="1", HF_HUB_DISABLE_IMPLICIT_TOKEN="1")
     with tempfile.TemporaryDirectory(prefix="learnmore-qwen-evidence-") as directory:
         output = Path(directory) / "result.json"

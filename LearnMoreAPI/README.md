@@ -61,6 +61,18 @@ QWEN_ASR_COMMAND_JSON=["python","/opt/qwen-asr/qwen3_asr_cli.py"]
 QWEN_ASR_TIMEOUT_SECONDS=600
 ```
 
+可用已建置的 Qwen 工具映像組合最新 API 程式；這個映像仍須明確設定
+上述選項才會啟用補充辨識，不會自行接替既有服務：
+
+```sh
+docker build --pull=false --build-arg QWEN_IMAGE=learnmore-qwen-asr:local \
+  -f LearnMoreAPI/qwen-asr/Dockerfile.api -t learnmore-api:qwen LearnMoreAPI
+```
+
+API 容器需掛載唯讀模型快取到 `/models`，並保留原有私有設定與模型快取。
+`/health` 的 `qwenSupplementalConfigured` 僅回報是否設定補充命令；
+不會回傳命令路徑、憑證，也不代表歌曲已驗收通過。
+
 未設定時沿用原流程。已全部通過的歌曲不執行補充辨識；有未通過行時，
 才將同一份 Demucs 人聲交給 Qwen，不提供正式歌詞或候選答案作提示。
 Qwen 與逐字對齊模型須預先下載，推論子程序禁止連網補檔，

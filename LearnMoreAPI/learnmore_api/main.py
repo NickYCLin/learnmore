@@ -417,6 +417,7 @@ async def health(settings: Settings = Depends(get_settings)) -> dict[str, object
         "backend": "codex",
         "codexConfigured": bool(settings.codex_bin),
         "whisperConfigured": bool(settings.whisper_model),
+        "qwenSupplementalConfigured": bool(settings.qwen_asr_command),
         "whisperModel": settings.whisper_model,
         "whisperDevice": settings.whisper_device,
         "whisperComputeType": settings.whisper_compute_type,
