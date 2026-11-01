@@ -8,11 +8,16 @@ Qwen3-ForcedAligner-0.6B。它不提供公開 HTTP 服務、不讀網站憑證�
 ## 建置與下載
 
 在 GB10 主機使用已驗證 CUDA 可用的 LearnMore API 基底映像，
-以映像 ID 固定基底版本。建置程序會保留原有 torch、torchaudio、
+先核對映像 ID，再建立獨立標籤固定基底版本。BuildKit 的 `FROM`
+需要映像名稱，不能直接把 `sha256:...` 映像 ID 當作名稱。
+建置程序會保留原有 torch、torchaudio、
 numpy 與 transformers 版本，避免替換 GB10 的 CUDA 套件。
 
 ```sh
-docker build --build-arg BASE_IMAGE=learnmore-api:gb10 \
+qwen_base_image_id=$(docker inspect --format '{{.Image}}' learnmore-api-gpu)
+qwen_base_tag="learnmore-qwen-base:${qwen_base_image_id#sha256:}"
+docker image tag "$qwen_base_image_id" "$qwen_base_tag"
+docker build --pull=false --build-arg BASE_IMAGE="$qwen_base_tag" \
   -t learnmore-qwen-asr:local LearnMoreAPI/qwen-asr
 docker volume create learnmore-qwen-models
 docker volume create learnmore-qwen-work
