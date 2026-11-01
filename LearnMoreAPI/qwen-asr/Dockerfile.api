@@ -1,0 +1,9 @@
+ARG QWEN_IMAGE=learnmore-qwen-asr:local
+FROM ${QWEN_IMAGE}
+
+USER 0
+WORKDIR /app
+COPY learnmore_api ./learnmore_api
+USER 1000:1000
+ENTRYPOINT ["uvicorn"]
+CMD ["learnmore_api.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers"]

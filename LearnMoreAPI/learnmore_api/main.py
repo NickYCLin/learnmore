@@ -117,6 +117,7 @@ class TranscribeYouTubeResponse(BaseModel):
     model: str
     durationSeconds: float | None
     segments: list[WhisperSegment]
+    _vocals_path: Path | None = PrivateAttr(default=None)
 
 
 class SeparateYouTubeRequest(BaseModel):
@@ -250,9 +251,20 @@ class Settings(BaseModel):
     uvr_timeout_seconds: float = 1800.0
     high_accuracy_use_vocals_stem: bool = True
     whisperx_align_enabled: bool = True
+    qwen_asr_command: list[str] = Field(default_factory=list)
+    qwen_asr_timeout_seconds: float = 600.0
 
 
 def load_settings() -> Settings:
+    from .qwen_evidence import load_command
+
+    qwen_command = load_command(os.getenv("QWEN_ASR_COMMAND_JSON", ""))
+    try:
+        qwen_timeout = float(os.getenv("QWEN_ASR_TIMEOUT_SECONDS", "600"))
+    except ValueError:
+        qwen_timeout = 600.0
+    if not math.isfinite(qwen_timeout) or qwen_timeout <= 0:
+        qwen_timeout = 600.0
     api_token = os.getenv("LEARNMORE_API_TOKEN", "").strip()
     codex_bin = os.getenv("CODEX_BIN", "codex").strip() or "codex"
     codex_model = os.getenv("CODEX_MODEL", "").strip() or None
@@ -306,6 +318,8 @@ def load_settings() -> Settings:
         uvr_timeout_seconds=uvr_timeout,
         high_accuracy_use_vocals_stem=high_accuracy_use_vocals_stem,
         whisperx_align_enabled=whisperx_align_enabled,
+        qwen_asr_command=qwen_command,
+        qwen_asr_timeout_seconds=qwen_timeout,
     )
 
 
@@ -403,6 +417,7 @@ async def health(settings: Settings = Depends(get_settings)) -> dict[str, object
         "backend": "codex",
         "codexConfigured": bool(settings.codex_bin),
         "whisperConfigured": bool(settings.whisper_model),
+        "qwenSupplementalConfigured": bool(settings.qwen_asr_command),
         "whisperModel": settings.whisper_model,
         "whisperDevice": settings.whisper_device,
         "whisperComputeType": settings.whisper_compute_type,
@@ -1724,6 +1739,25 @@ def high_accuracy_align_sync(request: HighAccuracyAlignRequest, settings: Settin
     if "+whisperx" in transcript.model:
         aligned = label_whisperx_alignment_sources(aligned)
     aligned = label_low_confidence_latin_alignments(aligned)
+    if settings.qwen_asr_command and any(not is_reliable_audio_alignment(line) for line in aligned):
+        from . import qwen_evidence
+
+        try:
+            if transcript._vocals_path is None or transcript.durationSeconds is None:
+                raise ValueError("qwen_missing_audio_context")
+            words = qwen_evidence.transcribe(transcript._vocals_path, transcript.durationSeconds,
+                                            settings.qwen_asr_command, settings.qwen_asr_timeout_seconds,
+                                            request.language)
+            supplemented = qwen_evidence.supplement(
+                [line.model_dump() for line in lyric_lines],
+                [line.model_dump() for line in aligned], words,
+                lambda line: is_reliable_audio_alignment(AlignedLyricLine(**line)),
+            )
+            aligned = [AlignedLyricLine(**line) for line in supplemented]
+            transcript.model += "+qwen3-asr-evidence"
+        except (OSError, ValueError, subprocess.SubprocessError):
+            # 補充辨識失敗時保留原驗證結果，不能把服務失敗視為校正完成。
+            transcript.model += "+qwen3-asr-unavailable"
     matched_count = sum(1 for line in aligned if is_reliable_audio_alignment(line))
     return HighAccuracyAlignResponse(
         songUid=request.songUid,
@@ -1786,7 +1820,7 @@ def transcribe_youtube_vocals_stem_sync(
     else:
         segments, duration = transcribe_audio_file_with_whisperx(vocals_path, language, settings)
         model = f"{settings.whisper_model}+vocals-stem+whisperx"
-    return TranscribeYouTubeResponse(
+    response = TranscribeYouTubeResponse(
         songUid=song_uid,
         youtubeUrl=youtube_url,
         language=language,
@@ -1794,6 +1828,8 @@ def transcribe_youtube_vocals_stem_sync(
         durationSeconds=duration,
         segments=segments,
     )
+    response._vocals_path = vocals_path
+    return response
 
 
 def select_vocals_stem(stems: list[AudioStem]) -> AudioStem | None:
@@ -3018,7 +3054,7 @@ def is_reliable_audio_alignment(line: AlignedLyricLine) -> bool:
         return False
     if source.startswith("shazam_timed_lyrics_verified"):
         return line.score >= 0.52
-    if source in {"whisper_word_match", "whisperx_word_match"}:
+    if source in {"whisper_word_match", "whisperx_word_match", "qwen3_asr_word_match"}:
         return line.score >= 0.70
     if source in {"whisper_segment_match", "whisperx_segment_match"}:
         return line.score >= 0.58
@@ -3089,6 +3125,7 @@ def is_reliable_latin_alignment_source(source: str) -> bool:
     if source.startswith("shazam_timed_lyrics_verified"):
         return True
     return source in {
+        "qwen3_asr_word_match",
         "whisper_word_match",
         "whisperx_word_match",
         "whisper_local_asr_anchor_match",
