@@ -161,7 +161,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--registry', type=Path, required=True)
     parser.add_argument('--apply', action='store_true')
-    parser.add_argument('--min-age-days', type=float, default=7)
+    parser.add_argument('--min-age-days', type=float, default=6 / 24)
     args = parser.parse_args()
     if not math.isfinite(args.min_age_days) or args.min_age_days < 0:
         parser.error('min-age-days must not be negative')
