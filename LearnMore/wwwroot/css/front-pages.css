@@ -340,15 +340,23 @@ main.pb-3:has(.lm-manage-table) {
 }
 
 .row.lm-page-shell:has(.lm-manage-table) {
-    --bs-gutter-x: 0;
+    --bs-gutter-x: 1.5rem;
     row-gap: 1.5rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
 }
 
 .row.lm-page-shell:has(.lm-manage-table) > .col-md-6 {
-    flex: 0 0 100%;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
+    flex: 0 0 65%;
+    width: 65%;
+    min-width: 600px;
+}
+
+.row.lm-page-shell:has(.lm-manage-table) > .col-md-6 + .col-md-6 {
+    flex-basis: 35%;
+    width: 35%;
+    min-width: 300px;
 }
 
 .row.lm-page-shell:has(.lm-manage-table) .card-header {
