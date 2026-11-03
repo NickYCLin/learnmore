@@ -24,20 +24,16 @@
                         <table class="table table-striped text-center align-middle lm-manage-table">
                             <thead>
                                 <tr>
-                                    <th>封面</th>
-                                    <th>歌名</th>
-                                    <th>原唱歌手</th>
-                                    <th>演唱者</th>
+                                    <th>歌曲</th>
                                     <th>狀態</th>
-                                    <th>音軌</th>
-                                    <th>編輯</th>
+                                    <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var song in Model.ProducerSongs)
                                 {
                                     <tr>
-                                        <td>
+                                        <td class="lm-manage-song">
                                             @if (!string.IsNullOrEmpty(song.YouTubeVideoUrl))
                                             {
                                                 var videoId = GetYouTubeVideoId(song.YouTubeVideoUrl);
@@ -52,10 +48,8 @@
                                                     <span class="text-white">無影片</span>
                                                 </div>
                                             }
+                                            <div><strong>@song.Title</strong><div class="lm-manage-artist">@song.Artist@if (!string.IsNullOrWhiteSpace(song.Performer) && !string.Equals(song.Artist?.Trim(), song.Performer.Trim(), StringComparison.OrdinalIgnoreCase)) { <span> · 演唱：@song.Performer</span> }</div></div>
                                         </td>
-                                        <td>@song.Title</td>
-                                        <td>@song.Artist</td>
-                                        <td>@song.Performer</td>
                                         <td>
                                             <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
                                             {
@@ -67,11 +61,9 @@
                                             }' />
                                         </td>
                                         <td>
-                                            <span class="badge @GetAudioStemStatusBadgeClass(song)" title="@GetAudioStemStatusTitle(song)">
+                                            <details><summary>音軌詳情</summary><span class="badge @GetAudioStemStatusBadgeClass(song)" title="@GetAudioStemStatusTitle(song)">
                                                 @GetAudioStemStatusLabel(song)
-                                            </span>
-                                        </td>
-                                        <td>
+                                            </span></details>
                                             <a asp-controller="Media" asp-action="Edit" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-danger">編輯歌曲</a>
                                             <a asp-controller="Media" asp-action="EditLyrics" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-warning">編輯歌詞</a>
                                         </td>
@@ -102,20 +94,16 @@
                         <table class="table table-striped text-center align-middle lm-manage-table">
                             <thead>
                                 <tr>
-                                    <th>封面</th>
-                                    <th>歌名</th>
-                                    <th>原唱歌手</th>
-                                    <th>演唱者</th>
+                                    <th>歌曲</th>
                                     <th>狀態</th>
-                                    <th>音軌</th>
-                                    <th>編輯</th>
+                                    <th>操作</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 @foreach (var song in Model.CollaborationSongs)
                                 {
                                     <tr>
-                                        <td>
+                                        <td class="lm-manage-song">
                                             @if (!string.IsNullOrEmpty(song.YouTubeVideoUrl))
                                             {
                                                 var videoId = GetYouTubeVideoId(song.YouTubeVideoUrl);
@@ -130,10 +118,8 @@
                                                     <span class="text-white">無影片</span>
                                                 </div>
                                             }
+                                            <div><strong>@song.Title</strong><div class="lm-manage-artist">@song.Artist@if (!string.IsNullOrWhiteSpace(song.Performer) && !string.Equals(song.Artist?.Trim(), song.Performer.Trim(), StringComparison.OrdinalIgnoreCase)) { <span> · 演唱：@song.Performer</span> }</div></div>
                                         </td>
-                                        <td>@song.Title</td>
-                                        <td>@song.Artist</td>
-                                        <td>@song.Performer</td>
                                         <td>
                                             <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
                                             {
@@ -145,11 +131,9 @@
                                             }' />
                                         </td>
                                         <td>
-                                            <span class="badge @GetAudioStemStatusBadgeClass(song)" title="@GetAudioStemStatusTitle(song)">
+                                            <details><summary>音軌詳情</summary><span class="badge @GetAudioStemStatusBadgeClass(song)" title="@GetAudioStemStatusTitle(song)">
                                                 @GetAudioStemStatusLabel(song)
-                                            </span>
-                                        </td>
-                                        <td>
+                                            </span></details>
                                             <a asp-controller="Media" asp-action="EditLyrics" asp-route-songUid="@song.SongUid" target="_blank" class="btn btn-sm btn-warning">編輯歌詞</a>
                                         </td>
                                     </tr>

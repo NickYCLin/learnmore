@@ -498,3 +498,32 @@ main.pb-3:has(.lm-manage-table) .btn-outline-warning:hover {
 .lm-manage-table .btn-danger:hover {
     background: #7f1d1d;
 }
+
+.row.lm-page-shell:has(.lm-manage-table) {
+    flex-wrap: wrap;
+    overflow-x: visible;
+}
+.row.lm-page-shell:has(.lm-manage-table) > .col-md-6,
+.row.lm-page-shell:has(.lm-manage-table) > .col-md-6 + .col-md-6 {
+    flex: 1 1 28rem;
+    width: auto;
+    min-width: 0;
+}
+.row.lm-page-shell .lm-manage-table { min-width: 0; table-layout: auto; }
+.row.lm-page-shell .lm-manage-table :is(th, td):nth-child(n) {
+    min-width: 0;
+    max-width: none;
+    position: static;
+    white-space: normal;
+    word-break: normal;
+    overflow-wrap: normal;
+    box-shadow: none;
+}
+.row.lm-page-shell .lm-manage-table th { white-space: nowrap; }
+.row.lm-page-shell .lm-manage-table .lm-manage-song { text-align: left; min-width: 13rem; }
+.lm-manage-song > a, .lm-manage-song > .lm-thumb-placeholder { display: inline-block; margin-bottom: .35rem; }
+.lm-manage-artist { color: var(--text-secondary, #475569); font-size: .875rem; }
+.lm-manage-table details { margin-bottom: .4rem; }
+.lm-manage-table summary { cursor: pointer; }
+.lm-manage-table :is(a, summary):focus-visible { outline: 3px solid #2563eb; outline-offset: 2px; }
+

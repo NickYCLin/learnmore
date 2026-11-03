@@ -15,7 +15,7 @@ public class MediaManageAudioStemStatusSurfaceTests
             "Media",
             "Manage.cshtml"));
 
-        Assert.Contains("<th>音軌</th>", source);
+        Assert.Contains("<summary>音軌詳情</summary>", source);
         Assert.Contains("GetAudioStemStatusLabel(song)", source);
         Assert.Contains("伴奏/人聲完成", source);
         Assert.Contains("未處理", source);
