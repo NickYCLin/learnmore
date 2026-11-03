@@ -530,7 +530,7 @@ main.pb-3:has(.lm-manage-table) .btn-outline-warning:hover {
 .lm-edit-title { font-size: 1.5rem; margin: 0 0 1.5rem; color: var(--text-primary); }
 .lm-edit-collaborators { border-top: 1px solid var(--border-color); padding-top: 1.25rem; margin-top: 1.25rem; }
 .lm-edit-actions { display: flex; gap: .75rem; flex-wrap: wrap; margin-top: 1.5rem; }
-.lm-edit-actions .btn { min-width: 5.5rem; }
+.lm-edit-song .lm-edit-actions .btn { min-width: 5.5rem; width: auto; flex: 0 0 auto; }
 .lm-edit-song :is(.form-control, .list-group-item, .alert-light) {
     background-color: var(--bg-secondary);
     color: var(--text-primary);

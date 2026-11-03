@@ -16,6 +16,17 @@ public class MediaManageAudioStemStatusSurfaceTests
     }
 
     [Fact]
+    public void EditActions_ShouldKeepCompactWidthsOnMobile()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "LearnMore", "wwwroot", "css", "front-pages.css"));
+
+        Assert.Contains(".lm-edit-song .lm-edit-actions .btn { min-width: 5.5rem; width: auto; flex: 0 0 auto; }", source);
+    }
+
+    [Fact]
     public void ManageView_ShouldRenderAudioStemStatusColumn()
     {
         var source = File.ReadAllText(Path.Combine(
