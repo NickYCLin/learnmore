@@ -43,7 +43,7 @@
     const live2dStatusTimeoutMs = 10000;
     const avatarRequestTimeoutMs = 6000;
     const vrmStatusTimeoutMs = 45000;
-    let learnMoreSupportedAvatarIds = new Set(fallbackSupportedAvatarIds);
+    const learnMoreSupportedAvatarIds = new Set(fallbackSupportedAvatarIds);
 
     let socket = null;
     let avatarEmbedConfig = null;
@@ -160,13 +160,6 @@
         return Boolean(id) && learnMoreSupportedAvatarIds.has(id) && !learnMoreBlockedAvatarIds.has(id);
     }
 
-    function setLearnMoreSupportedAvatarIds(avatarIds) {
-        const nextIds = Array.isArray(avatarIds)
-            ? avatarIds.map(id => String(id || '').trim()).filter(Boolean)
-            : [];
-        learnMoreSupportedAvatarIds = new Set([...fallbackSupportedAvatarIds, ...nextIds]);
-    }
-
     function getStoredAvatarId() {
         try {
             const stored = window.localStorage?.getItem(avatarStorageKey) || '';
@@ -249,7 +242,6 @@
             panel.dataset.avatarEmbedConfigStatus = 'fallback';
             panel.dataset.avatarEmbedConfigUrl = String(integration.learnMoreEmbedConfigUrl || '');
         }
-        setLearnMoreSupportedAvatarIds(integration?.availableAvatarIds);
         const allowedAvatarIds = new Set(
             (Array.isArray(integration?.availableAvatarIds) ? integration.availableAvatarIds : [])
                 .map(id => String(id || '').trim())

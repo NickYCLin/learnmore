@@ -7,10 +7,10 @@ const DEFAULT_VIEWPORT_WIDTH = 1365;
 const DEFAULT_VIEWPORT_HEIGHT = 900;
 const DEFAULT_VOCAL_DECODE_TIMEOUT_MS = 120000;
 const EXPECTED_SAMPLE_AVATARS = [
-  { id: "mao_pro", runtime: "live2d", label: "mao_pro" },
-  { id: "hiyori_pro", runtime: "live2d", label: "Hiyori Momose" }
+  { id: "mao_pro", runtime: "live2d", label: "mao_pro" }
 ];
 const BLOCKED_LEARNMORE_AVATAR_IDS = [
+  "hiyori_pro",
   "mika_live2d",
   "mika_stretchy_test",
   "mika_formal_2d",
