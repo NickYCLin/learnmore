@@ -5,6 +5,17 @@ namespace LearnMore.Tests;
 public class MediaManageAudioStemStatusSurfaceTests
 {
     [Fact]
+    public void ManageHeaders_ShouldOverrideCellWrappingWithoutClipping()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "LearnMore", "wwwroot", "css", "front-pages.css"));
+
+        Assert.Contains(".row.lm-page-shell .lm-manage-table th:nth-child(n) { white-space: nowrap; }", source);
+    }
+
+    [Fact]
     public void ManageView_ShouldRenderAudioStemStatusColumn()
     {
         var source = File.ReadAllText(Path.Combine(

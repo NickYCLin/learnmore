@@ -519,7 +519,7 @@ main.pb-3:has(.lm-manage-table) .btn-outline-warning:hover {
     overflow-wrap: normal;
     box-shadow: none;
 }
-.row.lm-page-shell .lm-manage-table th { white-space: nowrap; }
+.row.lm-page-shell .lm-manage-table th:nth-child(n) { white-space: nowrap; }
 .row.lm-page-shell .lm-manage-table .lm-manage-song { text-align: left; min-width: 13rem; }
 .lm-manage-song > a, .lm-manage-song > .lm-thumb-placeholder { display: inline-block; margin-bottom: .35rem; }
 .lm-manage-artist { color: var(--text-secondary, #475569); font-size: .875rem; }
