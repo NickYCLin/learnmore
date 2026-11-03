@@ -7,6 +7,15 @@ namespace LearnMore.Tests;
 
 public sealed class HomePerformerCollectionsTests
 {
+    [Fact]
+    public void PerformerCollections_UnifyOnlyTheAuthorizedYorushikaAliases()
+    {
+        Assert.Equal("ヨルシカ", PerformerNameNormalizer.NormalizeForCollection("ヨルシカ / n-buna"));
+        Assert.Equal("ヨルシカ", PerformerNameNormalizer.NormalizeForCollection("Yorushika (ヨルシカ)"));
+        Assert.Equal("n-buna", PerformerNameNormalizer.NormalizeForCollection("n-buna"));
+        Assert.Equal("Yorushika", PerformerNameNormalizer.NormalizeForCollection("Yorushika"));
+        Assert.Equal(3, PerformerNameNormalizer.GetCollectionAliases("ヨルシカ").Count);
+    }
     private static string Source(params string[] pathParts)
     {
         return File.ReadAllText(Path.Combine(

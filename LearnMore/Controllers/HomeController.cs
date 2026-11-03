@@ -677,7 +677,9 @@ END;";
                 .Select(group => new PerformerCollectionViewModel
                 {
                     Performer = group.Key,
-                    SongCount = group.Count(),
+                    SongCount = group.Key == "ヨルシカ"
+                        ? group.Select(song => song.SongUid).Where(uid => !string.IsNullOrWhiteSpace(uid)).Distinct(StringComparer.OrdinalIgnoreCase).Count()
+                        : group.Count(),
                     ThumbnailUrl = SelectPerformerThumbnailUrl(group),
                     SampleTitle = group.FirstOrDefault()?.Title
                 })
@@ -746,6 +748,7 @@ END;";
             var songs = new List<Songs>();
             const string query = @"
 SELECT
+    [SongUid],
     CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN [Performer] ELSE NULL END AS [Performer],
     [YouTubeVideoUrl],
     [ChannelThumbnailUrl]
@@ -760,6 +763,7 @@ WHERE CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN [Performer
             {
                 songs.Add(new Songs
                 {
+                    SongUid = reader.IsDBNull(reader.GetOrdinal("SongUid")) ? string.Empty : reader.GetString(reader.GetOrdinal("SongUid")),
                     Performer = reader.IsDBNull(reader.GetOrdinal("Performer"))
                         ? null
                         : reader.GetString(reader.GetOrdinal("Performer")),

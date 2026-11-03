@@ -7,7 +7,9 @@ public static class PerformerNameNormalizer
     private static readonly Dictionary<string, string> CollectionAliases = new(StringComparer.OrdinalIgnoreCase)
     {
         ["米津玄師 Kenshi Yonezu"] = "米津玄師",
-        ["tuki.(17)"] = "tuki."
+        ["tuki.(17)"] = "tuki.",
+        ["ヨルシカ / n-buna"] = "ヨルシカ",
+        ["Yorushika (ヨルシカ)"] = "ヨルシカ"
     };
 
     public static string NormalizeForCollection(string? performer)

@@ -38,6 +38,10 @@ namespace LearnMore.Controllers
 
             var trimmedPerformer = performer.Trim();
             var canonicalPerformer = PerformerNameNormalizer.NormalizeForCollection(trimmedPerformer);
+            if (canonicalPerformer == "ヨルシカ" && trimmedPerformer != canonicalPerformer)
+            {
+                return RedirectToAction(nameof(PlayPerformer), new { performer = canonicalPerformer });
+            }
             var performerAliases = PerformerNameNormalizer.GetCollectionAliases(canonicalPerformer);
             var email = HttpContext.Session.GetString("Email");
             var model = new GroupPlayerViewModel
@@ -66,10 +70,12 @@ ORDER BY s.SongID DESC";
                 conn.Open();
                 using (var reader = cmd.ExecuteReader())
                 {
+                    var seenSongUids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     while (reader.Read())
                     {
                         var songUid = reader.IsDBNull(0) ? null : reader.GetString(0);
                         if (string.IsNullOrWhiteSpace(songUid)) continue;
+                        if (canonicalPerformer == "ヨルシカ" && !seenSongUids.Add(songUid)) continue;
 
                         model.Songs.Add(new SongItem
                         {
