@@ -4,12 +4,8 @@
     ViewData["Title"] = "編輯歌曲";
 }
 
-<div class="lm-page-card">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white text-center">
-                    <h4>編輯歌曲</h4>
-                </div>
-                <div class="card-body">
+<div class="lm-page-card lm-edit-song">
+                    <h1 class="lm-edit-title">編輯歌曲</h1>
                     <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
                     {
                         Status = Model.Song.HighAccuracyStatus,
@@ -22,28 +18,30 @@
                         <input type="hidden" asp-for="Song.SongUid" />
 
                         <div class="mb-3">
-                            <label class="form-label">歌名</label>
+                            <label asp-for="Song.Title" class="form-label">歌名</label>
                             <input asp-for="Song.Title" class="form-control" />
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">原唱歌手</label>
+                        <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Song.Artist" class="form-label">原唱歌手</label>
                             <input asp-for="Song.Artist" class="form-control" />
                         </div>
 
-                        <div class="mb-3">
-                            <label class="form-label">演唱者</label>
+                        <div class="col-md-6 mb-3">
+                            <label asp-for="Song.Performer" class="form-label">演唱者</label>
                             <input asp-for="Song.Performer" class="form-control" />
+                        </div>
                         </div>
 
                         <div class="mb-3">
-                            <label class="form-label">翻譯歌詞的人</label>
+                            <label asp-for="Song.Translator" class="form-label">翻譯歌詞的人</label>
                             <input asp-for="Song.Translator" class="form-control" />
                         </div>
 
                         <!-- 協作者清單 -->
-                        <div class="mb-3">
-                            <label class="form-label">協作者 Emails</label>
+                        <div class="mb-3 lm-edit-collaborators">
+                            <label for="newCollaboratorEmail" class="form-label">協作者 Emails</label>
                             <ul id="collaboratorsList" class="list-group mb-2">
                                 @foreach (var collaborator in Model.Collaborators)
                                 {
@@ -61,13 +59,11 @@
                             </div>
                         </div>
 
-                        <div class="d-grid gap-2">
+                        <div class="lm-edit-actions">
                             <button type="submit" class="btn btn-success">存檔</button>
                             <a asp-action="Manage" class="btn btn-secondary">取消</a>
                         </div>
                     </form>
-                </div>
-            </div>
 </div>
 
 <script>
