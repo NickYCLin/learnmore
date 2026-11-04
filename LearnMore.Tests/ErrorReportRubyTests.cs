@@ -34,6 +34,27 @@ public sealed class ErrorReportRubyTests
     [InlineData(0)]
     public void TimingSplitAndOtherReportsHaveNoRepair(int reportId) => Assert.Null(RubyRepairTarget.Find(reportId));
 
+    [Theory]
+    [InlineData(46)]
+    [InlineData(48)]
+    [InlineData(49)]
+    public void ReadbackPreservesAllRawColumnsAndNeverProposesReplay(int reportId)
+    {
+        var target = RubyRepairTarget.Find(reportId)!;
+        var snapshot = Snapshot() with { ReportId = reportId };
+        snapshot.Lyric["LyricID"] = target.LyricId;
+        snapshot.Lyric["JapaneseRuby"] = target.After;
+        var preview = RubyRepairPreview.ForRead(snapshot);
+        Assert.Same(snapshot, preview.Snapshot);
+        Assert.Equal(snapshot.Fingerprint, preview.Fingerprint);
+        Assert.Null(preview.ProposedRuby);
+        Assert.Throws<RubyRepairConflictException>(() => target.Propose(target.After));
+        snapshot.Lyric["JapaneseRuby"] = "他人の編集";
+        Assert.Null(RubyRepairPreview.ForRead(snapshot).ProposedRuby);
+        snapshot.Lyric["JapaneseRuby"] = target.Before;
+        Assert.Equal(target.After, RubyRepairPreview.ForRead(snapshot).ProposedRuby);
+    }
+
     [Fact]
     public void FingerprintBindsAllColumnsAndExactSourceWithoutRecursion()
     {
@@ -110,6 +131,30 @@ public sealed class ErrorReportRubyTests
         store.Conflict = true;
         using var conflict = await Post(46, Snapshot().Fingerprint);
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        store.ReadbackOnly = true;
+        foreach (var reportId in new[] { 46, 48, 49 })
+        {
+            using var readback = await client.GetAsync($"/Management/ErrorReports/ruby/{reportId}");
+            Assert.Equal(HttpStatusCode.OK, readback.StatusCode);
+            Assert.True(readback.Headers.CacheControl?.NoStore);
+            var readbackHtml = await readback.Content.ReadAsStringAsync();
+            foreach (var field in new[] { "Japanese", "JapaneseRuby", "Roman", "Chinese", "TimeStamp" })
+                Assert.Contains($"<dt>{field}</dt>", readbackHtml);
+            Assert.Contains("&lt;script&gt;", readbackHtml);
+            Assert.DoesNotMatch("<form[^>]*action=\"[^\"]*ErrorReports/ruby/", readbackHtml);
+            Assert.DoesNotContain("name=\"fingerprint\"", readbackHtml);
+        }
+        foreach (var reportId in new[] { 47, 50 })
+        {
+            using var excludedGet = await client.GetAsync($"/Management/ErrorReports/ruby/{reportId}");
+            Assert.Equal(HttpStatusCode.NotFound, excludedGet.StatusCode);
+        }
+        foreach (var status in new[] { 401, 403 })
+        {
+            access.Result = new StatusCodeResult(status);
+            using var deniedGet = await client.GetAsync("/Management/ErrorReports/ruby/46");
+            Assert.Equal(status, (int)deniedGet.StatusCode);
+        }
         await application.StopAsync();
     }
 
@@ -130,10 +175,13 @@ public sealed class ErrorReportRubyTests
         public int Reads { get; private set; }
         public int Writes { get; private set; }
         public bool Conflict { get; set; }
+        public bool ReadbackOnly { get; set; }
         public Task<RubyRepairPreview> ReadAsync(int reportId, CancellationToken cancellationToken)
         {
             Reads++;
             var snapshot = Snapshot();
+            if (ReadbackOnly)
+                return Task.FromResult(new RubyRepairPreview(snapshot, snapshot.Fingerprint, null));
             return Task.FromResult(new RubyRepairPreview(snapshot, snapshot.Fingerprint, RubyRepairTarget.Find(reportId)!.After));
         }
         public Task<RubyRepairReceipt> ApplyAsync(int reportId, string fingerprint, string actor, CancellationToken cancellationToken)

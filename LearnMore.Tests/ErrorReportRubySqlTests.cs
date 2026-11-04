@@ -52,7 +52,12 @@ public sealed class ErrorReportRubySqlTests : IAsyncLifetime
         Assert.Equal(RubyRepairTarget.Find(46)!.After, await Scalar($"SELECT JapaneseRuby FROM dbo.[Songs_{RubyRepairTarget.SongUid}] WHERE LyricID=3"));
         Assert.Equal("hito", await Scalar($"SELECT Roman FROM dbo.[Songs_{RubyRepairTarget.SongUid}] WHERE LyricID=3"));
         Assert.Equal(0, await Scalar("SELECT Status FROM dbo.ErrorReports WHERE ReportID=46"));
+        var readback = await Store.ReadAsync(46, default);
+        Assert.Null(readback.ProposedRuby);
+        foreach (var field in before.Snapshot.Lyric.Keys)
+            Assert.Equal(field == "JapaneseRuby" ? RubyRepairTarget.Find(46)!.After : before.Snapshot.Lyric[field], readback.Snapshot.Lyric[field]);
         await Assert.ThrowsAsync<RubyRepairConflictException>(() => Store.ApplyAsync(46, before.Fingerprint, "manager@example.invalid", default));
+        await Assert.ThrowsAsync<RubyRepairConflictException>(() => Store.ApplyAsync(46, readback.Fingerprint, "manager@example.invalid", default));
         Assert.Equal(1, audit.Prepared);
     }
 

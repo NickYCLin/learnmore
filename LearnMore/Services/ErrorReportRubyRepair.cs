@@ -37,7 +37,17 @@ public sealed record RubyRepairSnapshot(int ReportId, SortedDictionary<string, o
     public string Fingerprint => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(this)))).ToLowerInvariant();
 }
 
-public sealed record RubyRepairPreview(RubyRepairSnapshot Snapshot, string Fingerprint, string ProposedRuby);
+public sealed record RubyRepairPreview(RubyRepairSnapshot Snapshot, string Fingerprint, string? ProposedRuby)
+{
+    public static RubyRepairPreview ForRead(RubyRepairSnapshot snapshot)
+    {
+        var target = RubyRepairTarget.Find(snapshot.ReportId) ?? throw new RubyRepairConflictException();
+        string? proposedRuby;
+        try { proposedRuby = target.Propose(Convert.ToString(snapshot.Lyric["JapaneseRuby"]) ?? ""); }
+        catch (RubyRepairConflictException) { proposedRuby = null; }
+        return new(snapshot, snapshot.Fingerprint, proposedRuby);
+    }
+}
 public sealed record RubyRepairReceipt(string AuditId, bool CompletionRecorded);
 
 public interface IErrorReportRubyRepair
@@ -98,7 +108,7 @@ public sealed class ErrorReportRubyRepair(IConfiguration configuration, IRubyRep
         await using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
         var result = await ReadLockedAsync(connection, transaction, reportId, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
-        return result;
+        return RubyRepairPreview.ForRead(result);
     }
 
     public async Task<RubyRepairReceipt> ApplyAsync(int reportId, string fingerprint, string actor, CancellationToken cancellationToken)
@@ -107,7 +117,9 @@ public sealed class ErrorReportRubyRepair(IConfiguration configuration, IRubyRep
         await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync(cancellationToken);
         await using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-        var preview = await ReadLockedAsync(connection, transaction, reportId, cancellationToken);
+        var snapshot = await ReadLockedAsync(connection, transaction, reportId, cancellationToken);
+        var preview = new RubyRepairPreview(snapshot, snapshot.Fingerprint,
+            RubyRepairTarget.Find(reportId)!.Propose(Convert.ToString(snapshot.Lyric["JapaneseRuby"]) ?? ""));
         if (!string.Equals(preview.Fingerprint, fingerprint, StringComparison.Ordinal)) throw new RubyRepairConflictException();
         var auditId = audit.Prepare(preview.Snapshot, preview.ProposedRuby, actor);
         await using var command = new SqlCommand($"UPDATE dbo.[Songs_{RubyRepairTarget.SongUid}] SET JapaneseRuby=@Ruby WHERE LyricID=@LyricId", connection, transaction);
@@ -126,7 +138,7 @@ public sealed class ErrorReportRubyRepair(IConfiguration configuration, IRubyRep
         return new RubyRepairReceipt(auditId, audit.Complete(auditId));
     }
 
-    private static async Task<RubyRepairPreview> ReadLockedAsync(SqlConnection connection, SqlTransaction transaction, int reportId, CancellationToken cancellationToken)
+    private static async Task<RubyRepairSnapshot> ReadLockedAsync(SqlConnection connection, SqlTransaction transaction, int reportId, CancellationToken cancellationToken)
     {
         var target = RubyRepairTarget.Find(reportId) ?? throw new RubyRepairConflictException();
         var report = await ReadRowAsync(connection, transaction, "SELECT * FROM dbo.ErrorReports WITH (UPDLOCK,HOLDLOCK) WHERE ReportID=@Id", reportId, cancellationToken);
@@ -137,8 +149,7 @@ public sealed class ErrorReportRubyRepair(IConfiguration configuration, IRubyRep
         var lyric = await ReadRowAsync(connection, transaction, $"SELECT * FROM dbo.[Songs_{RubyRepairTarget.SongUid}] WITH (UPDLOCK,HOLDLOCK) WHERE LyricID=@Id", target.LyricId, cancellationToken);
         foreach (var required in new[] { "Japanese", "JapaneseRuby", "Roman", "Chinese", "TimeStamp", "LyricID" })
             if (!lyric.ContainsKey(required)) throw new RubyRepairConflictException();
-        var snapshot = new RubyRepairSnapshot(reportId, report, song, lyric);
-        return new RubyRepairPreview(snapshot, snapshot.Fingerprint, target.Propose(Convert.ToString(lyric["JapaneseRuby"]) ?? ""));
+        return new RubyRepairSnapshot(reportId, report, song, lyric);
     }
 
     private static async Task<SortedDictionary<string, object?>> ReadRowAsync(SqlConnection connection, SqlTransaction transaction, string sql, object identifier, CancellationToken cancellationToken)

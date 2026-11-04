@@ -13,9 +13,14 @@
         {
             <dt>@field.Key</dt><dd class="text-break" style="white-space: pre-wrap">@(field.Value ?? "NULL")</dd>
         }
-        <dt>JapaneseRuby 修正後</dt><dd class="text-break" style="white-space: pre-wrap">@Model.ProposedRuby</dd>
+        @if (Model.ProposedRuby != null)
+        {
+            <dt>JapaneseRuby 修正後</dt><dd class="text-break" style="white-space: pre-wrap">@Model.ProposedRuby</dd>
+        }
         <dt>原值指紋（含回報、來源與全部歌詞欄位）</dt><dd class="text-break">@Model.Fingerprint</dd>
     </dl>
+    @if (Model.ProposedRuby != null)
+    {
     <p>送出前必須確認這是正確影片與句子。原值有任何變動即拒絕，不覆蓋他人更新。送出會先保存稽核備份；不會自動標為已解決。</p>
     <form method="post" asp-controller="ErrorReportRuby" asp-action="Apply" asp-route-reportId="@Model.Snapshot.ReportId">
         @Html.AntiForgeryToken()
@@ -23,4 +28,10 @@
         <button type="submit" class="btn btn-primary">確認只修正這一筆假名</button>
         <a asp-controller="ErrorReports" asp-action="Index" class="btn btn-secondary">取消並返回清單</a>
     </form>
+    }
+    else
+    {
+        <p role="status">此句已修正或原值已變更，目前僅供讀回核對，不能再次套用。</p>
+        <a asp-controller="ErrorReports" asp-action="Index" class="btn btn-secondary">返回清單</a>
+    }
 </main>
