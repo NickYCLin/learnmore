@@ -2071,6 +2071,16 @@ def test_transcription_uses_safe_decoder_and_acoustic_word_times(client, monkeyp
         assert result[0].words[0].start == 1.1
 
 
+def test_required_profile_is_loaded_from_environment(client, monkeypatch):
+    _, main = client
+    monkeypatch.setenv("HIGH_ACCURACY_REQUIRED_PROFILE", "kotoba-whisper-cuda-whisperx")
+    monkeypatch.setenv("WHISPER_MODEL", "medium")
+    monkeypatch.setenv("WHISPER_DEVICE", "cpu")
+    settings = main.load_settings()
+    assert settings.high_accuracy_required_profile == "kotoba-whisper-cuda-whisperx"
+    assert main.alignment_profile(settings)["primary"]["requestAllowed"] is False
+
+
 def test_kotoba_alignment_failure_never_retries_unsafe_timestamp_decoder(client, monkeypatch, tmp_path):
     _, main = client
     settings = main.Settings(api_token="test-token")
