@@ -47,6 +47,7 @@
 <html lang="@shareMetadata.HtmlLanguage">
 <head>
     <meta charset="utf-8" />
+    <script src="~/js/theme-init.js" asp-append-version="true"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@shareMetadata.PageTitle</title>
     <meta name="description" content="@shareMetadata.Description" />
@@ -1424,7 +1425,9 @@
     </style>
     <link rel="stylesheet" href="~/css/front-pages.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
-
+</head>
+<body>
+    <script>window.LearnMoreTheme?.applyToBody();</script>
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container-fluid">
             <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">
@@ -1546,8 +1549,6 @@
         </div>
     </nav>
 
-</head>
-<body>
     @{
         var layoutContainerClass = ViewData["LayoutContainerClass"] as string ?? "container";
     }
@@ -1594,14 +1595,12 @@
 
 <script>
     document.addEventListener('DOMContentLoaded',function(){
-        const body=document.body;const saved=localStorage.getItem('theme');if(saved==='dark-theme') body.classList.add('dark-theme');
         
         // 桌面版和手機版主題切換
         document.querySelectorAll('#themeToggle, #themeToggleMobile, .theme-toggle').forEach(t=>t.addEventListener('click',e=>{
             e.preventDefault();
             e.stopPropagation();
-            const dark=body.classList.toggle('dark-theme');
-            localStorage.setItem('theme',dark?'dark-theme':'');
+            window.LearnMoreTheme?.toggle();
         }));
 
         // 群組播放 inline (首頁上處理，這裡只保留樣式與通用功能)
