@@ -1,0 +1,53 @@
+@model SongViewModel
+    <div id="comments-container">
+        @if (Model.Comments != null && Model.Comments.Any())
+        {
+            @foreach (var comment in Model.Comments)
+            {
+                <div class="comment">
+                    <img src="@comment.Avatar" alt="使用者頭像" class="avatar">
+                    <strong>@(string.IsNullOrEmpty(comment.UserName) ? "訪客" : comment.UserName)：</strong>
+                    @if (comment.IsPrivate)
+                    {
+                        <span class="private-label">🔒 悄悄話</span>
+
+                        @if (comment.CanViewPrivate)
+                        {
+                            <p>@comment.Message</p>
+                        }
+                    }
+                    else
+                    {
+                        <p>@comment.Message</p>
+                    }
+                    <span class="timestamp">@comment.TimeStamp.ToString("yyyy/MM/dd HH:mm")</span>
+
+                    @if (Model.IsManage)
+                    {
+                        <div class="admin-reply-form">
+                            <input type="text" id="reply-input-@comment.CommentId" placeholder="輸入管理員回覆...">
+                            <button onclick="submitReply('@comment.CommentId')">💬 回覆</button>
+                        </div>
+                    }
+
+                    @if (comment.Replies != null && comment.Replies.Any())
+                    {
+                        <div class="admin-replies">
+                            @foreach (var reply in comment.Replies)
+                            {
+                                <div class="admin-reply">
+                                    <strong>管理員：</strong>
+                                    <p>@reply.ReplyMessage</p>
+                                    <span class="timestamp">@reply.ReplyTime.ToString("yyyy/MM/dd HH:mm")</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <p class="no-comments">目前沒有留言，快來留言吧！</p>
+        }
+    </div>

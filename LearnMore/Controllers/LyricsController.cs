@@ -124,60 +124,8 @@ namespace LearnMore.Controllers
         }
 
         private List<CommentModel> GetCommentsBySongUid(string songUid)
-        {
-            string appBasePath = HttpContext.Request.PathBase;
-            List<CommentModel> comments = new List<CommentModel>();
-
-            using (SqlConnection connection = new SqlConnection(_connectionString))
-            {
-                connection.Open();
-
-                string query = @"
-            SELECT [CommentId]
-                  ,[SongUid]
-                  ,[UserEmail]
-                  ,[UserName]
-                  ,[Message]
-                  ,[TimeStamp]
-                  ,[IsPrivate]
-                  ,[Avatar]
-              FROM [V_Comments]
-              WHERE [SongUid] = @SongUid
-              ORDER BY [TimeStamp] DESC";  // 最新留言排在最上方
-
-                using (SqlCommand command = new SqlCommand(query, connection))
-                {
-                    command.Parameters.AddWithValue("@SongUid", songUid);
-
-                    using (SqlDataReader reader = command.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            string? avatar = reader["Avatar"] != DBNull.Value ? reader["Avatar"].ToString() : null;
-                            string userName = reader.IsDBNull(3) ? "訪客" : reader.GetString(3);
-
-                            comments.Add(new CommentModel
-                            {
-                                CommentId = reader.GetGuid(0),
-                                SongUid = reader.GetString(1),
-                                UserEmail = reader.IsDBNull(2) ? "--" : reader.GetString(2),
-                                UserName = reader.IsDBNull(3) ? "訪客" : reader.GetString(3),
-                                Message = reader.GetString(4),
-                                TimeStamp = reader.GetDateTime(5),
-                                IsPrivate = !reader.IsDBNull(6) && reader.GetBoolean(6),
-                                Avatar = !string.IsNullOrEmpty(avatar)
-                                ? $"{appBasePath}{avatar}"
-                            : (string.IsNullOrEmpty(userName) || userName == "訪客")
-                                ? $"{appBasePath}/images/visitor.png"
-                                : $"{appBasePath}/images/default-avatar.png"
-                            });
-                        }
-                    }
-                }
-            }
-
-            return comments;
-        }
+            => LearnMore.Services.SongCommentReader.Read(_connectionString, songUid,
+                HttpContext.Session.GetString("Email"), HttpContext.Request.PathBase);
 
         private Songs? GetSongByUid(string songUid)
         {

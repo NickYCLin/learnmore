@@ -1007,6 +1007,12 @@
                             messageHtml += `<p>${htmlEncode(c.Message||'')}</p>`;
                         }
                         el.innerHTML = `<img src="${c.Avatar || ''}" class="avatar"> <strong>${htmlEncode(c.UserName||'訪客')}：</strong> ${messageHtml} <span class="timestamp">${c.TimeStamp ? new Date(c.TimeStamp).toLocaleString() : ''}</span>`;
+                        (c.Replies || []).forEach(reply => {
+                            const replyElement = document.createElement('div');
+                            replyElement.className = 'admin-reply';
+                            replyElement.textContent = `管理員：${reply.ReplyMessage || ''}`;
+                            el.appendChild(replyElement);
+                        });
                         commentsContainer.appendChild(el);
                     });
                 } else { commentsContainer.innerHTML = '<p class="no-comments">目前沒有留言，快來留言吧！</p>'; }

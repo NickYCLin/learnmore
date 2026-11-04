@@ -9,6 +9,7 @@
         public string Message { get; set; } = string.Empty; // 留言內容
         public DateTime TimeStamp { get; set; } // 留言時間
         public bool IsPrivate { get; set; }
+        public bool CanViewPrivate { get; set; }
         public List<CommentReplyModel> Replies { get; set; } = new List<CommentReplyModel>();
         public string Avatar { get; set; } = string.Empty; // 使用者頭像
     }

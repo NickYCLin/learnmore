@@ -265,45 +265,10 @@ Translator, TranslationSource, YouTubeVideoUrl, SongUid FROM Songs WHERE SongUid
                     lyricsList = new List<Lyrics>();
                 }
 
-                // 3) 取得留言（從 V_Comments）
-                string commentsQuery = @"SELECT [CommentId],[SongUid],[UserEmail],[UserName],[Message],[TimeStamp],[IsPrivate],[Avatar]
-FROM [V_Comments]
-WHERE [SongUid] = @SongUid
-ORDER BY [TimeStamp] DESC";
-
-                using (var cmd = new SqlCommand(commentsQuery, conn))
-                {
-                    cmd.Parameters.AddWithValue("@SongUid", songUid);
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            string? avatar = reader["Avatar"] != DBNull.Value ? reader["Avatar"].ToString() : null;
-                            string userName = reader.IsDBNull(3) ? "訪客" : reader.GetString(3);
-
-                            string commentEmail = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
-                            bool canViewPrivate = isManage || (!string.IsNullOrWhiteSpace(email) && string.Equals(commentEmail, email, StringComparison.OrdinalIgnoreCase));
-                            bool isPrivate = !reader.IsDBNull(6) && reader.GetBoolean(6);
-
-                            comments.Add(new
-                            {
-                                CommentId = reader.GetGuid(0),
-                                SongUid = reader.GetString(1),
-                                UserName = userName,
-                                Message = isPrivate && !canViewPrivate ? string.Empty : reader.GetString(4),
-                                TimeStamp = reader.GetDateTime(5),
-                                IsPrivate = isPrivate,
-                                CanViewPrivate = canViewPrivate,
-                                Avatar = !string.IsNullOrEmpty(avatar)
-                                    ? $"{appBasePath}{avatar}"
-                                    : (string.IsNullOrEmpty(userName) || userName == "訪客")
-                                        ? $"{appBasePath}/images/visitor.png"
-                                        : $"{appBasePath}/images/default-avatar.png"
-                            });
-                        }
-                    }
-                }
             }
+
+            comments.AddRange(LearnMore.Services.SongCommentReader.Read(
+                _connectionString, songUid, email, appBasePath));
 
             return Json(new { success = true, song, lyrics = lyricsList, comments, isLoggedIn = !string.IsNullOrWhiteSpace(email), isManage, isEnableRoman, isEnableAuto });
         }
