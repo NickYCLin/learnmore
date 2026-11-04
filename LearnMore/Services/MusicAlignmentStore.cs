@@ -182,9 +182,9 @@ public sealed class MusicAlignmentStore(IConfiguration config)
         await using var db = await OpenAsync(ct);
         using var q = new SqlCommand("UPDATE dbo.MusicAlignmentJobs SET State=@state,ReportJson=@report,FailureCode=@failure,LeaseUntil=NULL,UpdatedAt=SYSUTCDATETIME() WHERE JobId=@id AND State='processing' AND LeaseUntil>=SYSUTCDATETIME()", db);
         q.Parameters.AddWithValue("@id", id);
-        q.Parameters.AddWithValue("@state", report == null ? "failed" : report.Accepted ? "verified" : "needs_review");
+        q.Parameters.AddWithValue("@state", CompletionState(report));
         q.Parameters.AddWithValue("@report", report == null ? DBNull.Value : Serialize(report));
-        q.Parameters.AddWithValue("@failure", report == null ? "alignment_failed" : report.Accepted ? DBNull.Value : "verification_incomplete");
+        q.Parameters.AddWithValue("@failure", (object?)CompletionFailureCode(report) ?? DBNull.Value);
         if (await q.ExecuteNonQueryAsync(ct) != 1) throw new MusicAutomationException("job_lease_lost");
     }
 

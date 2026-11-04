@@ -47,6 +47,7 @@ AI 客戶端的 MCP 設定範例（只有程式及私有設定路徑，沒有密
 
 `queued → processing → verified / needs_review / failed`；只有套用完成才是 `applied`。
 `verified` 不會自動回寫歌曲。程序中斷後租約到期會變成 `interrupted`，不會自動重跑推論。
+遠端未設定、HTTP 4xx/5xx、逾時、傳輸或 JSON 格式失敗會以 `failed` 及安全的 `failureCode` 回報；HTTP 代碼格式為 `remote_high_accuracy_http_502`。報告不包含遠端錯誤正文或憑證。已取得音訊報告但證據不足仍為 `needs_review/verification_incomplete`，不會降低驗證門檻。歷史工作不回填或重跑，舊 `unavailable` 報告無法還原當時的 HTTP 原因。
 相同 `request_id` 重試會回傳原工作；不同 ID 的同一歌曲、相同快照若已有排隊、執行中或通過的工作，也會共用原工作。
 如果請求逾時或回應遺失，先查原 `job_id`，不要建立新 ID 重送。
 

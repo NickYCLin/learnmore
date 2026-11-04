@@ -11,7 +11,7 @@ public sealed record MusicAlignmentLine(int LyricId, string Japanese, double Bef
     double Start, double End, double Score, string Source, bool Matched);
 public sealed record MusicAlignmentReport(string Model, double? DurationSeconds, int MatchedCount,
     int TotalCount, bool Accepted, string PreviewHash, List<MusicAlignmentLine> Lines,
-    RemoteHighAccuracyAlignmentClient.ReferenceAudioEvidence? ReferenceEvidence = null);
+    RemoteHighAccuracyAlignmentClient.ReferenceAudioEvidence? ReferenceEvidence = null, string? FailureCode = null);
 public sealed record MusicAlignmentJob(Guid JobId, string SongUid, string State, DateTime CreatedAt,
     DateTime UpdatedAt, string? FailureCode, MusicAlignmentReport? Report, DateTime? AppliedAt);
 public sealed class MusicAutomationException(string code, int status = 409) : Exception(code)
@@ -22,6 +22,30 @@ public sealed class MusicAutomationException(string code, int status = 409) : Ex
 
 public static class MusicAlignmentValidation
 {
+    public static string? CompletionFailureCode(MusicAlignmentReport? report)
+        => report == null ? "alignment_failed" : report.Accepted ? null
+            : SafeFailureCode(report.FailureCode) ?? "verification_incomplete";
+
+    public static string CompletionState(MusicAlignmentReport? report)
+        => report?.Accepted == true ? "verified"
+            : report == null || SafeFailureCode(report.FailureCode) != null ? "failed" : "needs_review";
+
+    private static string? SafeFailureCode(string? code)
+    {
+        if (code is "remote_high_accuracy_api_not_configured" or "remote_high_accuracy_lyrics_empty"
+            or "remote_high_accuracy_api_empty_response" or "remote_high_accuracy_response_missing"
+            or "remote_high_accuracy_api_failed" or "remote_high_accuracy_timeout"
+            or "remote_high_accuracy_transport_failed" or "remote_high_accuracy_invalid_response") return code;
+        const string prefix = "remote_high_accuracy_http_";
+        return code?.StartsWith(prefix, StringComparison.Ordinal) == true
+            && code.Length == prefix.Length + 3
+            && code[prefix.Length..].All(char.IsAsciiDigit)
+            && int.TryParse(code[prefix.Length..], out var status) && status is >= 400 and <= 599 ? code : null;
+    }
+
+    public static MusicAlignmentReport BuildFailure(MusicSongSnapshot snapshot, string code)
+        => Build(snapshot, new(new(false, new(), SafeFailureCode(code) ?? "remote_high_accuracy_response_missing")));
+
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public static string Serialize<T>(T value) => JsonSerializer.Serialize(value, Json);
     public static T Parse<T>(string value) => JsonSerializer.Deserialize<T>(value, Json)
@@ -61,7 +85,11 @@ public static class MusicAlignmentValidation
                 contractValid && alignment?.IsMatched == true);
         }).ToList();
         var hash = Hash(new { snapshot, model = response?.Model, lines, accepted, response?.ReferenceEvidence });
+        var failureCode = response != null ? null
+            : remote.HttpStatusCode is >= 400 and <= 599 ? $"remote_high_accuracy_http_{remote.HttpStatusCode}"
+            : SafeFailureCode(attempt.FailureReason) ?? "remote_high_accuracy_response_missing";
         return new(response?.Model ?? "unavailable", response?.DurationSeconds,
-            lines.Count(x => x.Matched), snapshot.Lyrics.Count, accepted, hash, lines, response?.ReferenceEvidence);
+            lines.Count(x => x.Matched), snapshot.Lyrics.Count, accepted, hash, lines, response?.ReferenceEvidence,
+            failureCode);
     }
 }

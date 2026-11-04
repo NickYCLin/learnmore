@@ -25,6 +25,14 @@ public sealed class MusicAlignmentWorker(MusicAlignmentStore store, RemoteHighAc
                         await store.CompleteAsync(id, MusicAlignmentValidation.Build(snapshot, remote), stoppingToken);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { return; }
+                    catch (Exception ex) when (ex is OperationCanceledException or HttpRequestException or System.Text.Json.JsonException)
+                    {
+                        var code = ex is OperationCanceledException ? "remote_high_accuracy_timeout"
+                            : ex is HttpRequestException ? "remote_high_accuracy_transport_failed"
+                            : "remote_high_accuracy_invalid_response";
+                        logger.LogWarning("音樂遠端對齊失敗 jobId={JobId} code={Code}", id, code);
+                        await store.CompleteAsync(id, MusicAlignmentValidation.BuildFailure(snapshot, code), stoppingToken);
+                    }
                     catch (Exception ex)
                     {
                         logger.LogWarning("音樂對齊工作失敗 jobId={JobId} type={Type}", id, ex.GetType().Name);

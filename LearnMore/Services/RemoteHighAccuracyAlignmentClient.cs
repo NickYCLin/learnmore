@@ -85,7 +85,7 @@ public sealed class RemoteHighAccuracyAlignmentClient
                 false,
                 new List<VocalOnsetDetectionService.LyricTimingAlignment>(),
                 "remote_high_accuracy_api_failed",
-                $"HTTP {(int)response.StatusCode}: {Truncate(body, 1000)}"));
+                $"HTTP {(int)response.StatusCode}: {Truncate(body, 1000)}"), HttpStatusCode: (int)response.StatusCode);
         }
 
         var result = JsonSerializer.Deserialize<HighAccuracyAlignResponse>(body, JsonOptions);
@@ -277,7 +277,8 @@ public sealed class RemoteHighAccuracyAlignmentClient
         [property: JsonPropertyName("currentStart")] double CurrentStart);
 
     public sealed record RemoteAlignmentReport(
-        VocalOnsetDetectionService.AlignmentAttemptResult Attempt, HighAccuracyAlignResponse? Response = null);
+        VocalOnsetDetectionService.AlignmentAttemptResult Attempt, HighAccuracyAlignResponse? Response = null,
+        int? HttpStatusCode = null);
 
     public sealed record HighAccuracyAlignResponse(
         [property: JsonPropertyName("songUid")] string? SongUid,
