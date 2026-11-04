@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
 import wave
+import json
 
 import pytest
 
@@ -47,3 +48,53 @@ def test_chunk_merging_keeps_each_input_separate_and_restores_absolute_times():
 def test_invalid_local_times_cannot_be_hidden_by_an_absolute_offset(start, end):
     with pytest.raises(ValueError):
         cli.merge_chunks([Path("a.wav")], [(0, Path("part.wav"), 30, 2)], [result(start, end)])
+
+
+@pytest.mark.parametrize("tail_frames", [1067, 9499])
+def test_short_tail_is_merged_without_losing_or_padding_audio(tmp_path, tail_frames):
+    source = tmp_path / "source.wav"
+    samples = b"\x01\x02" * (16000 * 30 + tail_frames)
+    with wave.open(str(source), "wb") as output:
+        output.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+        output.writeframes(samples)
+    tasks = cli.chunk_audio([source], 15, tmp_path)
+    assert len(tasks) == 2 and tasks[-1][3] == 15 + tail_frames / 16000
+    recovered = b""
+    for _, path, _, duration in tasks:
+        with wave.open(str(path)) as audio:
+            recovered += audio.readframes(audio.getnframes())
+    assert recovered == samples
+    assert sum(task[3] for task in tasks) == len(samples) / 32000
+
+
+def test_resume_reuses_valid_chunks_but_rechecks_contract_and_retains_failure(tmp_path):
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"audio")
+    tasks = [(0, source, 0, 2), (0, source, 2, 2), (0, source, 4, 2)]
+    journal = tmp_path / "chunks.json"
+    calls = []
+
+    def transcribe(**kwargs):
+        calls.append(kwargs)
+        return [result(end=3 if len(calls) == 2 else 0.8)]
+
+    model = SimpleNamespace(transcribe=transcribe)
+    with pytest.raises(ValueError, match="incomplete"):
+        cli.transcribe_chunks(model, [source], tasks, "English", journal)
+    assert len(calls) == 3
+    saved = json.loads(journal.read_text())
+    assert [item["completed"] for item in saved["chunks"]] == [True, False, True]
+    assert saved["chunks"][1]["error"] == "invalid_chunk_word_timing"
+    cli.transcribe_chunks(model, [source], tasks, "English", journal, resume=True)
+    assert len(calls) == 4
+    assert json.loads(journal.read_text())["chunks"][1]["attempts"][0]["raw"]["time_stamps"]["items"][0]["end_time"] == 3
+    with pytest.raises(ValueError, match="contract_mismatch"):
+        cli.transcribe_chunks(model, [source], tasks, "Japanese", journal, resume=True)
+    assert len(calls) == 4
+
+
+def test_concurrent_chunk_resume_is_rejected(tmp_path):
+    journal = tmp_path / "chunks.json"
+    journal.with_name("chunks.json.lock").touch()
+    with pytest.raises(FileExistsError):
+        cli.transcribe_chunks(None, [], [], "English", journal)

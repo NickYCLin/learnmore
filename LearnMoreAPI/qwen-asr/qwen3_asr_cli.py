@@ -11,6 +11,7 @@ from pathlib import Path
 import sys
 import tempfile
 import wave
+from types import SimpleNamespace
 
 MODELS = {
     "Qwen/Qwen3-ASR-1.7B": "7278e1e70fe206f11671096ffdd38061171dd6e5",
@@ -29,6 +30,8 @@ def model_paths(*, download: bool = False) -> list[str]:
 
 
 def serializable(value):
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
     if dataclasses.is_dataclass(value):
         return dataclasses.asdict(value)
     if isinstance(value, (list, tuple)):
@@ -45,8 +48,12 @@ def chunk_audio(paths: list[Path], seconds: int, directory: Path):
     for index, path in enumerate(paths):
         with wave.open(str(path)) as source:
             rate = source.getframerate()
-            for part, start in enumerate(range(0, source.getnframes(), rate * seconds)):
-                frames = min(rate * seconds, source.getnframes() - start)
+            starts = list(range(0, source.getnframes(), rate * seconds))
+            if len(starts) > 1 and source.getnframes() - starts[-1] < rate:
+                starts.pop()
+            for part, start in enumerate(starts):
+                stop = starts[part + 1] if part + 1 < len(starts) else source.getnframes()
+                frames = stop - start
                 data = source.readframes(frames)
                 target = directory / f"{index}-{part}.wav"
                 with wave.open(str(target), "wb") as output:
@@ -54,6 +61,74 @@ def chunk_audio(paths: list[Path], seconds: int, directory: Path):
                     output.writeframes(data)
                 tasks.append((index, target, start / rate, frames / rate))
     return tasks
+
+
+def persist_journal(path: Path, payload):
+    descriptor, temporary = tempfile.mkstemp(prefix=path.name, dir=path.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+            json.dump(payload, output, ensure_ascii=False, allow_nan=False)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary, path)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def transcribe_chunks(model, paths, tasks, language, journal_path, *, resume=False, max_new_tokens=512):
+    contract = {"models": MODELS, "language": language, "maxNewTokens": max_new_tokens,
+                "inputs": [file_digest(path) for path in paths], "chunks": [
+                    {"input": index, "sha256": file_digest(path), "offset": offset, "duration": duration}
+                    for index, path, offset, duration in tasks]}
+    lock = journal_path.with_name(journal_path.name + ".lock")
+    descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.close(descriptor)
+        if journal_path.is_symlink():
+            raise ValueError("invalid_chunk_journal")
+        if journal_path.exists():
+            if not resume:
+                raise ValueError("chunk_journal_exists")
+            journal = json.loads(journal_path.read_text(encoding="utf-8"))
+            if journal.get("contract") != contract or len(journal.get("chunks", [])) != len(tasks):
+                raise ValueError("chunk_journal_contract_mismatch")
+        else:
+            journal = {"contract": contract, "verificationStatus": "unreviewed", "chunks": [{} for _ in tasks]}
+        results = []
+        failed = False
+        for position, task in enumerate(tasks):
+            entry = journal["chunks"][position]
+            try:
+                if not entry.get("completed"):
+                    raw = model.transcribe(audio=[str(task[1])],
+                                           language=None if language == "auto" else language,
+                                           return_time_stamps=True)
+                    if len(raw) != 1:
+                        raise ValueError("chunk_result_count_mismatch")
+                    history = entry.get("attempts", [])
+                    if entry.get("raw"):
+                        history = [*history, {"raw": entry["raw"], "error": entry.get("error")}]
+                    entry = {"attempts": history, "raw": {"language": raw[0].language, "text": raw[0].text,
+                                     "time_stamps": serializable(raw[0].time_stamps)}, "completed": False}
+                    journal["chunks"][position] = entry
+                    persist_journal(journal_path, journal)
+                result = SimpleNamespace(**entry["raw"])
+                merge_chunks(paths, [task], [result])
+                entry.update(completed=True, error=None)
+                results.append(result)
+            except Exception as error:
+                code = str(error) if isinstance(error, ValueError) and str(error) in {
+                    "invalid_chunk_word_timing", "chunk_result_count_mismatch"} else "chunk_transcription_failed"
+                entry.update(completed=False, error=code)
+                journal["chunks"][position] = entry
+                failed = True
+                results.append(None)
+            persist_journal(journal_path, journal)
+        if failed:
+            raise ValueError("chunk_transcription_incomplete")
+        return results
+    finally:
+        lock.unlink(missing_ok=True)
 
 
 def merge_chunks(paths: list[Path], tasks, results):
@@ -65,7 +140,8 @@ def merge_chunks(paths: list[Path], tasks, results):
         previous = -1.0
         for word in stamps["items"]:
             start, end = word["start_time"], word["end_time"]
-            if (not math.isfinite(start) or not math.isfinite(end) or start < previous
+            if (type(start) not in {int, float} or type(end) not in {int, float}
+                    or not math.isfinite(start) or not math.isfinite(end) or start < previous
                     or not 0 <= start <= end <= duration):
                 raise ValueError("invalid_chunk_word_timing")
             previous = start
@@ -91,6 +167,7 @@ def main(argv=None) -> int:
     transcribe.add_argument("--max-new-tokens", type=int, default=512)
     transcribe.add_argument("--chunk-seconds", type=int, default=0,
                             help="PCM WAV 可選擇分成 5–60 秒的獨立辨識片段")
+    transcribe.add_argument("--resume-chunks", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "download":
         model_paths(download=True)
@@ -138,9 +215,13 @@ def main(argv=None) -> int:
     with tempfile.TemporaryDirectory(prefix="learnmore-qwen-chunks-") as directory:
         tasks = (chunk_audio(args.audio, args.chunk_seconds, Path(directory)) if args.chunk_seconds
                  else [(i, path, 0, 0) for i, path in enumerate(args.audio)])
-        raw_results = model.transcribe(audio=[str(task[1]) for task in tasks],
-                                       language=None if args.language == "auto" else args.language,
-                                       return_time_stamps=True)
+        raw_results = (transcribe_chunks(
+            model, args.audio, tasks, args.language,
+            args.output.with_name(args.output.name + ".chunks.json"),
+            resume=args.resume_chunks, max_new_tokens=args.max_new_tokens) if args.chunk_seconds else
+            model.transcribe(audio=[str(task[1]) for task in tasks],
+                             language=None if args.language == "auto" else args.language,
+                             return_time_stamps=True))
         if len(raw_results) != len(tasks):
             raise RuntimeError("transcript_count_mismatch")
         results = (merge_chunks(args.audio, tasks, raw_results) if args.chunk_seconds else [

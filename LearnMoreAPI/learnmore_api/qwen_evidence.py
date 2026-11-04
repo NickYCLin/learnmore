@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import os
 from pathlib import Path
@@ -81,12 +82,32 @@ def parse_result(payload: dict, audio_path: Path, duration: float) -> list[dict]
 
 def transcribe(audio_path: Path, duration: float, command: list[str], timeout: float,
                language: str = "ja") -> list[dict]:
-    with tempfile.TemporaryDirectory(prefix="learnmore-qwen-evidence-") as directory:
-        output = Path(directory) / "result.json"
+    root = Path(os.environ.get("QWEN_DIAGNOSTICS_DIR", "/tmp/learnmore-qwen-diagnostics"))
+    root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    directory = Path(tempfile.mkdtemp(prefix="evidence-", dir=root))
+    output = directory / "result.json"
+    receipt = {"diagnosticId": directory.name, "language": language, "state": "started"}
+    (directory / "diagnostic.json").write_text(json.dumps(receipt))
+    try:
         run_transcription([audio_path], output, command, timeout, language)
         if output.stat().st_size > 12_000_000:
             raise ValueError("qwen_report_too_large")
-        return parse_result(json.loads(output.read_text()), audio_path, duration)
+        words = parse_result(json.loads(output.read_text()), audio_path, duration)
+        receipt.update(state="completed", exitCode=0)
+        return words
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        code = "timeout" if isinstance(error, subprocess.TimeoutExpired) else (
+            "subprocess_exit" if isinstance(error, subprocess.CalledProcessError) else "invalid_evidence")
+        if isinstance(error, ValueError) and str(error) in {
+            "qwen_invalid_word_timing", "qwen_wrong_model_contract", "qwen_incomplete_word_coverage",
+            "qwen_wrong_audio", "qwen_report_too_large"}:
+            code = str(error)
+        receipt.update(state="failed", errorCode=code,
+                       exitCode=error.returncode if isinstance(error, subprocess.CalledProcessError) else None)
+        logging.getLogger(__name__).warning("Qwen evidence failed diagnosticId=%s code=%s", directory.name, code)
+        raise
+    finally:
+        (directory / "diagnostic.json").write_text(json.dumps(receipt))
 
 
 def run_transcription(audio_paths: list[Path], output: Path, command: list[str], timeout: float,

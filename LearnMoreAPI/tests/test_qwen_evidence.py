@@ -18,7 +18,7 @@ def report(audio):
 
 
 @pytest.mark.parametrize("change", ["hash", "model", "missing_word", "infinite", "negative",
-                                   "beyond_audio", "reversed", "wrong_result", "wrong_file"])
+                                   "beyond_audio", "reversed", "wrong_result", "wrong_file", "zero_length"])
 def test_wrong_audio_or_incomplete_evidence_is_rejected(tmp_path, change):
     audio = tmp_path / "vocals.wav"
     audio.write_bytes(b"audio evidence")
@@ -34,6 +34,7 @@ def test_wrong_audio_or_incomplete_evidence_is_rejected(tmp_path, change):
     if change == "reversed": items.reverse()
     if change == "wrong_result": payload["results"].append(result)
     if change == "wrong_file": result["file"] = "other.wav"
+    if change == "zero_length": items[0]["end_time"] = items[0]["start_time"]
     with pytest.raises(ValueError):
         qwen.parse_result(payload, audio, 5)
 
