@@ -70,12 +70,19 @@ def test_real_stdio_protocol_and_authenticated_http_tools(tmp_path,can_write):
                 await session.initialize()
                 listing=await session.list_tools()
                 names={t.name for t in listing.tools}
-                assert len(names)==(5 if can_write else 4)
+                assert len(names)==(7 if can_write else 6)
                 assert ('apply_verified_alignment' in names)==can_write
                 result=await session.call_tool('start_music_alignment',{'request_id':'same-request','youtube_url':'https://youtu.be/LjuJgrdh5eY'})
                 assert not result.isError
                 for name in ['get_music_job','get_alignment_report','preview_alignment_changes']:
                     assert not (await session.call_tool(name,{'job_id':jid})).isError
+                assert not (await session.call_tool('get_local_evidence_snapshot',{'song_uid':jid})).isError
+                assert not (await session.call_tool('revalidate_local_alignment_evidence',{
+                    'request_id':'same-evidence-request','song_uid':jid,'evidence_id':'a'*32,
+                    'snapshot_hash':'A'*64,'language':'en'})).isError
+                assert (await session.call_tool('revalidate_local_alignment_evidence',{
+                    'request_id':'bad-evidence-request','song_uid':jid,'evidence_id':'../raw',
+                    'snapshot_hash':'A'*64,'language':'en'})).isError
                 invalid=await session.call_tool('get_music_job',{'job_id':'../apply'})
                 assert invalid.isError
                 if can_write:
@@ -84,7 +91,10 @@ def test_real_stdio_protocol_and_authenticated_http_tools(tmp_path,can_write):
     finally:api.shutdown();api.server_close();thread.join()
     assert calls[0][3]['requestId']=='same-request'
     assert calls[0][1]=='/LearnMore/api/music-automation/jobs'
-    assert all(c[2]=='Bearer '+READ for c in calls[:4])
+    assert all(c[2]=='Bearer '+READ for c in calls[:6])
+    assert calls[4][1].endswith('/songs/'+jid+'/evidence-snapshot')
+    assert calls[5][1].endswith('/local-evidence/jobs')
+    assert calls[5][3]['language']=='en'
     if can_write:
         assert calls[-1][2]=='Bearer '+WRITE
         assert calls[-1][3]['previewHash']=='A'*64

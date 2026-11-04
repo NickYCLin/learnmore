@@ -11,7 +11,9 @@ public sealed record MusicAlignmentLine(int LyricId, string Japanese, double Bef
     double Start, double End, double Score, string Source, bool Matched);
 public sealed record MusicAlignmentReport(string Model, double? DurationSeconds, int MatchedCount,
     int TotalCount, bool Accepted, string PreviewHash, List<MusicAlignmentLine> Lines,
-    RemoteHighAccuracyAlignmentClient.ReferenceAudioEvidence? ReferenceEvidence = null, string? FailureCode = null);
+    RemoteHighAccuracyAlignmentClient.ReferenceAudioEvidence? ReferenceEvidence = null, string? FailureCode = null,
+    MusicLocalEvidenceBinding? LocalEvidence = null);
+public sealed record MusicLocalEvidenceBinding(string EvidenceId, string SnapshotHash, string Language);
 public sealed record MusicAlignmentJob(Guid JobId, string SongUid, string State, DateTime CreatedAt,
     DateTime UpdatedAt, string? FailureCode, MusicAlignmentReport? Report, DateTime? AppliedAt);
 public sealed class MusicAutomationException(string code, int status = 409) : Exception(code)
@@ -53,13 +55,13 @@ public static class MusicAlignmentValidation
     public static string Hash<T>(T value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Serialize(value))));
 
     public static MusicAlignmentReport Build(MusicSongSnapshot snapshot,
-        RemoteHighAccuracyAlignmentClient.RemoteAlignmentReport remote)
+        RemoteHighAccuracyAlignmentClient.RemoteAlignmentReport remote, string language = "ja")
     {
         var response = remote.Response;
         var attempt = remote.Attempt;
         var raw = response?.AlignedLines ?? new();
         var contractValid = response != null && response.SongUid == snapshot.SongUid
-            && response.YoutubeUrl == snapshot.YoutubeUrl && response.Language == "ja"
+            && response.YoutubeUrl == snapshot.YoutubeUrl && (language is "ja" or "en") && response.Language == language
             && response.TotalCount == snapshot.Lyrics.Count && raw.Count == snapshot.Lyrics.Count
             && raw.Select(x => x.LyricId).Distinct().Count() == raw.Count
             && response.DurationSeconds is > 0 && double.IsFinite(response.DurationSeconds.Value)

@@ -97,6 +97,39 @@ public sealed class RemoteHighAccuracyAlignmentClient
                 "remote_high_accuracy_api_empty_response"));
         }
 
+        return BuildRemoteReport(snapshot, result);
+    }
+
+    public async Task<RemoteAlignmentReport> VerifyLocalEvidenceAsync(MusicSongSnapshot snapshot,
+        MusicLocalEvidenceBinding binding, CancellationToken ct = default)
+    {
+        if (!IsConfigured) throw new MusicAutomationException("evidence_service_not_configured", 503);
+        using var request = new HttpRequestMessage(HttpMethod.Post, BuildRemoteUri("v1/local-alignment-evidence/verify"))
+        {
+            Content = JsonContent.Create(new { binding.EvidenceId, binding.SnapshotHash, snapshot.SongUid,
+                snapshot.YoutubeUrl, binding.Language,
+                lyrics = snapshot.Lyrics.Select(lyric => new HighAccuracyLyricLine(lyric.LyricID, lyric.Japanese, lyric.TimeStamp)) },
+                options: JsonOptions)
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _options.RemoteHighAccuracyApiToken);
+        using var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(60);
+        using var response = await client.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode) throw new MusicAutomationException("evidence_revalidation_rejected");
+        var result = await response.Content.ReadFromJsonAsync<HighAccuracyAlignResponse>(JsonOptions, ct)
+            ?? throw new MusicAutomationException("evidence_invalid_response");
+        if (result.Model == null || !Regex.IsMatch(result.Model, @"\Aqwen3-asr-pinned-local-evidence:[0-9a-f]{64}\z")
+            || result.AlignedLines == null
+            || result.AlignedLines.Select(line => line.LyricId).Distinct().Count() != result.AlignedLines.Count
+            || result.ReferenceEvidence != null || result.AlignedLines.Any(line => line.Source is not
+                ("qwen3_asr_word_match" or "current_timestamp_context")))
+            throw new MusicAutomationException("evidence_invalid_response");
+        return BuildRemoteReport(new SongLyricsProcessingSnapshot
+            { SongUid = snapshot.SongUid, YouTubeUrl = snapshot.YoutubeUrl, Lyrics = snapshot.Lyrics }, result);
+    }
+
+    private RemoteAlignmentReport BuildRemoteReport(SongLyricsProcessingSnapshot snapshot, HighAccuracyAlignResponse result)
+    {
         var referenceVerified = IsReliableReference(result);
         var linesById = result.AlignedLines.ToDictionary(line => line.LyricId);
         var alignments = new List<VocalOnsetDetectionService.LyricTimingAlignment>(snapshot.Lyrics.Count);

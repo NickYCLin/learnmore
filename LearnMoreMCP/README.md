@@ -42,6 +42,8 @@ AI 客戶端的 MCP 設定範例（只有程式及私有設定路徑，沒有密
 | `start_music_alignment` | 指定 `song_uid` 或已建檔的 `youtube_url`，加上穩定的 `request_id`，建立分析工作 |
 | `get_music_job` | 查詢工作；處理中依 `nextPollAfterSeconds` 等待 |
 | `get_alignment_report` | 取得逐行原秒數、聲學時間、來源、分數及網站接受結果 |
+| `get_local_evidence_snapshot` | 讀取完整正式快照與來源綁定雜湊，不執行推論 |
+| `revalidate_local_alignment_evidence` | 重驗服務端已登記證據，建立工作；支援明確 ja/en，不推論、不套用 |
 | `preview_alignment_changes` | 檢閱通過後的變更與 `previewHash` |
 | `apply_verified_alignment` | 用 `preview_hash` 套用；只在配置獨立套用憑證時提供 |
 
@@ -52,7 +54,10 @@ AI 客戶端的 MCP 設定範例（只有程式及私有設定路徑，沒有密
 如果請求逾時或回應遺失，先查原 `job_id`，不要建立新 ID 重送。
 
 只分析現有歌曲與正式歌詞；陌生影片會回覆 `upload_song_first`，不會自行將辨識稿建檔。
-本版不接受本機音檔上傳，不處理翻譯補件；這些仍使用既有網站流程。
+本版不接受任意本機音檔或客戶端報告上傳，不處理翻譯補件。可信本機證據須先經
+受信任操作者審核並登記於唯讀服務端目錄，詳見 `docs/MUSIC_LOCAL_EVIDENCE.md`。
+未登記或未通過重驗的候選不能套用。更新 MCP 程式後須由客戶端重新載入工具，
+舊連線不會自動增加新工具。
 
 ## 網站端啟用
 

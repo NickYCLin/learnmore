@@ -209,6 +209,74 @@ public sealed class MusicAlignmentSqlTests : IAsyncLifetime
         Assert.Equal("song_video_mismatch",(await Assert.ThrowsAsync<MusicAutomationException>(()=>Store.StartAsync("mismatch",uid,"https://youtu.be/aaaaaaaaaaa"))).Code);
         Assert.Equal("upload_song_first",(await Assert.ThrowsAsync<MusicAutomationException>(()=>Store.StartAsync("new",null,"https://youtu.be/bbbbbbbbbbb"))).Code);
     }
+    [SqlAuditFact]
+    public async Task LocalEvidenceImportIsAtomicIdempotentAndDoesNotChangeSong()
+    {
+        var snapshot = await Store.GetEvidenceSnapshotAsync(uid);
+        var binding = new MusicLocalEvidenceBinding(new('a',32),Hash(snapshot),"ja");
+        var report = BuildFailure(snapshot,"remote_high_accuracy_timeout") with {LocalEvidence=binding};
+        var before = Serialize(snapshot);
+        var jobs = await Task.WhenAll(Store.ImportEvidenceAsync("evidence-one",snapshot,report,binding),
+            Store.ImportEvidenceAsync("evidence-one",snapshot,report,binding));
+        Assert.Equal(jobs[0].JobId,jobs[1].JobId);
+        Assert.Equal("failed",jobs[0].State);
+        Assert.Equal(before,Serialize(await Store.GetEvidenceSnapshotAsync(uid)));
+        Assert.Equal("1",await Scalar("SELECT COUNT(*) FROM dbo.MusicAlignmentJobs"));
+        Assert.Equal("0",await Scalar("SELECT COUNT(*) FROM dbo.MusicAlignmentBackups"));
+        Assert.Null(await Store.ClaimAsync());
+        Assert.Equal(jobs[0].JobId,(await Store.FindEvidenceRequestAsync("evidence-one",uid,binding))!.JobId);
+        Assert.Equal("request_id_reused",(await Assert.ThrowsAsync<MusicAutomationException>(() =>
+            Store.FindEvidenceRequestAsync("evidence-one",uid,binding with {Language="en"}))).Code);
+    }
+
+    [SqlAuditFact]
+    public async Task LocalEvidenceRejectsChangedFullSnapshotAndActiveInference()
+    {
+        var snapshot = await Store.GetEvidenceSnapshotAsync(uid);
+        var binding = new MusicLocalEvidenceBinding(new('a',32),Hash(snapshot),"ja");
+        var report = BuildFailure(snapshot,"remote_high_accuracy_timeout") with {LocalEvidence=binding};
+        await Sql($"UPDATE dbo.[Songs_{uid}] SET Chinese=N'人工更新' WHERE LyricID=1");
+        Assert.Equal("song_changed_since_analysis",(await Assert.ThrowsAsync<MusicAutomationException>(() =>
+            Store.ImportEvidenceAsync("changed",snapshot,report,binding))).Code);
+        snapshot = await Store.GetEvidenceSnapshotAsync(uid);
+        binding = binding with {SnapshotHash=Hash(snapshot)};
+        report = report with {LocalEvidence=binding};
+        await Store.StartAsync("active-inference",uid,null);
+        Assert.Equal("song_is_processing",(await Assert.ThrowsAsync<MusicAutomationException>(() =>
+            Store.ImportEvidenceAsync("blocked",snapshot,report,binding))).Code);
+        Assert.Equal("1",await Scalar("SELECT COUNT(*) FROM dbo.MusicAlignmentJobs"));
+    }
+
+    [SqlAuditFact]
+    public async Task VerifiedLocalEvidenceRetainsPreviewConflictBackupAndReadback()
+    {
+        var snapshot = await Store.GetEvidenceSnapshotAsync(uid);
+        var binding = new MusicLocalEvidenceBinding(new('a',32),Hash(snapshot),"ja");
+        var lines = snapshot.Lyrics.Select((lyric,index) => new {lyricId=lyric.LyricID,japanese=lyric.Japanese,
+            start=index==0?1.25:4.5,end=index==0?3.0:6.0,score=1.0,source="qwen3_asr_word_match"}).ToArray();
+        var body = Serialize(new {songUid=uid,youtubeUrl=snapshot.YoutubeUrl,language="ja",
+            model="qwen3-asr-pinned-local-evidence:"+new string('a',64),durationSeconds=10,
+            alignedLines=lines,matchedCount=2,totalCount=2});
+        var client = new RemoteHighAccuracyAlignmentClient(Microsoft.Extensions.Options.Options.Create(
+            new VocalOnsetDetectionOptions {UseRemoteHighAccuracyApi=true,RemoteHighAccuracyApiBaseUrl="https://example.invalid/",
+                RemoteHighAccuracyApiToken="fixture-only"}),new Factory(body),NullLogger<RemoteHighAccuracyAlignmentClient>.Instance);
+        var report = Build(snapshot,await client.VerifyLocalEvidenceAsync(snapshot,binding)) with {LocalEvidence=binding};
+        report = report with {PreviewHash=Hash(new {report.PreviewHash,binding})};
+        var job = await Store.ImportEvidenceAsync("verified-local",snapshot,report,binding);
+        Assert.Equal("verified",job.State);
+        Assert.Equal(Serialize(snapshot),Serialize(await Store.GetEvidenceSnapshotAsync(uid)));
+        Assert.Equal("song_is_processing",(await Assert.ThrowsAsync<MusicAutomationException>(() =>
+            Store.ImportEvidenceAsync("other-local",snapshot,report,binding))).Code);
+        Assert.Equal("preview_changed",(await Assert.ThrowsAsync<MusicAutomationException>(() =>
+            Store.ApplyAsync(job.JobId,new('B',64)))).Code);
+        var text = await Scalar($"SELECT Japanese+Chinese+JapaneseRuby+Roman FROM dbo.[Songs_{uid}] WHERE LyricID=1");
+        Assert.Equal("applied",(await Store.ApplyAsync(job.JobId,report.PreviewHash)).State);
+        Assert.Equal("applied",(await Store.ApplyAsync(job.JobId,report.PreviewHash)).State);
+        Assert.Equal(text,await Scalar($"SELECT Japanese+Chinese+JapaneseRuby+Roman FROM dbo.[Songs_{uid}] WHERE LyricID=1"));
+        Assert.Equal("1.25",await Scalar($"SELECT TimeStamp FROM dbo.[Songs_{uid}] WHERE LyricID=1"));
+        Assert.Equal("1",await Scalar("SELECT COUNT(*) FROM dbo.MusicAlignmentBackups"));
+    }
+
     private sealed class Factory(string body):IHttpClientFactory { public HttpClient CreateClient(string name)=>new(new Handler(body)); }
     private sealed class Handler(string body):HttpMessageHandler { protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,CancellationToken ct)=>Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK){Content=new StringContent(body,Encoding.UTF8,"application/json")}); }
 }

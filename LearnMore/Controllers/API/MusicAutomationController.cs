@@ -38,6 +38,38 @@ public sealed class MusicAutomationController(MusicAlignmentStore store, ILogger
 {
     public sealed record StartRequest(string RequestId, string? SongUid = null, string? YoutubeUrl = null);
     public sealed record ApplyRequest(string PreviewHash);
+    public sealed record LocalEvidenceRequest(string RequestId, string SongUid, string EvidenceId,
+        string SnapshotHash, string Language = "ja");
+
+    [HttpGet("songs/{uid:guid}/evidence-snapshot")]
+    public Task<IActionResult> EvidenceSnapshot(Guid uid, CancellationToken ct) => Safe(async () =>
+    {
+        var snapshot = await store.GetEvidenceSnapshotAsync(uid.ToString("D"), ct);
+        return ResponseJson(new { snapshot, snapshotHash = MusicAlignmentValidation.Hash(snapshot) });
+    });
+
+    [HttpPost("local-evidence/jobs")]
+    public Task<IActionResult> LocalEvidence(LocalEvidenceRequest request,
+        [FromServices] RemoteHighAccuracyAlignmentClient client, CancellationToken ct) => Safe(async () =>
+    {
+        if (string.IsNullOrWhiteSpace(request.RequestId) || request.RequestId.Length > 128
+            || request.Language is not ("ja" or "en")
+            || !Guid.TryParseExact(request.EvidenceId, "N", out var evidenceId)
+            || request.EvidenceId != evidenceId.ToString("N")
+            || request.SnapshotHash?.Length != 64 || !request.SnapshotHash.All(char.IsAsciiHexDigit))
+            throw new MusicAutomationException("evidence_invalid_contract", 400);
+        var binding = new MusicLocalEvidenceBinding(request.EvidenceId, request.SnapshotHash, request.Language);
+        var prior = await store.FindEvidenceRequestAsync(request.RequestId, request.SongUid, binding, ct);
+        if (prior != null) return ResponseJson(Summary(prior));
+        var snapshot = await store.GetEvidenceSnapshotAsync(request.SongUid, ct);
+        if (MusicAlignmentValidation.Hash(snapshot) != binding.SnapshotHash)
+            throw new MusicAutomationException("song_changed_since_analysis");
+        var remote = await client.VerifyLocalEvidenceAsync(snapshot, binding, ct);
+        var report = MusicAlignmentValidation.Build(snapshot, remote, binding.Language);
+        report = report with { LocalEvidence = binding,
+            PreviewHash = MusicAlignmentValidation.Hash(new { report.PreviewHash, binding }) };
+        return ResponseJson(Summary(await store.ImportEvidenceAsync(request.RequestId, snapshot, report, binding, ct)), 201);
+    });
 
     [HttpPost("jobs")]
     public Task<IActionResult> Start(StartRequest request, CancellationToken ct) => Safe(async () =>

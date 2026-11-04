@@ -28,6 +28,33 @@ def test_health(client) -> None:
     assert body["whisperConfigured"] is True
 
 
+def test_required_profile_refuses_silent_cpu_fallback_before_inference(client, monkeypatch):
+    test_client, main = client
+    main.app.state.settings = main.app.state.settings.model_copy(update={
+        "high_accuracy_required_profile": "kotoba-whisper-cuda-whisperx",
+        "whisper_model": "medium", "whisper_device": "cpu", "whisperx_align_enabled": False})
+    monkeypatch.setattr(main, "high_accuracy_align_sync", lambda *_: pytest.fail("must not infer"))
+    headers = {"Authorization": "Bearer test-token"}
+    assert test_client.get("/v1/alignment-capabilities").status_code == 401
+    capabilities = test_client.get("/v1/alignment-capabilities", headers=headers).json()
+    assert capabilities["primary"]["requestAllowed"] is False
+    assert capabilities["primary"]["matchesExpectedJapaneseProfile"] is False
+    response = test_client.post("/v1/high-accuracy-align", headers=headers, json={
+        "youtubeUrl": "https://youtu.be/abcdefghijk", "lyrics": [{"lyricId": 1, "japanese": "空"}]})
+    assert response.status_code == 503
+    assert response.json()["detail"] == "high_accuracy_profile_mismatch"
+    assert test_client.get("/health").json()["highAccuracyAlignmentEngine"] == "faster-whisper-words"
+
+
+def test_required_profile_checks_model_device_and_whisperx(client):
+    _, main = client
+    settings = main.Settings(api_token="test", high_accuracy_required_profile="kotoba-whisper-cuda-whisperx",
+                             whisper_model="kotoba-tech/kotoba-whisper-v2.0-faster", whisper_device="cuda")
+    assert main.alignment_profile(settings)["primary"]["requestAllowed"] is True
+    assert main.alignment_profile(settings.model_copy(update={"whisperx_align_enabled": False}))["primary"]["requestAllowed"] is False
+    assert main.alignment_profile(settings.model_copy(update={"high_accuracy_required_profile": "unknown"}))["primary"]["requestAllowed"] is False
+
+
 def test_word_alignment_keeps_contextual_reading_and_word_boundaries(client) -> None:
     _, main = client
     words = [

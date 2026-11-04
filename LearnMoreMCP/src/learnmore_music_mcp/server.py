@@ -41,6 +41,8 @@ class MusicClient:
             known = {"job_not_found", "upload_song_first", "ambiguous_video", "request_id_reused",
                 "song_changed_since_analysis", "preview_changed", "verification_required", "text_enrichment_required",
                 "verification_incomplete", "song_is_processing", "song_video_mismatch", "queue_full", "formal_lyrics_required"}
+            known.update({"evidence_invalid_contract", "evidence_snapshot_mismatch", "evidence_revalidation_rejected",
+                          "evidence_service_not_configured", "evidence_invalid_response"})
             try:
                 code = response.json().get("error", "")
             except (ValueError, AttributeError):
@@ -70,6 +72,25 @@ def create_server(client: MusicClient) -> FastMCP:
         if not request_id.strip() or len(request_id) > 128 or not (song_uid or youtube_url):
             raise ValueError("需要穩定的 request_id，以及 song_uid 或已建檔影片連結")
         return await client.request("POST", "jobs", {"requestId": request_id, "songUid": song_uid, "youtubeUrl": youtube_url})
+
+    @server.tool(annotations=read)
+    async def get_local_evidence_snapshot(song_uid: str) -> dict:
+        """讀取完整正式歌詞快照及服務端 snapshotHash；不推論、不變更歌曲。"""
+        return await client.request("GET", "songs/" + validate_job_id(song_uid) + "/evidence-snapshot")
+
+    @server.tool(annotations=ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False))
+    async def revalidate_local_alignment_evidence(request_id: str, song_uid: str, evidence_id: str,
+                                                 snapshot_hash: str, language: str = "ja") -> dict:
+        """重驗服務端已登記的不可變音訊證據並建立報告工作；不啟動推論或套用歌曲。保留相同 request_id 重試。"""
+        if not request_id.strip() or len(request_id) > 128 or language not in {"ja", "en"}:
+            raise ValueError("需要穩定 request_id 與明確 ja/en 語言")
+        canonical_evidence = UUID(evidence_id).hex
+        if evidence_id != canonical_evidence or len(snapshot_hash) != 64 or any(
+                char not in "0123456789abcdefABCDEF" for char in snapshot_hash):
+            raise ValueError("需要 evidence UUID hex 與完整 snapshotHash")
+        return await client.request("POST", "local-evidence/jobs", {
+            "requestId": request_id, "songUid": validate_job_id(song_uid), "evidenceId": evidence_id,
+            "snapshotHash": snapshot_hash, "language": language})
 
     @server.tool(annotations=read)
     async def get_music_job(job_id: str) -> dict:

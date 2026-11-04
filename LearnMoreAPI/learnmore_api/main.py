@@ -16,6 +16,7 @@ import tempfile
 import time
 import urllib.parse
 import urllib.request
+import wave
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -234,6 +235,11 @@ class HighAccuracyAlignResponse(BaseModel):
     referenceEvidence: dict[str, Any] | None = None
 
 
+class LocalEvidenceRequest(HighAccuracyAlignRequest):
+    evidenceId: str = Field(pattern=r"^[0-9a-f]{32}$")
+    snapshotHash: str = Field(pattern=r"^[0-9A-Fa-f]{64}$")
+
+
 class Settings(BaseModel):
     api_token: str
     codex_bin: str = "codex"
@@ -254,6 +260,8 @@ class Settings(BaseModel):
     whisperx_align_enabled: bool = True
     qwen_asr_command: list[str] = Field(default_factory=list)
     qwen_asr_timeout_seconds: float = 600.0
+    local_evidence_root: str = ""
+    high_accuracy_required_profile: str = ""
 
 
 def load_settings() -> Settings:
@@ -308,6 +316,7 @@ def load_settings() -> Settings:
         codex_timeout_seconds=timeout,
         codex_workdir=codex_workdir or "/tmp/learnmore-api-codex",
         whisper_model=whisper_model,
+        high_accuracy_required_profile=os.getenv("HIGH_ACCURACY_REQUIRED_PROFILE", "").strip(),
         whisper_device=whisper_device,
         whisper_compute_type=whisper_compute_type,
         whisper_download_dir=whisper_download_dir or "/tmp/learnmore-api-whisper",
@@ -321,6 +330,7 @@ def load_settings() -> Settings:
         whisperx_align_enabled=whisperx_align_enabled,
         qwen_asr_command=qwen_command,
         qwen_asr_timeout_seconds=qwen_timeout,
+        local_evidence_root=os.getenv("LOCAL_EVIDENCE_ROOT", "").strip(),
     )
 
 
@@ -422,11 +432,34 @@ async def health(settings: Settings = Depends(get_settings)) -> dict[str, object
         "whisperModel": settings.whisper_model,
         "whisperDevice": settings.whisper_device,
         "whisperComputeType": settings.whisper_compute_type,
-        "highAccuracyAlignmentEngine": "whisperx",
+        "highAccuracyAlignmentEngine": "whisperx" if settings.whisperx_align_enabled else "faster-whisper-words",
         "whisperxAlignEnabled": settings.whisperx_align_enabled,
         "vocalsStemEnabled": settings.high_accuracy_use_vocals_stem and bool(settings.uvr_command_template),
         "sourceCommit": os.getenv("LEARNMORE_SOURCE_COMMIT", ""),
     }
+
+
+def alignment_profile(settings: Settings) -> dict[str, Any]:
+    from .qwen_evidence import MODELS
+
+    expected = "kotoba-whisper-cuda-whisperx"
+    ready = ("kotoba-whisper" in settings.whisper_model.lower()
+             and settings.whisper_device == "cuda" and settings.whisperx_align_enabled)
+    return {"primary": {"model": settings.whisper_model, "device": settings.whisper_device,
+                        "computeType": settings.whisper_compute_type,
+                        "whisperxEnabled": settings.whisperx_align_enabled,
+                        "requiredProfile": settings.high_accuracy_required_profile,
+                        "expectedJapaneseProfile": expected, "matchesExpectedJapaneseProfile": ready,
+                        "requestAllowed": not settings.high_accuracy_required_profile
+                        or settings.high_accuracy_required_profile == expected and ready},
+            "localEvidence": {"configured": bool(settings.local_evidence_root), "languages": ["ja", "en"],
+                              "trust": "operator-registered-manifest-sha256", "models": MODELS,
+                              "inferencePerformed": False}}
+
+
+@app.get("/v1/alignment-capabilities", dependencies=[Depends(require_bearer_token)])
+async def alignment_capabilities(settings: Settings = Depends(get_settings)) -> dict[str, Any]:
+    return alignment_profile(settings)
 
 
 @app.post(
@@ -676,6 +709,8 @@ async def high_accuracy_align(
     request: HighAccuracyAlignRequest,
     settings: Settings = Depends(get_settings),
 ) -> HighAccuracyAlignResponse:
+    if not alignment_profile(settings)["primary"]["requestAllowed"]:
+        raise HTTPException(status_code=503, detail="high_accuracy_profile_mismatch")
     lock: asyncio.Semaphore = app.state.whisper_lock
     async with lock:
         try:
@@ -693,6 +728,25 @@ async def high_accuracy_align(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=str(exc),
             ) from exc
+
+
+@app.post("/v1/local-alignment-evidence/verify", response_model=HighAccuracyAlignResponse,
+          dependencies=[Depends(require_bearer_token)])
+async def verify_local_evidence(request: LocalEvidenceRequest,
+                                settings: Settings = Depends(get_settings)) -> HighAccuracyAlignResponse:
+    from . import local_evidence
+
+    try:
+        result = await asyncio.to_thread(local_evidence.verify, settings.local_evidence_root,
+                                        request.evidenceId, request.snapshotHash, request.songUid,
+                                        request.youtubeUrl, request.language,
+                                        [line.model_dump() for line in request.lyrics])
+        return HighAccuracyAlignResponse(**result)
+    except (OSError, ValueError, KeyError, TypeError, wave.Error) as error:
+        code = str(error) if isinstance(error, ValueError) and str(error).startswith(("evidence_", "qwen_")) else "evidence_invalid_artifact"
+        allowed = {"evidence_registry_not_configured", "evidence_not_registered", "evidence_manifest_changed",
+                   "evidence_snapshot_mismatch", "evidence_audio_or_raw_changed", "evidence_language_mismatch"}
+        raise HTTPException(status_code=409, detail=code if code in allowed else "evidence_revalidation_failed") from None
 
 
 async def translate_batch(lines: list[LyricLine], settings: Settings) -> dict[str, Any]:

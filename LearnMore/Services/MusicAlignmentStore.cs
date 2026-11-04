@@ -8,6 +8,78 @@ namespace LearnMore.Services;
 
 public sealed class MusicAlignmentStore(IConfiguration config)
 {
+    public async Task<MusicSongSnapshot> GetEvidenceSnapshotAsync(string uid, CancellationToken ct = default)
+    {
+        await using var db = await OpenAsync(ct);
+        await using var tx = (SqlTransaction)await db.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var snapshot = await SnapshotAsync(db, tx, uid, ct);
+        await tx.CommitAsync(ct);
+        return snapshot;
+    }
+
+    public async Task<MusicAlignmentJob?> FindEvidenceRequestAsync(string requestId, string uid,
+        MusicLocalEvidenceBinding binding, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(requestId) || requestId.Length > 128)
+            throw new MusicAutomationException("invalid_request_id", 400);
+        await using var db = await OpenAsync(ct);
+        using var query = new SqlCommand("SELECT JobId,SongUid,ReportJson FROM dbo.MusicAlignmentJobs WHERE RequestKey=@key UNION SELECT j.JobId,j.SongUid,j.ReportJson FROM dbo.MusicAlignmentRequests r JOIN dbo.MusicAlignmentJobs j ON j.JobId=r.JobId WHERE r.RequestKey=@key", db);
+        query.Parameters.AddWithValue("@key", Hash(requestId));
+        Guid? id = null;
+        await using (var reader = await query.ExecuteReaderAsync(ct))
+        {
+            if (await reader.ReadAsync(ct))
+            {
+                if (reader.GetString(1) != CanonicalUid(uid) || reader.IsDBNull(2)
+                    || Parse<MusicAlignmentReport>(reader.GetString(2)).LocalEvidence != binding)
+                    throw new MusicAutomationException("request_id_reused");
+                id = reader.GetGuid(0);
+            }
+        }
+        return id.HasValue ? await GetAsync(id.Value, ct) : null;
+    }
+
+    public async Task<MusicAlignmentJob> ImportEvidenceAsync(string requestId, MusicSongSnapshot snapshot,
+        MusicAlignmentReport report, MusicLocalEvidenceBinding binding, CancellationToken ct = default)
+    {
+        if (Hash(snapshot) != binding.SnapshotHash || report.LocalEvidence != binding)
+            throw new MusicAutomationException("evidence_snapshot_mismatch");
+        await using var db = await OpenAsync(ct);
+        await using var tx = (SqlTransaction)await db.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockAsync(db, tx, "LearnMore.CodexBackfill", ct);
+        await LockAsync(db, tx, "LearnMore.MusicAutomation.Start", ct);
+        using var prior = new SqlCommand("SELECT JobId,SongUid,ReportJson FROM dbo.MusicAlignmentJobs WITH(UPDLOCK,HOLDLOCK) WHERE RequestKey=@key UNION SELECT j.JobId,j.SongUid,j.ReportJson FROM dbo.MusicAlignmentRequests r JOIN dbo.MusicAlignmentJobs j ON j.JobId=r.JobId WHERE r.RequestKey=@key", db, tx);
+        prior.Parameters.AddWithValue("@key", Hash(requestId));
+        Guid? existing = null;
+        await using (var reader = await prior.ExecuteReaderAsync(ct))
+        {
+            if (await reader.ReadAsync(ct))
+            {
+                if (reader.GetString(1) != snapshot.SongUid || reader.IsDBNull(2)
+                    || Parse<MusicAlignmentReport>(reader.GetString(2)).LocalEvidence != binding)
+                    throw new MusicAutomationException("request_id_reused");
+                existing = reader.GetGuid(0);
+            }
+        }
+        if (existing.HasValue) { await tx.CommitAsync(ct); return await GetAsync(existing.Value, ct); }
+        var current = await SnapshotAsync(db, tx, snapshot.SongUid, ct);
+        if (Hash(current) != binding.SnapshotHash) throw new MusicAutomationException("song_changed_since_analysis");
+        using var active = new SqlCommand("SELECT COUNT(*) FROM dbo.MusicAlignmentJobs WHERE SongUid=@uid AND State IN ('queued','processing','verified')", db, tx);
+        active.Parameters.AddWithValue("@uid", snapshot.SongUid);
+        if (current.Status == "high_accuracy_processing" || Convert.ToInt32(await active.ExecuteScalarAsync(ct)) != 0)
+            throw new MusicAutomationException("song_is_processing");
+        var id = Guid.NewGuid();
+        using var insert = new SqlCommand("INSERT dbo.MusicAlignmentJobs(JobId,RequestKey,SongUid,SnapshotHash,SnapshotJson,State,ReportJson,FailureCode) VALUES(@id,@key,@uid,@hash,@snapshot,@state,@report,@failure)", db, tx);
+        insert.Parameters.AddWithValue("@id", id); insert.Parameters.AddWithValue("@key", Hash(requestId));
+        insert.Parameters.AddWithValue("@uid", snapshot.SongUid); insert.Parameters.AddWithValue("@hash", Hash(snapshot));
+        insert.Parameters.AddWithValue("@snapshot", Serialize(snapshot)); insert.Parameters.AddWithValue("@state", CompletionState(report));
+        insert.Parameters.AddWithValue("@report", Serialize(report));
+        insert.Parameters.AddWithValue("@failure", (object?)CompletionFailureCode(report) ?? DBNull.Value);
+        await insert.ExecuteNonQueryAsync(ct);
+        await tx.CommitAsync(ct);
+        return await GetAsync(id, ct);
+    }
+
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
         await using var stream = typeof(MusicAlignmentStore).Assembly.GetManifestResourceStream("LearnMore.MusicAutomation.sql")!;

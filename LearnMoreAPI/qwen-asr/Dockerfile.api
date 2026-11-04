@@ -4,6 +4,7 @@ FROM ${QWEN_IMAGE}
 USER 0
 WORKDIR /app
 COPY --chown=1000:1000 learnmore_api ./learnmore_api
+COPY --chown=1000:1000 qwen-asr/qwen3_asr_cli.py /opt/qwen-asr/qwen3_asr_cli.py
 USER 1000:1000
 ENTRYPOINT ["uvicorn"]
 CMD ["learnmore_api.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers"]
