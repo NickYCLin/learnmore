@@ -13,6 +13,7 @@ import sys
 import statistics
 import subprocess
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 from contextlib import asynccontextmanager
@@ -1742,6 +1743,8 @@ def high_accuracy_align_sync(request: HighAccuracyAlignRequest, settings: Settin
     if settings.qwen_asr_command and any(not is_reliable_audio_alignment(line) for line in aligned):
         from . import qwen_evidence
 
+        deadline = time.monotonic() + settings.qwen_asr_timeout_seconds
+        supplemental_unavailable = False
         try:
             if transcript._vocals_path is None or transcript.durationSeconds is None:
                 raise ValueError("qwen_missing_audio_context")
@@ -1754,10 +1757,23 @@ def high_accuracy_align_sync(request: HighAccuracyAlignRequest, settings: Settin
                 lambda line: is_reliable_audio_alignment(AlignedLyricLine(**line)),
             )
             aligned = [AlignedLyricLine(**line) for line in supplemented]
-            transcript.model += "+qwen3-asr-evidence"
         except (OSError, ValueError, subprocess.SubprocessError):
-            # 補充辨識失敗時保留原驗證結果，不能把服務失敗視為校正完成。
-            transcript.model += "+qwen3-asr-unavailable"
+            supplemental_unavailable = True
+        try:
+            if transcript._vocals_path is None or transcript.durationSeconds is None:
+                raise ValueError("qwen_missing_audio_context")
+            supplemented = qwen_evidence.supplement_latin_regions(
+                transcript._vocals_path, transcript.durationSeconds,
+                settings.qwen_asr_command, max(0.0, deadline - time.monotonic()),
+                [line.model_dump() for line in lyric_lines],
+                [line.model_dump() for line in aligned],
+                lambda line: is_reliable_audio_alignment(AlignedLyricLine(**line)),
+                is_latin_dominant_lyric,
+            )
+            aligned = [AlignedLyricLine(**line) for line in supplemented]
+        except (OSError, ValueError, subprocess.SubprocessError):
+            supplemental_unavailable = True
+        transcript.model += "+qwen3-asr-unavailable" if supplemental_unavailable else "+qwen3-asr-evidence"
     matched_count = sum(1 for line in aligned if is_reliable_audio_alignment(line))
     return HighAccuracyAlignResponse(
         songUid=request.songUid,

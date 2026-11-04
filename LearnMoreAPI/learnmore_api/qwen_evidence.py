@@ -6,9 +6,12 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
+import time
 import unicodedata
+import wave
 
 MODELS = {
     "Qwen/Qwen3-ASR-1.7B": "7278e1e70fe206f11671096ffdd38061171dd6e5",
@@ -51,7 +54,10 @@ def parse_result(payload: dict, audio_path: Path, duration: float) -> list[dict]
     if result.get("file") != audio_path.name or result.get("fileSha256") != digest:
         raise ValueError("qwen_wrong_audio")
     text = result.get("text")
-    if not isinstance(text, str) or result.get("language") not in {"", "Japanese", "English"}:
+    language = result.get("language")
+    if (not isinstance(text, str) or not isinstance(language, str)
+            or (language != "" and (not set(language.split(",")).issubset({"Japanese", "English"})
+                                   or len(language.split(",")) != len(set(language.split(",")))))):
         raise ValueError("qwen_unsupported_transcript")
     timestamps = result.get("timeStamps") or {"items": []}
     if not isinstance(timestamps, dict) or not isinstance(timestamps.get("items"), list):
@@ -63,7 +69,7 @@ def parse_result(payload: dict, audio_path: Path, duration: float) -> list[dict]
         start, end, token = item.get("start_time"), item.get("end_time"), item.get("text")
         if (type(start) not in {int, float} or type(end) not in {int, float}
                 or not math.isfinite(start) or not math.isfinite(end)
-                or start < previous or start < 0 or end < start or end > duration
+                or start < previous or start < 0 or end <= start or end > duration
                 or not isinstance(token, str) or not normalize(token)):
             raise ValueError("qwen_invalid_word_timing")
         words.append({"index": len(words) + 1, "start": start, "end": end, "text": token})
@@ -75,24 +81,29 @@ def parse_result(payload: dict, audio_path: Path, duration: float) -> list[dict]
 
 def transcribe(audio_path: Path, duration: float, command: list[str], timeout: float,
                language: str = "ja") -> list[dict]:
+    with tempfile.TemporaryDirectory(prefix="learnmore-qwen-evidence-") as directory:
+        output = Path(directory) / "result.json"
+        run_transcription([audio_path], output, command, timeout, language)
+        if output.stat().st_size > 12_000_000:
+            raise ValueError("qwen_report_too_large")
+        return parse_result(json.loads(output.read_text()), audio_path, duration)
+
+
+def run_transcription(audio_paths: list[Path], output: Path, command: list[str], timeout: float,
+                      language: str) -> None:
     languages = {"ja": "Japanese", "en": "English", "auto": "auto"}
     if language not in languages:
         raise ValueError("qwen_unsupported_requested_language")
-    # 不將網站 API 憑證或 Hugging Face 登入資訊傳給辨識子程序。
     allowed = {"PATH", "HOME", "LD_LIBRARY_PATH", "HF_HOME", "PYTHONPATH", "VIRTUAL_ENV",
                "PYTHONDONTWRITEBYTECODE", "PYTHONUNBUFFERED"}
     env = {k: v for k, v in os.environ.items()
            if (k in allowed or k.startswith(("CUDA_", "NVIDIA_", "TORCH_")))
            and not any(marker in k.upper() for marker in ("TOKEN", "SECRET", "PASSWORD", "API_KEY"))}
     env.update(HF_HUB_OFFLINE="1", HF_HUB_DISABLE_IMPLICIT_TOKEN="1")
-    with tempfile.TemporaryDirectory(prefix="learnmore-qwen-evidence-") as directory:
-        output = Path(directory) / "result.json"
-        subprocess.run([*command, "transcribe", str(audio_path), "--language", languages[language],
-                        "--max-new-tokens", "512", "--chunk-seconds", "30", "--output", str(output)],
-                       check=True, timeout=timeout, capture_output=True, env=env)
-        if output.stat().st_size > 12_000_000:
-            raise ValueError("qwen_report_too_large")
-        return parse_result(json.loads(output.read_text()), audio_path, duration)
+    subprocess.run([*command, "transcribe", *(str(path) for path in audio_paths),
+                    "--language", languages[language], "--max-new-tokens", "512",
+                    "--chunk-seconds", "30", "--output", str(output)],
+                   check=True, timeout=timeout, capture_output=True, env=env)
 
 
 def supplement(lyrics: list[dict], aligned: list[dict], words: list[dict], reliable) -> list[dict]:
@@ -138,4 +149,84 @@ def supplement(lyrics: list[dict], aligned: list[dict], words: list[dict], relia
             result[i] = dict(original, start=first["start"], end=last["end"],
                              source="qwen3_asr_word_match", score=1.0,
                              whisperWordStartIndex=None, whisperWordEndIndex=None)
+    return result
+
+
+def latin_regions(lyrics: list[dict], aligned: list[dict], duration: float, reliable, latin_dominant) -> list[dict]:
+    if not math.isfinite(duration) or duration <= 0:
+        raise ValueError("qwen_invalid_duration")
+    if len(lyrics) != len(aligned) or any(
+        lyric["lyricId"] != row["lyricId"] or lyric["japanese"] != row["japanese"]
+        for lyric, row in zip(lyrics, aligned)
+    ):
+        raise ValueError("qwen_lyric_contract_mismatch")
+    regions = []
+    for index, (lyric, row) in enumerate(zip(lyrics, aligned)):
+        hint = lyric.get("currentStart")
+        if (reliable(row) or not latin_dominant(lyric["japanese"])
+                or type(hint) not in {int, float} or not math.isfinite(hint)):
+            continue
+        previous_end = next((item["end"] for item in reversed(aligned[:index]) if reliable(item)), 0.0)
+        following_start = next((item["start"] for item in aligned[index + 1:] if reliable(item)), duration)
+        start = max(0.0, hint - 3.0, previous_end)
+        end = min(duration, hint + 12.0, following_start)
+        if not 0 <= start <= hint < end <= duration:
+            continue
+        normalized_text = unicodedata.normalize("NFKC", lyric["japanese"])
+        language = "auto" if re.search(r"[\u3040-\u30ff\u3400-\u9fff]", normalized_text) else "en"
+        regions.append({"index": index, "start": start, "end": end, "language": language})
+    return regions
+
+
+def supplement_latin_regions(audio_path: Path, duration: float, command: list[str], timeout: float,
+                             lyrics: list[dict], aligned: list[dict], reliable, latin_dominant) -> list[dict]:
+    regions = latin_regions(lyrics, aligned, duration, reliable, latin_dominant)
+    if not regions:
+        return aligned
+    deadline = time.monotonic() + timeout
+    result = list(aligned)
+    with tempfile.TemporaryDirectory(prefix="learnmore-latin-evidence-") as directory:
+        try:
+            with wave.open(str(audio_path), "rb") as source:
+                rate = source.getframerate()
+                if abs(source.getnframes() / rate - duration) > 0.1:
+                    raise ValueError("qwen_audio_duration_mismatch")
+                for region in regions:
+                    first = math.ceil(region["start"] * rate)
+                    stop = math.floor(region["end"] * rate)
+                    if stop <= first:
+                        raise ValueError("qwen_empty_audio_region")
+                    source.setpos(first)
+                    frames = source.readframes(stop - first)
+                    if len(frames) != (stop - first) * source.getnchannels() * source.getsampwidth():
+                        raise ValueError("qwen_truncated_region_audio")
+                    path = Path(directory) / f"region-{region['index']}.wav"
+                    with wave.open(str(path), "wb") as output:
+                        output.setparams(source.getparams())
+                        output.writeframes(frames)
+                    region.update(path=path, offset=first / rate, duration=(stop - first) / rate)
+        except (wave.Error, EOFError) as error:
+            raise ValueError("qwen_unsupported_region_audio") from error
+        for language in ("en", "auto"):
+            batch = [region for region in regions if region["language"] == language]
+            if not batch:
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command[0], timeout)
+            output = Path(directory) / f"{language}.json"
+            run_transcription([region["path"] for region in batch], output, command, remaining, language)
+            if output.stat().st_size > 12_000_000:
+                raise ValueError("qwen_report_too_large")
+            payload = json.loads(output.read_text())
+            rows = payload.get("results") if isinstance(payload, dict) else None
+            if not isinstance(rows, list) or len(rows) != len(batch):
+                raise ValueError("qwen_wrong_result_count")
+            for region, row in zip(batch, rows):
+                words = parse_result(dict(payload, results=[row]), region["path"], region["duration"])
+                absolute_words = [dict(word, start=word["start"] + region["offset"],
+                                       end=word["end"] + region["offset"]) for word in words]
+                candidate = supplement(lyrics, result, absolute_words, reliable)
+                index = region["index"]
+                result[index] = candidate[index]
     return result
