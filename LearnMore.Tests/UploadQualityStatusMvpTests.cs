@@ -5,6 +5,25 @@ namespace LearnMore.Tests;
 public class UploadQualityStatusMvpTests
 {
     [Fact]
+    public void PublicLyricsReviewNotice_ShouldBeScopedAndPreserveIncompleteLyricsWarnings()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "LearnMore",
+            "wwwroot",
+            "js",
+            "site.js"));
+
+        Assert.Contains("document.querySelector('.lyrics-processing-alert')", source);
+        Assert.Contains("!== '需要人工校正'", source);
+        Assert.Contains("lyrics.length === 0", source);
+        Assert.Contains("line.querySelector('.cn-line')", source);
+        Assert.Contains("!chinese || chinese === '翻譯中...'", source);
+        Assert.DoesNotContain("high_accuracy_completed", source);
+    }
+
+    [Fact]
     public void HighAccuracyStatusSummary_ShouldRenderOnlyActionableStatusesAndHideCompletedBadge()
     {
         var source = File.ReadAllText(Path.Combine(

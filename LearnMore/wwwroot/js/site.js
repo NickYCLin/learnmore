@@ -20,3 +20,27 @@ function escapeHtml(text) {
 if (typeof window !== 'undefined') {
     window.escapeHtml = escapeHtml;
 }
+
+(() => {
+    if (typeof document === 'undefined') return;
+
+    function hidePublicReviewNotice() {
+        const notice = document.querySelector('.lyrics-processing-alert');
+        if (!notice || notice.querySelector('.badge')?.textContent.trim() !== '需要人工校正') return;
+
+        const lyrics = Array.from(document.querySelectorAll('.lyrics-line[data-lyric-id][data-timestamp]'));
+        if (lyrics.length === 0) return;
+        if (lyrics.some(line => {
+            const chinese = line.querySelector('.cn-line')?.textContent.trim();
+            return !chinese || chinese === '翻譯中...';
+        })) return;
+
+        notice.remove();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', hidePublicReviewNotice, { once: true });
+    } else {
+        hidePublicReviewNotice();
+    }
+})();
