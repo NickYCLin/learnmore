@@ -159,6 +159,8 @@ builder.Services.AddSession(options =>
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PersistentLoginSessionService>();
+builder.Services.AddScoped<IErrorReportReader, ErrorReportReader>();
+builder.Services.AddScoped<IErrorReportManagerAccess, ErrorReportManagerAccess>();
 builder.Services.AddScoped<IMobileIdentityVerifier, MobileIdentityVerifier>();
 builder.Services.AddScoped<IMobileAccountStore, MobileAccountStore>();
 builder.Services.AddScoped<MobileAuthorizeFilter>();

@@ -1,0 +1,42 @@
+@model LearnMore.Services.ErrorReportPage
+@{
+    ViewData["Title"] = "歌詞或秒數錯誤回報（唯讀）";
+}
+<main class="container py-4">
+    <h1 class="h3">@ViewData["Title"]</h1>
+    <p>顯示所有原始狀態，包含未解決及新回報。狀態 0 為新回報；不提供狀態修改或刪除。</p>
+    <p>共 @Model.TotalCount 筆，第 @Model.Page 頁，共 @Model.TotalPages 頁。每頁 @Model.PageSize 筆。</p>
+    <p>依回報日期、回報唯一鍵遞減排序。清單為即時資料；新回報可能使跨頁位置變動。</p>
+    @if (Model.Items.Count == 0)
+    {
+        <p role="status">此頁沒有回報；請依總筆數確認是否超出最後一頁。</p>
+    }
+    @foreach (var report in Model.Items)
+    {
+        <article class="border-bottom py-3">
+            <h2 class="h5">回報 @report.ReportId — @report.Title</h2>
+            <dl>
+                <dt>SongUid</dt><dd class="text-break">@report.SongUid</dd>
+                <dt>精確影片來源（原始值）</dt><dd class="text-break">@report.VideoSource</dd>
+                <dt>LyricID</dt><dd>@report.LyricId</dd>
+                <dt>描述</dt><dd class="text-break" style="white-space: pre-wrap">@report.Description</dd>
+                <dt>原狀態</dt><dd>@(report.Status ?? "NULL")</dd>
+                <dt>回報日期（原始伺服器時間）</dt><dd>@report.ReportDate?.ToString("yyyy-MM-dd HH:mm:ss.fffffff")</dd>
+            </dl>
+            @if (Guid.TryParse(report.SongUid, out var songUid))
+            {
+                <a href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本的歌曲頁</a>
+            }
+        </article>
+    }
+    <nav aria-label="回報清單分頁" class="d-flex gap-3 py-3">
+        @if (Model.Page > 1)
+        {
+            <a asp-action="Index" asp-route-page="@(Model.Page - 1)" asp-route-pageSize="@Model.PageSize">上一頁</a>
+        }
+        @if (Model.Page < Model.TotalPages)
+        {
+            <a asp-action="Index" asp-route-page="@(Model.Page + 1)" asp-route-pageSize="@Model.PageSize">下一頁</a>
+        }
+    </nav>
+</main>
