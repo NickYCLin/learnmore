@@ -1,0 +1,26 @@
+@model LearnMore.Services.RubyRepairPreview
+@{
+    ViewData["Title"] = "確認單句假名修正";
+}
+<main class="container py-4">
+    <h1 class="h3">@ViewData["Title"] — 回報 @Model.Snapshot.ReportId</h1>
+    <p>僅供現有 Manager 手動確認。只變更 JapaneseRuby，不改原文、羅馬拼音、時間、分句或回報狀態。</p>
+    <p>歌曲：水平線；SongUid：@LearnMore.Services.RubyRepairTarget.SongUid</p>
+    <p>來源：@LearnMore.Services.RubyRepairTarget.VideoSource</p>
+    <p>原始歌詞列全部欄位如下（HTML 以文字顯示，不執行）：</p>
+    <dl>
+        @foreach (var field in Model.Snapshot.Lyric)
+        {
+            <dt>@field.Key</dt><dd class="text-break" style="white-space: pre-wrap">@(field.Value ?? "NULL")</dd>
+        }
+        <dt>JapaneseRuby 修正後</dt><dd class="text-break" style="white-space: pre-wrap">@Model.ProposedRuby</dd>
+        <dt>原值指紋（含回報、來源與全部歌詞欄位）</dt><dd class="text-break">@Model.Fingerprint</dd>
+    </dl>
+    <p>送出前必須確認這是正確影片與句子。原值有任何變動即拒絕，不覆蓋他人更新。送出會先保存稽核備份；不會自動標為已解決。</p>
+    <form method="post" asp-controller="ErrorReportRuby" asp-action="Apply" asp-route-reportId="@Model.Snapshot.ReportId">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="fingerprint" value="@Model.Fingerprint" />
+        <button type="submit" class="btn btn-primary">確認只修正這一筆假名</button>
+        <a asp-controller="ErrorReports" asp-action="Index" class="btn btn-secondary">取消並返回清單</a>
+    </form>
+</main>

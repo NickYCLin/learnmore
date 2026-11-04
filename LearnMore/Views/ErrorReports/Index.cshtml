@@ -23,6 +23,10 @@
                 <dt>原狀態</dt><dd>@(report.Status ?? "NULL")</dd>
                 <dt>回報日期（原始伺服器時間）</dt><dd>@report.ReportDate?.ToString("yyyy-MM-dd HH:mm:ss.fffffff")</dd>
             </dl>
+            @if (int.TryParse(report.ReportId, out var reportId) && LearnMore.Services.RubyRepairTarget.Find(reportId) != null)
+            {
+                <a asp-controller="ErrorReportRuby" asp-action="Index" asp-route-reportId="@reportId">核對單句假名修正（不變更回報狀態）</a>
+            }
             @if (Guid.TryParse(report.SongUid, out var songUid))
             {
                 <a href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本的歌曲頁</a>

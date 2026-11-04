@@ -160,6 +160,8 @@ builder.Services.AddSession(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PersistentLoginSessionService>();
 builder.Services.AddScoped<IErrorReportReader, ErrorReportReader>();
+builder.Services.AddScoped<IErrorReportRubyRepair, ErrorReportRubyRepair>();
+builder.Services.AddSingleton<IRubyRepairAudit, FileRubyRepairAudit>();
 builder.Services.AddScoped<IErrorReportManagerAccess, ErrorReportManagerAccess>();
 builder.Services.AddScoped<IMobileIdentityVerifier, MobileIdentityVerifier>();
 builder.Services.AddScoped<IMobileAccountStore, MobileAccountStore>();
