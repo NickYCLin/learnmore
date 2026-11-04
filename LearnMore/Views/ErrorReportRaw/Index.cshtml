@@ -1,0 +1,23 @@
+@model LearnMore.Services.ErrorReportRawSnapshot
+@{
+    ViewData["Title"] = "回報歌詞原始值查驗";
+}
+<main class="container py-4">
+    <h1 class="h3">@ViewData["Title"] — 回報 @Model.ReportId</h1>
+    <p>此頁僅供 Manager 唯讀核對，不提供修正操作，不變更秒數、分句或回報狀態。</p>
+    <p>SongUid：@Model.SongUid</p>
+    <p>精確影片來源：<a href="@Model.VideoSource">@Model.VideoSource</a></p>
+    @foreach (var lyric in Model.Lyrics)
+    {
+        <section aria-label="LyricID @lyric["LyricID"]">
+            <h2 class="h5">LyricID @lyric["LyricID"]</h2>
+            <dl>
+                @foreach (var field in new[] { "Japanese", "JapaneseRuby", "Roman", "Chinese", "TimeStamp" })
+                {
+                    <dt>@field</dt><dd class="text-break" style="white-space: pre-wrap">@(lyric[field] ?? "NULL")</dd>
+                }
+            </dl>
+        </section>
+    }
+    <a asp-controller="ErrorReports" asp-action="Index" class="btn btn-secondary">返回回報清單</a>
+</main>
