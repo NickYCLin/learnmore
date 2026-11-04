@@ -1,0 +1,15 @@
+@model SongViewModel
+@{
+    bool empty = Model.Lyrics.Count == 0;
+    bool incomplete = Model.Lyrics.Any(line => string.IsNullOrWhiteSpace(line.Chinese) || line.Chinese.Trim() == "翻譯中...");
+    bool running = new[] { "high_accuracy_pending", "high_accuracy_processing", "queued", "running" }
+        .Contains(Model.HighAccuracyStatus, StringComparer.OrdinalIgnoreCase);
+    bool failed = new[] { "high_accuracy_failed", "failed" }.Contains(Model.HighAccuracyStatus, StringComparer.OrdinalIgnoreCase);
+}
+@if (empty || incomplete || running || failed)
+{
+    <div class="lyrics-processing-alert alert @(failed ? "alert-warning" : "alert-info")" role="status">
+        <strong>@(failed ? "歌曲整理暫時未完成" : "這首歌還在整理中")</strong>
+        <p class="mb-0">@(empty ? "目前尚無歌詞內容。" : incomplete ? "部分翻譯尚未完成。" : running ? "秒數校正正在背景處理。" : "秒數校正未完成，播放時間可能不準確。")</p>
+    </div>
+}

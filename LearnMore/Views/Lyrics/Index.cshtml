@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="~/css/mika-avatar.css" asp-append-version="true" />
 }
 
+@await Html.PartialAsync("_ProcessingNotice", Model)
 <div class="title-container">
     <h1>@Model.Title</h1>
     <p class="subtitle song-detail-meta">
