@@ -1,0 +1,48 @@
+@model LearnMore.Services.TimingReviewQueuePage
+@{
+    ViewData["Title"] = "全站待校正清單（管理員唯讀）";
+}
+<main class="container py-4">
+    <h1 class="h3">@ViewData["Title"]</h1>
+    <p>全站歌曲依 SongUid 去重，不限個人主負責或協作者。只列部分完成、待人工檢查及失敗狀態，不提供重試或套用。</p>
+    <p>共 @Model.TotalCount 首，第 @Model.Page 頁，共 @Model.TotalPages 頁，每頁 @Model.PageSize 首。</p>
+    <p>依 SongID、SongUid 穩定排序；清單為即時資料，跨頁期間若狀態變更，請重新核對總數與 SongUid。</p>
+    <p>工作只顯示最新一筆；RequestKey 為雜湊，不是原始 request_id。@(Model.JobsAvailable ? "" : "目前沒有校正工作表，工作資訊不可用。")</p>
+    <a href="@Url.Content($"~/Management/ReviewQueue/data?page={Model.Page}&pageSize={Model.PageSize}")">讀取此頁 JSON</a>
+    @if (Model.Items.Count == 0)
+    {
+        <p role="status">此頁沒有歌曲，請依總數確認是否超出最後一頁。</p>
+    }
+    @foreach (var song in Model.Items)
+    {
+        <article class="border-bottom py-3">
+            <h2 class="h5">@song.Title</h2>
+            <dl>
+                <dt>SongUid</dt><dd class="text-break">@song.SongUid</dd>
+                <dt>精確影片來源</dt><dd class="text-break">@song.YoutubeUrl</dd>
+                <dt>YouTube ID</dt><dd>@(song.YoutubeId ?? "無法辨識，需核對原始來源")</dd>
+                <dt>校正狀態</dt><dd>@song.Status</dd>
+                <dt>原因</dt><dd class="text-break" style="white-space: pre-wrap">@song.Reason</dd>
+                <dt>最新 jobId</dt><dd>@(song.JobId?.ToString() ?? "無既有工作")</dd>
+                <dt>RequestKey SHA256</dt><dd class="text-break">@song.RequestKeyHash</dd>
+                <dt>工作狀態／失敗原因</dt><dd>@song.JobState / @song.FailureCode</dd>
+                <dt>更新時間（UTC）</dt><dd>@song.JobUpdatedAt?.ToString("O")</dd>
+                <dt>套用時間（UTC）</dt><dd>@song.AppliedAt?.ToString("O")</dd>
+            </dl>
+            @if (Guid.TryParse(song.SongUid, out var songUid))
+            {
+                <a href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本</a>
+            }
+        </article>
+    }
+    <nav aria-label="全站待校正分頁" class="d-flex gap-3 py-3">
+        @if (Model.Page > 1)
+        {
+            <a href="@Url.Content($"~/Management/ReviewQueue?page={Model.Page - 1}&pageSize={Model.PageSize}")">上一頁</a>
+        }
+        @if (Model.Page < Model.TotalPages)
+        {
+            <a href="@Url.Content($"~/Management/ReviewQueue?page={Model.Page + 1}&pageSize={Model.PageSize}")">下一頁</a>
+        }
+    </nav>
+</main>
