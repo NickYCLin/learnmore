@@ -162,6 +162,8 @@ builder.Services.AddScoped<PersistentLoginSessionService>();
 builder.Services.AddScoped<IErrorReportReader, ErrorReportReader>();
 builder.Services.AddScoped<IErrorReportRubyRepair, ErrorReportRubyRepair>();
 builder.Services.AddScoped<IErrorReportRawReader, ErrorReportRawReader>();
+builder.Services.AddScoped<IReport50Repair, Report50Repair>();
+builder.Services.AddSingleton<IReport50RepairAudit, FileReport50RepairAudit>();
 builder.Services.AddSingleton<IRubyRepairAudit, FileRubyRepairAudit>();
 builder.Services.AddScoped<IErrorReportManagerAccess, ErrorReportManagerAccess>();
 builder.Services.AddScoped<IMobileIdentityVerifier, MobileIdentityVerifier>();

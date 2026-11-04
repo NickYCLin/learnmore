@@ -1,0 +1,58 @@
+@model LearnMore.Services.Report50RepairPreview
+@{
+    ViewData["Title"] = "Report50 兩列分句修復預覽";
+    var fields = new[] { "Japanese", "JapaneseRuby", "Roman", "Chinese", "TimeStamp" };
+}
+<main class="container py-4">
+    <h1 class="h3">@ViewData["Title"]</h1>
+    <p>僅限既有 Manager；SongUid：@LearnMore.Services.RubyRepairTarget.SongUid</p>
+    <p>精確影片：<a href="@LearnMore.Services.RubyRepairTarget.VideoSource">@LearnMore.Services.RubyRepairTarget.VideoSource</a></p>
+    <p>只調整21／22句界與「呟」讀音，保留中文、211.95／225.61秒與回報狀態。候選不代表實播已驗證；須先確認精確影片句界再決定套用。</p>
+    @for (var index = 0; index < Model.Snapshot.Lyrics.Count; index++)
+    {
+        var row = Model.Snapshot.Lyrics[index];
+        var candidate = Model.Candidate[index];
+        var afterValues = new object[] { candidate.Japanese, candidate.JapaneseRuby, candidate.Roman, candidate.Chinese, candidate.TimeStamp };
+        <section>
+            <h2 class="h5">LyricID @row["LyricID"]</h2>
+            <h3 class="h6">目前原始值</h3>
+            <dl>
+            @foreach (var field in fields)
+            {
+                <dt>@field</dt><dd class="text-break" style="white-space: pre-wrap">@(row[field] ?? "NULL")</dd>
+            }
+            </dl>
+            @if (Model.CanApply)
+            {
+                <h3 class="h6">候選值（尚未套用）</h3>
+                <dl>
+                @for (var fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
+                {
+                    <dt>@fields[fieldIndex]</dt><dd class="text-break" style="white-space: pre-wrap">@afterValues[fieldIndex]</dd>
+                }
+                </dl>
+            }
+        </section>
+    }
+    <h2 class="h5">文字來源（不取代影片實播）</h2>
+    <ul>
+    @foreach (var source in Model.Sources)
+    {
+        <li><a href="@source.url">@source.url</a> — @source.supports</li>
+    }
+    </ul>
+    @if (Model.CanApply)
+    {
+        <p>兩列五欄原值均符合限定候選，送出後仍會重新核對指紋與完整原始列。任一列衝突即整批拒絕；不改回報狀態。</p>
+        <form method="post" asp-controller="Report50Repair" asp-action="Apply" asp-route-reportId="50">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="fingerprint" value="@Model.Snapshot.Fingerprint" />
+            <button type="submit" class="btn btn-primary">已實播核實，確認套用此兩列候選</button>
+        </form>
+    }
+    else
+    {
+        <p role="status">@(Model.AlreadyApplied ? "此候選已套用，目前僅供唯讀核對，不能再次套用。" : "原值與限定候選不符，目前僅供唯讀核對，不允許套用。")</p>
+    }
+    <a asp-controller="ErrorReports" asp-action="Index" class="btn btn-secondary">返回回報清單</a>
+</main>

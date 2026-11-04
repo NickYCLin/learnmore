@@ -42,5 +42,6 @@
 
   <ItemGroup>
     <EmbeddedResource Include="../docs/sql/005-music-automation.sql" LogicalName="LearnMore.MusicAutomation.sql" />
+    <EmbeddedResource Include="Services/Report50RepairTarget.json" LogicalName="LearnMore.Report50RepairTarget.json" />
   </ItemGroup>
 </Project>

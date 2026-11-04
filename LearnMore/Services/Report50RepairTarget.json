@@ -1,0 +1,57 @@
+{
+  "sourceSha256": "4b58c5790617ba5e290f7fc78776df8bdfd4dcbecdee650ad53d3cacc0635b49",
+  "sources": [
+    {
+      "url": "https://www.universal-music.co.jp/backnumber/news/2021-08-13/",
+      "supports": "官方連結精確影片iqEr3P78fz8"
+    },
+    {
+      "url": "https://www.uta-net.com/song/306206/",
+      "supports": "呟いてる完整詞尾及下一句從悲しい起"
+    },
+    {
+      "url": "https://utaten.com/lyric/hw20081801/",
+      "supports": "同詞界與呟讀つぶや"
+    },
+    {
+      "url": "https://imidas.jp/kojiten/detail/W-18-0-385-06.html",
+      "supports": "集英社広辞典呟く讀つぶやく"
+    }
+  ],
+  "before": [
+    {
+      "LyricID": 21,
+      "Japanese": "水平線が光る朝にあなたの希望が崩れ落ちて風に飛ばされる欠片に誰かが綺麗と呟いて",
+      "JapaneseRuby": "<ruby>水平線<rt>すいへいせん</rt></ruby>が<ruby>光る<rt>ひかる</rt></ruby><ruby>朝<rt>あさ</rt></ruby>にあなたの<ruby>希望<rt>きぼう</rt></ruby>が<ruby>崩れ<rt>くずれ</rt></ruby><ruby>落ち<rt>おち</rt></ruby>て<ruby>風<rt>かぜ</rt></ruby>に<ruby>飛ば<rt>とば</rt></ruby>される<ruby>欠片<rt>かけら</rt></ruby>に<ruby>誰か<rt>だれか</rt></ruby>が<ruby>綺麗<rt>きれい</rt></ruby>と<ruby>呟<rt>げん</rt></ruby>いて",
+      "Roman": "suihei sen ga hikaru asa ni anata no kibō ga kuzureochi te kaze ni tobasa reru kakera ni dareka ga kirei to tsubuyai te",
+      "Chinese": "在水平線閃耀的早晨 你的希望崩塌墜落 被風吹散的碎片 有人喃喃說著好美",
+      "TimeStamp": "211.95"
+    },
+    {
+      "LyricID": 22,
+      "Japanese": "る悲しい声で歌いながらいつしか海に流れ着いて光ってあなたはそれを見るでしょう",
+      "JapaneseRuby": "る<ruby>悲しい<rt>かなしい</rt></ruby><ruby>声<rt>こえ</rt></ruby>で<ruby>歌い<rt>うたい</rt></ruby>ながらいつしか<ruby>海<rt>うみ</rt></ruby>に<ruby>流れ<rt>ながれ</rt></ruby><ruby>着い<rt>つい</rt></ruby>て<ruby>光っ<rt>ひかっ</rt></ruby>てあなたはそれを<ruby>見る<rt>みる</rt></ruby>でしょう",
+      "Roman": "ru kanashii koe de utai nagara itsushika umi ni nagaretsui te hikatte anata wa sore o miru desho u",
+      "Chinese": "用悲傷的聲音歌唱著 終有一天漂流到海上閃閃發光 你一定會看見的",
+      "TimeStamp": "225.61"
+    }
+  ],
+  "after": [
+    {
+      "LyricID": 21,
+      "Japanese": "水平線が光る朝にあなたの希望が崩れ落ちて風に飛ばされる欠片に誰かが綺麗と呟いてる",
+      "JapaneseRuby": "<ruby>水平線<rt>すいへいせん</rt></ruby>が<ruby>光る<rt>ひかる</rt></ruby><ruby>朝<rt>あさ</rt></ruby>にあなたの<ruby>希望<rt>きぼう</rt></ruby>が<ruby>崩れ<rt>くずれ</rt></ruby><ruby>落ち<rt>おち</rt></ruby>て<ruby>風<rt>かぜ</rt></ruby>に<ruby>飛ば<rt>とば</rt></ruby>される<ruby>欠片<rt>かけら</rt></ruby>に<ruby>誰か<rt>だれか</rt></ruby>が<ruby>綺麗<rt>きれい</rt></ruby>と<ruby>呟<rt>つぶや</rt></ruby>いてる",
+      "Roman": "suihei sen ga hikaru asa ni anata no kibō ga kuzureochi te kaze ni tobasa reru kakera ni dareka ga kirei to tsubuyai teru",
+      "Chinese": "在水平線閃耀的早晨 你的希望崩塌墜落 被風吹散的碎片 有人喃喃說著好美",
+      "TimeStamp": "211.95"
+    },
+    {
+      "LyricID": 22,
+      "Japanese": "悲しい声で歌いながらいつしか海に流れ着いて光ってあなたはそれを見るでしょう",
+      "JapaneseRuby": "<ruby>悲しい<rt>かなしい</rt></ruby><ruby>声<rt>こえ</rt></ruby>で<ruby>歌い<rt>うたい</rt></ruby>ながらいつしか<ruby>海<rt>うみ</rt></ruby>に<ruby>流れ<rt>ながれ</rt></ruby><ruby>着い<rt>つい</rt></ruby>て<ruby>光っ<rt>ひかっ</rt></ruby>てあなたはそれを<ruby>見る<rt>みる</rt></ruby>でしょう",
+      "Roman": "kanashii koe de utai nagara itsushika umi ni nagaretsui te hikatte anata wa sore o miru desho u",
+      "Chinese": "用悲傷的聲音歌唱著 終有一天漂流到海上閃閃發光 你一定會看見的",
+      "TimeStamp": "225.61"
+    }
+  ]
+}
