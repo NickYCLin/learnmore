@@ -118,17 +118,17 @@ public sealed class ErrorReportRubyRepair(IConfiguration configuration, IRubyRep
         await connection.OpenAsync(cancellationToken);
         await using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
         var snapshot = await ReadLockedAsync(connection, transaction, reportId, cancellationToken);
-        var preview = new RubyRepairPreview(snapshot, snapshot.Fingerprint,
-            RubyRepairTarget.Find(reportId)!.Propose(Convert.ToString(snapshot.Lyric["JapaneseRuby"]) ?? ""));
+        var proposedRuby = RubyRepairTarget.Find(reportId)!.Propose(Convert.ToString(snapshot.Lyric["JapaneseRuby"]) ?? "");
+        var preview = new RubyRepairPreview(snapshot, snapshot.Fingerprint, proposedRuby);
         if (!string.Equals(preview.Fingerprint, fingerprint, StringComparison.Ordinal)) throw new RubyRepairConflictException();
-        var auditId = audit.Prepare(preview.Snapshot, preview.ProposedRuby, actor);
+        var auditId = audit.Prepare(preview.Snapshot, proposedRuby, actor);
         await using var command = new SqlCommand($"UPDATE dbo.[Songs_{RubyRepairTarget.SongUid}] SET JapaneseRuby=@Ruby WHERE LyricID=@LyricId", connection, transaction);
-        command.Parameters.Add("@Ruby", SqlDbType.NVarChar, -1).Value = preview.ProposedRuby;
+        command.Parameters.Add("@Ruby", SqlDbType.NVarChar, -1).Value = proposedRuby;
         command.Parameters.Add("@LyricId", SqlDbType.Int).Value = RubyRepairTarget.Find(reportId)!.LyricId;
         if (await command.ExecuteNonQueryAsync(cancellationToken) != 1) throw new RubyRepairConflictException();
         var after = await ReadRowAsync(connection, transaction,
             $"SELECT * FROM dbo.[Songs_{RubyRepairTarget.SongUid}] WITH (UPDLOCK,HOLDLOCK) WHERE LyricID=@Id", RubyRepairTarget.Find(reportId)!.LyricId, cancellationToken);
-        var expected = new SortedDictionary<string, object?>(preview.Snapshot.Lyric, StringComparer.Ordinal) { ["JapaneseRuby"] = preview.ProposedRuby };
+        var expected = new SortedDictionary<string, object?>(preview.Snapshot.Lyric, StringComparer.Ordinal) { ["JapaneseRuby"] = proposedRuby };
         if (JsonSerializer.Serialize(after) != JsonSerializer.Serialize(expected)) throw new RubyRepairConflictException();
         var reportAfter = await ReadRowAsync(connection, transaction, "SELECT * FROM dbo.ErrorReports WITH (UPDLOCK,HOLDLOCK) WHERE ReportID=@Id", reportId, cancellationToken);
         var songAfter = await ReadRowAsync(connection, transaction, "SELECT * FROM dbo.Songs WITH (UPDLOCK,HOLDLOCK) WHERE SongUid=@Id", RubyRepairTarget.SongUid, cancellationToken);
