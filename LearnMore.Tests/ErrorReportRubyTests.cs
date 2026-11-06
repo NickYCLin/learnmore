@@ -14,6 +14,7 @@ namespace LearnMore.Tests;
 public sealed class ErrorReportRubyTests
 {
     [Theory]
+    [InlineData(38, 10, "呟", "げん", "つぶや")]
     [InlineData(46, 3, "人", "にん", "ひと")]
     [InlineData(48, 13, "人", "にん", "ひと")]
     [InlineData(49, 15, "重な", "おもな", "かさな")]
@@ -35,6 +36,7 @@ public sealed class ErrorReportRubyTests
     public void TimingSplitAndOtherReportsHaveNoRepair(int reportId) => Assert.Null(RubyRepairTarget.Find(reportId));
 
     [Theory]
+    [InlineData(38)]
     [InlineData(46)]
     [InlineData(48)]
     [InlineData(49)]
@@ -72,14 +74,16 @@ public sealed class ErrorReportRubyTests
     }
 
     [Theory]
-    [InlineData(401)]
-    [InlineData(403)]
-    public async Task DeniedGetAndPostDoNotReachStore(int status)
+    [InlineData(46, 401)]
+    [InlineData(46, 403)]
+    [InlineData(38, 401)]
+    [InlineData(38, 403)]
+    public async Task DeniedGetAndPostDoNotReachStore(int reportId, int status)
     {
         var store = new Repair();
         var controller = new ErrorReportRubyController(new Access(new StatusCodeResult(status)), store, NullLogger<ErrorReportRubyController>.Instance);
-        Assert.Equal(status, Assert.IsType<StatusCodeResult>(await controller.Index(46, default)).StatusCode);
-        Assert.Equal(status, Assert.IsType<StatusCodeResult>(await controller.Apply(46, new string('a', 64), default)).StatusCode);
+        Assert.Equal(status, Assert.IsType<StatusCodeResult>(await controller.Index(reportId, default)).StatusCode);
+        Assert.Equal(status, Assert.IsType<StatusCodeResult>(await controller.Apply(reportId, new string('a', 64), default)).StatusCode);
         Assert.Equal(0, store.Reads + store.Writes);
     }
 
@@ -132,7 +136,7 @@ public sealed class ErrorReportRubyTests
         using var conflict = await Post(46, Snapshot().Fingerprint);
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
         store.ReadbackOnly = true;
-        foreach (var reportId in new[] { 46, 48, 49 })
+        foreach (var reportId in new[] { 38, 46, 48, 49 })
         {
             using var readback = await client.GetAsync($"/Management/ErrorReports/ruby/{reportId}");
             Assert.Equal(HttpStatusCode.OK, readback.StatusCode);

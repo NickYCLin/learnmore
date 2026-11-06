@@ -13,6 +13,7 @@ public sealed record RubyRepairTarget(int ReportId, int LyricId, string Before, 
     public const string VideoSource = "https://www.youtube.com/watch?v=iqEr3P78fz8";
     public static RubyRepairTarget? Find(int reportId) => reportId switch
     {
+        38 => new(38, 10, "<ruby>呟<rt>げん</rt></ruby>", "<ruby>呟<rt>つぶや</rt></ruby>"),
         46 => new(46, 3, "<ruby>人<rt>にん</rt></ruby>", "<ruby>人<rt>ひと</rt></ruby>"),
         48 => new(48, 13, "<ruby>人<rt>にん</rt></ruby>", "<ruby>人<rt>ひと</rt></ruby>"),
         49 => new(49, 15, "<ruby>重な<rt>おもな</rt></ruby>", "<ruby>重な<rt>かさな</rt></ruby>"),

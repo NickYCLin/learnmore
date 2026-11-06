@@ -30,8 +30,9 @@ public sealed class ErrorReportRubySqlTests : IAsyncLifetime
             CREATE TABLE dbo.ErrorReports (ReportID int PRIMARY KEY, ErrorSongUid nvarchar(100), ErrorLyricID int, Status int);
             CREATE TABLE dbo.[Songs_{RubyRepairTarget.SongUid}] (LyricID int PRIMARY KEY, Japanese nvarchar(max), JapaneseRuby nvarchar(max), Roman nvarchar(max), Chinese nvarchar(max), TimeStamp float);
             INSERT dbo.Songs VALUES ('{RubyRepairTarget.SongUid}',N'水平線','{RubyRepairTarget.VideoSource}');
-            INSERT dbo.ErrorReports VALUES (46,'{RubyRepairTarget.SongUid}',3,0),(48,'{RubyRepairTarget.SongUid}',13,0),(49,'{RubyRepairTarget.SongUid}',15,0);
+            INSERT dbo.ErrorReports VALUES (38,'{RubyRepairTarget.SongUid}',10,0),(46,'{RubyRepairTarget.SongUid}',3,0),(48,'{RubyRepairTarget.SongUid}',13,0),(49,'{RubyRepairTarget.SongUid}',15,0);
             INSERT dbo.[Songs_{RubyRepairTarget.SongUid}] VALUES (3,N'人',N'{RubyRepairTarget.Find(46)!.Before}','hito',N'原值',73.14);
+            INSERT dbo.[Songs_{RubyRepairTarget.SongUid}] VALUES (10,N'誰かが綺麗と呟いてる',N'誰かが綺麗と{RubyRepairTarget.Find(38)!.Before}いてる','dareka ga kirei to tsubuyai teru',N'保留中文',83);
             """);
     }
 
@@ -40,6 +41,22 @@ public sealed class ErrorReportRubySqlTests : IAsyncLifetime
         if (master == null) return;
         SqlConnection.ClearAllPools();
         await Execute(master, $"ALTER DATABASE [{database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{database}]");
+    }
+
+    [SqlAuditFact]
+    public async Task Report38PreservesLatestTimingAndAllOtherColumns()
+    {
+        var before = await Store.ReadAsync(38, default);
+        Assert.Equal(83d, before.Snapshot.Lyric["TimeStamp"]);
+        await Store.ApplyAsync(38, before.Fingerprint, "manager@example.invalid", default);
+        var after = await Store.ReadAsync(38, default);
+        foreach (var field in before.Snapshot.Lyric.Keys.Where(field => field != "JapaneseRuby"))
+            Assert.Equal(before.Snapshot.Lyric[field], after.Snapshot.Lyric[field]);
+        Assert.Equal(before.Snapshot.Report, after.Snapshot.Report);
+        Assert.Equal(before.Snapshot.Song, after.Snapshot.Song);
+        Assert.Null(after.ProposedRuby);
+        await Assert.ThrowsAsync<RubyRepairConflictException>(() => Store.ApplyAsync(38, after.Fingerprint, "manager@example.invalid", default));
+        Assert.Equal(1, audit.Prepared);
     }
 
     [SqlAuditFact]
