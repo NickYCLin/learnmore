@@ -155,7 +155,11 @@ public class ErrorReportReadOnlyTests
         var action = new ActionContext(context, new RouteData(), new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor());
         var view = scope.ServiceProvider.GetRequiredService<IRazorViewEngine>().GetView(null, "/Views/ErrorReports/Index.cshtml", false);
         Assert.True(view.Success);
-        var model = new ErrorReportPage(1, 25, 1, [new("7", null, "<script>title</script>", "javascript:bad", "42", "<script>alert(1)</script>", "0", null)]);
+        var model = new ErrorReportPage(1, 25, 3, [
+            new("7", null, "<script>title</script>", "javascript:bad", "42", "<script>alert(1)</script>", "0", null),
+            new("47", RubyRepairTarget.SongUid, "水平線", RubyRepairTarget.VideoSource, "7", "秒數", "0", null),
+            new("50", RubyRepairTarget.SongUid, "水平線", RubyRepairTarget.VideoSource, "22", "分句", "0", null)]);
+        context.Request.PathBase = "/LearnMore";
         var data = new ViewDataDictionary<ErrorReportPage>(new EmptyModelMetadataProvider(), new ModelStateDictionary()) { Model = model };
         var temp = new TempDataDictionary(context, scope.ServiceProvider.GetRequiredService<ITempDataProvider>());
         using var writer = new StringWriter();
@@ -166,6 +170,11 @@ public class ErrorReportReadOnlyTests
         Assert.DoesNotContain("<form", html);
         Assert.DoesNotContain("href=\"javascript:", html);
         Assert.Contains("42", html);
+        Assert.Contains("href=\"/LearnMore/Management/ErrorReports/raw/47\"", html);
+        Assert.Contains("href=\"/LearnMore/Management/ErrorReports/raw/50\"", html);
+        Assert.Contains("href=\"/LearnMore/Management/ErrorReports/split/50\"", html);
+        Assert.DoesNotContain("/split/47", html);
+        Assert.DoesNotContain("/raw/7\"", html);
     }
 
     private static ErrorReportsController Create(IErrorReportManagerAccess access, IErrorReportReader reader)

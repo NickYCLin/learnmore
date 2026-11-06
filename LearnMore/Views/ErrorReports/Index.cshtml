@@ -27,6 +27,14 @@
             {
                 <a asp-controller="ErrorReportRuby" asp-action="Index" asp-route-reportId="@reportId">核對單句假名修正（不變更回報狀態）</a>
             }
+            @if (LearnMore.Services.ErrorReportRawTarget.Find(reportId) != null)
+            {
+                <a href="@Url.Content("~/Management/ErrorReports/raw/" + reportId)">查驗原始欄位（唯讀）</a>
+            }
+            @if (reportId == 50)
+            {
+                <a href="@Url.Content("~/Management/ErrorReports/split/50")">核對既有兩列分句修復預覽（須先實播確認）</a>
+            }
             @if (Guid.TryParse(report.SongUid, out var songUid))
             {
                 <a href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本的歌曲頁</a>
