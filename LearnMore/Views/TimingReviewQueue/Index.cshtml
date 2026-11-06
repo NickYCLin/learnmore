@@ -2,47 +2,94 @@
 @{
     ViewData["Title"] = "全站待校正清單（管理員唯讀）";
 }
-<main class="container py-4">
-    <h1 class="h3">@ViewData["Title"]</h1>
-    <p>全站歌曲依 SongUid 去重，不限個人主負責或協作者。只列部分完成、待人工檢查及失敗狀態，不提供重試或套用。</p>
-    <p>共 @Model.TotalCount 首，第 @Model.Page 頁，共 @Model.TotalPages 頁，每頁 @Model.PageSize 首。</p>
-    <p>依 SongID、SongUid 穩定排序；清單為即時資料，跨頁期間若狀態變更，請重新核對總數與 SongUid。</p>
-    <p>工作只顯示最新一筆；RequestKey 為雜湊，不是原始 request_id。@(Model.JobsAvailable ? "" : "目前沒有校正工作表，工作資訊不可用。")</p>
-    <a href="@Url.Content($"~/Management/ReviewQueue/data?page={Model.Page}&pageSize={Model.PageSize}")">讀取此頁 JSON</a>
+@section Styles {
+    <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
+}
+<section class="mq-page" aria-labelledby="queueTitle">
+    <header class="mq-hero">
+        <div>
+            <p class="mq-eyebrow">管理工作台 <span class="mq-readonly">唯讀檢視</span></p>
+            <h1 id="queueTitle">全站待校正清單</h1>
+            <p class="mq-subtitle">集中查看需要人工確認的歌曲，讓每一次校正都有跡可循。</p>
+        </div>
+        <a class="mq-link" href="@Url.Content("~/Media/Manage")">返回音樂管理 <span aria-hidden="true">↗</span></a>
+    </header>
+    <nav class="mq-tabs" aria-label="管理清單">
+        <a href="@Url.Content("~/Management/ReviewQueue")" aria-current="page">待校正清單</a>
+        <a href="@Url.Content("~/Management/ErrorReports")">錯誤回報</a>
+    </nav>
+    <div class="mq-overview">
+        <div><span class="mq-label">待確認歌曲</span><strong>@Model.TotalCount <small>首</small></strong></div>
+        <div><span class="mq-label">目前頁次</span><strong>@(Model.TotalPages == 0 ? "—" : Model.Page.ToString()) <small>/ @Model.TotalPages 頁</small></strong></div>
+        <div><span class="mq-label">每頁顯示</span><strong>@Model.PageSize <small>首</small></strong></div>
+    </div>
+    <aside class="mq-notice">
+        <strong>全站範圍・不變更資料</strong>
+        <p>依 SongUid 去重，不限個人主負責或協作者。只列部分完成、待人工檢查及失敗狀態，不提供重試或套用。</p>
+        @if (!Model.JobsAvailable)
+        {
+            <p role="status">目前沒有校正工作表，工作資訊不可用。</p>
+        }
+    </aside>
+    <div class="mq-list-heading"><h2>需要確認的歌曲</h2><a class="mq-link" href="@Url.Content($"~/Management/ReviewQueue/data?page={Model.Page}&pageSize={Model.PageSize}")">讀取此頁 JSON <span aria-hidden="true">↗</span></a></div>
     @if (Model.Items.Count == 0)
     {
-        <p role="status">此頁沒有歌曲，請依總數確認是否超出最後一頁。</p>
+        <div class="mq-empty" role="status"><h2>此頁沒有待校正歌曲</h2><p>請依總數確認是否超出最後一頁。</p><a href="@Url.Content("~/Management/ReviewQueue")">回到第一頁</a></div>
     }
     @foreach (var song in Model.Items)
     {
-        <article class="border-bottom py-3">
-            <h2 class="h5">@song.Title</h2>
-            <dl>
+        var statusLabel = song.Status switch
+        {
+            "high_accuracy_partial" => "部分完成",
+            "high_accuracy_needs_review" => "待人工檢查",
+            "high_accuracy_failed" => "校正失敗",
+            _ => song.Status
+        };
+        var statusTone = song.Status == "high_accuracy_failed" ? "danger" : "attention";
+        <article class="mq-card">
+            <header class="mq-card-heading"><h2>@song.Title</h2><span class="mq-badge mq-badge--@statusTone">@statusLabel</span></header>
+            <div class="mq-description"><span class="mq-label">待確認原因</span><p>@(string.IsNullOrWhiteSpace(song.Reason) ? "尚未提供原因，請核對工作資訊。" : song.Reason)</p></div>
+            <div class="mq-actions">
+                @if (Guid.TryParse(song.SongUid, out var songUid))
+                {
+                    <a class="mq-action-primary" href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本 <span aria-hidden="true">↗</span></a>
+                }
+            </div>
+            <details class="mq-details">
+                <summary>來源與校正工作資訊</summary>
+                <dl>
                 <dt>SongUid</dt><dd class="text-break">@song.SongUid</dd>
                 <dt>精確影片來源</dt><dd class="text-break">@song.YoutubeUrl</dd>
                 <dt>YouTube ID</dt><dd>@(song.YoutubeId ?? "無法辨識，需核對原始來源")</dd>
                 <dt>校正狀態</dt><dd>@song.Status</dd>
-                <dt>原因</dt><dd class="text-break" style="white-space: pre-wrap">@song.Reason</dd>
                 <dt>最新 jobId</dt><dd>@(song.JobId?.ToString() ?? "無既有工作")</dd>
                 <dt>RequestKey SHA256</dt><dd class="text-break">@song.RequestKeyHash</dd>
                 <dt>工作狀態／失敗原因</dt><dd>@song.JobState / @song.FailureCode</dd>
                 <dt>更新時間（UTC）</dt><dd>@song.JobUpdatedAt?.ToString("O")</dd>
                 <dt>套用時間（UTC）</dt><dd>@song.AppliedAt?.ToString("O")</dd>
-            </dl>
-            @if (Guid.TryParse(song.SongUid, out var songUid))
-            {
-                <a href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本</a>
-            }
+                </dl>
+                <p class="mq-footnote">只顯示最新一筆工作；RequestKey 是 SHA256 雜湊，不是原始 request_id。時間以 UTC 顯示。</p>
+            </details>
         </article>
     }
-    <nav aria-label="全站待校正分頁" class="d-flex gap-3 py-3">
+    <p class="mq-footnote">依 SongID、SongUid 穩定排序；清單為即時資料，跨頁期間若狀態變更，請重新核對總數與 SongUid。</p>
+    <nav aria-label="全站待校正分頁" class="mq-pagination">
         @if (Model.Page > 1)
         {
             <a href="@Url.Content($"~/Management/ReviewQueue?page={Model.Page - 1}&pageSize={Model.PageSize}")">上一頁</a>
         }
+        else
+        {
+            <span aria-disabled="true">上一頁</span>
+        }
+        <span class="mq-page-number">@(Model.TotalPages == 0 ? "尚無資料" : $"第 {Model.Page} 頁 / 共 {Model.TotalPages} 頁")</span>
         @if (Model.Page < Model.TotalPages)
         {
             <a href="@Url.Content($"~/Management/ReviewQueue?page={Model.Page + 1}&pageSize={Model.PageSize}")">下一頁</a>
         }
+        else
+        {
+            <span aria-disabled="true">下一頁</span>
+        }
     </nav>
-</main>
+</section>

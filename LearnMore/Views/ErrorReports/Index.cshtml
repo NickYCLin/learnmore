@@ -2,27 +2,55 @@
 @{
     ViewData["Title"] = "歌詞或秒數錯誤回報（唯讀）";
 }
-<main class="container py-4">
-    <h1 class="h3">@ViewData["Title"]</h1>
-    <p>顯示所有原始狀態，包含未解決及新回報。狀態 0 為新回報；不提供狀態修改或刪除。</p>
-    <p>共 @Model.TotalCount 筆，第 @Model.Page 頁，共 @Model.TotalPages 頁。每頁 @Model.PageSize 筆。</p>
-    <p>依回報日期、回報唯一鍵遞減排序。清單為即時資料；新回報可能使跨頁位置變動。</p>
+@section Styles {
+    <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
+}
+<section class="mq-page" aria-labelledby="queueTitle">
+    <header class="mq-hero">
+        <div>
+            <p class="mq-eyebrow">管理工作台 <span class="mq-readonly">唯讀檢視</span></p>
+            <h1 id="queueTitle">歌詞與秒數錯誤回報</h1>
+            <p class="mq-subtitle">從使用者的回饋出發，逐筆核對歌詞、假名與時間軸。</p>
+        </div>
+        <a class="mq-link" href="@Url.Content("~/Media/Manage")">返回音樂管理 <span aria-hidden="true">↗</span></a>
+    </header>
+    <nav class="mq-tabs" aria-label="管理清單">
+        <a href="@Url.Content("~/Management/ReviewQueue")">待校正清單</a>
+        <a href="@Url.Content("~/Management/ErrorReports")" aria-current="page">錯誤回報</a>
+    </nav>
+    <div class="mq-overview">
+        <div><span class="mq-label">全部回報</span><strong>@Model.TotalCount <small>筆</small></strong></div>
+        <div><span class="mq-label">目前頁次</span><strong>@(Model.TotalPages == 0 ? "—" : Model.Page.ToString()) <small>/ @Model.TotalPages 頁</small></strong></div>
+        <div><span class="mq-label">每頁顯示</span><strong>@Model.PageSize <small>筆</small></strong></div>
+    </div>
+    <aside class="mq-notice"><strong>保留原始回報・不變更狀態</strong><p>顯示所有原始狀態，包含未解決及新回報。狀態 0 為新回報；不提供狀態修改或刪除。</p></aside>
+    <div class="mq-list-heading"><h2>回報紀錄</h2><span class="mq-label">最新回報優先</span></div>
     @if (Model.Items.Count == 0)
     {
-        <p role="status">此頁沒有回報；請依總筆數確認是否超出最後一頁。</p>
+        <div class="mq-empty" role="status"><h2>此頁沒有回報</h2><p>請依總筆數確認是否超出最後一頁。</p><a href="@Url.Content("~/Management/ErrorReports")">回到第一頁</a></div>
     }
     @foreach (var report in Model.Items)
     {
-        <article class="border-bottom py-3">
-            <h2 class="h5">回報 @report.ReportId — @report.Title</h2>
-            <dl>
+        <article class="mq-card">
+            <header class="mq-card-heading"><div><p class="mq-eyebrow">回報 #@report.ReportId</p><h2>@report.Title</h2></div><span class="mq-badge @(report.Status == "0" ? "mq-badge--attention" : "")">@(report.Status == "0" ? "新回報" : $"原狀態：{report.Status ?? "NULL"}")</span></header>
+            <p class="mq-meta">回報時間 @(report.ReportDate?.ToString("yyyy-MM-dd HH:mm") ?? "未提供") <span>（原始伺服器時間）</span></p>
+            <div class="mq-description"><span class="mq-label">問題描述</span><p>@(string.IsNullOrWhiteSpace(report.Description) ? "此回報未填寫描述。" : report.Description)</p></div>
+            <div class="mq-actions">
+            @if (Guid.TryParse(report.SongUid, out var songUid))
+            {
+                <a class="mq-action-primary" href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本的歌曲頁 <span aria-hidden="true">↗</span></a>
+            }
+            </div>
+            <details class="mq-details">
+                <summary>來源與回報核對工具</summary>
+                <dl>
                 <dt>SongUid</dt><dd class="text-break">@report.SongUid</dd>
                 <dt>精確影片來源（原始值）</dt><dd class="text-break">@report.VideoSource</dd>
                 <dt>LyricID</dt><dd>@report.LyricId</dd>
-                <dt>描述</dt><dd class="text-break" style="white-space: pre-wrap">@report.Description</dd>
                 <dt>原狀態</dt><dd>@(report.Status ?? "NULL")</dd>
                 <dt>回報日期（原始伺服器時間）</dt><dd>@report.ReportDate?.ToString("yyyy-MM-dd HH:mm:ss.fffffff")</dd>
-            </dl>
+                </dl>
+                <div class="mq-actions">
             @if (int.TryParse(report.ReportId, out var reportId) && LearnMore.Services.RubyRepairTarget.Find(reportId) != null)
             {
                 <a asp-controller="ErrorReportRuby" asp-action="Index" asp-route-reportId="@reportId">核對單句假名修正（不變更回報狀態）</a>
@@ -35,20 +63,28 @@
             {
                 <a href="@Url.Content("~/Management/ErrorReports/split/50")">核對既有兩列分句修復預覽（須先實播確認）</a>
             }
-            @if (Guid.TryParse(report.SongUid, out var songUid))
-            {
-                <a href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本的歌曲頁</a>
-            }
+                </div>
+            </details>
         </article>
     }
-    <nav aria-label="回報清單分頁" class="d-flex gap-3 py-3">
+    <p class="mq-footnote">依回報日期、回報唯一鍵遞減排序。清單為即時資料；新回報可能使跨頁位置變動。</p>
+    <nav aria-label="回報清單分頁" class="mq-pagination">
         @if (Model.Page > 1)
         {
             <a asp-action="Index" asp-route-page="@(Model.Page - 1)" asp-route-pageSize="@Model.PageSize">上一頁</a>
         }
+        else
+        {
+            <span aria-disabled="true">上一頁</span>
+        }
+        <span class="mq-page-number">@(Model.TotalPages == 0 ? "尚無資料" : $"第 {Model.Page} 頁 / 共 {Model.TotalPages} 頁")</span>
         @if (Model.Page < Model.TotalPages)
         {
             <a asp-action="Index" asp-route-page="@(Model.Page + 1)" asp-route-pageSize="@Model.PageSize">下一頁</a>
         }
+        else
+        {
+            <span aria-disabled="true">下一頁</span>
+        }
     </nav>
-</main>
+</section>
