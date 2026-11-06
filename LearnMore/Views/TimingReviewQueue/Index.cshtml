@@ -1,6 +1,7 @@
 @model LearnMore.Services.TimingReviewQueuePage
 @{
-    ViewData["Title"] = "全站待校正清單（管理員唯讀）";
+    ViewData["Title"] = "全站待校正清單";
+    var workStates = ViewData["WorkStates"] as IReadOnlyDictionary<string, LearnMore.Services.ManagementWorkEvent>;
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
@@ -8,7 +9,7 @@
 <section class="mq-page" aria-labelledby="queueTitle">
     <header class="mq-hero">
         <div>
-            <p class="mq-eyebrow">管理工作台 <span class="mq-readonly">唯讀檢視</span></p>
+            <p class="mq-eyebrow">管理工作台 <span class="mq-readonly">處理進度</span></p>
             <h1 id="queueTitle">全站待校正清單</h1>
             <p class="mq-subtitle">集中查看需要人工確認的歌曲，讓每一次校正都有跡可循。</p>
         </div>
@@ -24,8 +25,8 @@
         <div><span class="mq-label">每頁顯示</span><strong>@Model.PageSize <small>首</small></strong></div>
     </div>
     <aside class="mq-notice">
-        <strong>全站範圍・不變更資料</strong>
-        <p>依 SongUid 去重，不限個人主負責或協作者。只列部分完成、待人工檢查及失敗狀態，不提供重試或套用。</p>
+        <strong>全站範圍・人工處理獨立紀錄</strong>
+        <p>依 SongUid 去重，不限個人主負責或協作者。人工處理記號不會隱藏歌曲，也不會重試或套用；校正工作更新後需重新確認。</p>
         @if (!Model.JobsAvailable)
         {
             <p role="status">目前沒有校正工作表，工作資訊不可用。</p>
@@ -49,6 +50,7 @@
         <article class="mq-card">
             <header class="mq-card-heading"><h2>@song.Title</h2><span class="mq-badge mq-badge--@statusTone">@statusLabel</span></header>
             <div class="mq-description"><span class="mq-label">待確認原因</span><p>@(string.IsNullOrWhiteSpace(song.Reason) ? "尚未提供原因，請核對工作資訊。" : song.Reason)</p></div>
+            @await Html.PartialAsync("_ManagementWorkBadge", new LearnMore.Services.ManagementWorkBadge("review", song.SongUid, LearnMore.Services.ManagementWork.Evidence(song), workStates?.GetValueOrDefault(song.SongUid)))
             <div class="mq-actions">
                 @if (Guid.TryParse(song.SongUid, out var songUid))
                 {

@@ -160,6 +160,7 @@ builder.Services.AddSession(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<PersistentLoginSessionService>();
 builder.Services.AddScoped<IErrorReportReader, ErrorReportReader>();
+builder.Services.AddScoped<IManagementWorkStore, ManagementWorkStore>();
 builder.Services.AddScoped<ITimingReviewQueueReader, TimingReviewQueueReader>();
 builder.Services.AddScoped<ITimingReviewQueueManagerAccess, TimingReviewQueueManagerAccess>();
 builder.Services.AddScoped<IErrorReportRubyRepair, ErrorReportRubyRepair>();

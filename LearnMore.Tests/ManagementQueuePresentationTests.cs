@@ -79,6 +79,22 @@ public sealed class ManagementQueuePresentationTests
         Assert.DoesNotContain("class=\"mq-card\"", html);
     }
 
+    [Fact]
+    public async Task WorkFormPreservesAuditAndEncodesNotes()
+    {
+        var evidence = new string('A', 64);
+        var detail = new ManagementWorkDetail(new("report", "7", "標題", "問題", null, evidence),
+            [new(42, evidence, "resolved", "<script>bad</script>", "manager@example.invalid", DateTime.UtcNow)]);
+        var html = await Render("ManagementWork", detail);
+        Assert.Contains("__RequestVerificationToken", html);
+        Assert.Contains("name=\"ExpectedRevision\" value=\"42\"", html);
+        Assert.Contains("name=\"EvidenceHash\" value=\"" + evidence, html);
+        Assert.Contains("&lt;script&gt;bad&lt;/script&gt;", html);
+        Assert.Contains("manager@example.invalid", html);
+        Assert.Contains("value=\"resolved\" selected=\"selected\"", html);
+        Assert.Contains("/LearnMore/Management/Work", html);
+    }
+
     private static async Task<string> Render<TModel>(string viewName, TModel model)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions

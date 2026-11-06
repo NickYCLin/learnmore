@@ -20,7 +20,7 @@ public sealed class TimingReviewQueueManagerAccess(IConfiguration configuration)
 [Route("Management/ReviewQueue")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class TimingReviewQueueController(ITimingReviewQueueManagerAccess access,
-    ITimingReviewQueueReader reader) : Controller
+    ITimingReviewQueueReader reader, IManagementWorkStore? workStore = null) : Controller
 {
     [HttpGet("")]
     public Task<IActionResult> Index(int page = 1, int pageSize = 25, CancellationToken cancellationToken = default)
@@ -39,11 +39,21 @@ public sealed class TimingReviewQueueController(ITimingReviewQueueManagerAccess 
         try
         {
             var result = await reader.ReadAsync(page, pageSize, cancellationToken);
+            if (!json && workStore != null)
+                ViewData["WorkStates"] = await workStore.ReadLatestAsync("review", result.Items.Select(item => item.SongUid).ToArray(), cancellationToken);
             return json ? Json(result) : View("Index", result);
         }
         catch (TimingReviewQueueSchemaException)
         {
             return StatusCode(503, new { message = "歌曲或校正工作欄位不完整，無法核實全站清單；不是零首。" });
+        }
+        catch (ManagementWorkUnavailableException)
+        {
+            return StatusCode(503, "處理紀錄尚未就緒，請先完成管理處理紀錄資料表部署；不是尚未處理。");
+        }
+        catch (System.Data.SqlClient.SqlException)
+        {
+            return StatusCode(503, "清單或處理紀錄暫時無法讀取，請稍後重試；不是零首或尚未處理。");
         }
     }
 }

@@ -20,7 +20,7 @@ public sealed class ErrorReportManagerAccess(IConfiguration configuration) : IEr
 [Route("Management/ErrorReports")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class ErrorReportsController(IErrorReportManagerAccess access, IErrorReportReader reader,
-    ILogger<ErrorReportsController> logger) : Controller
+    ILogger<ErrorReportsController> logger, IManagementWorkStore? workStore = null) : Controller
 {
     [HttpGet("")]
     public Task<IActionResult> Index(int page = 1, int pageSize = 25, CancellationToken cancellationToken = default)
@@ -39,12 +39,23 @@ public sealed class ErrorReportsController(IErrorReportManagerAccess access, IEr
         try
         {
             var result = await reader.ReadAsync(page, pageSize, cancellationToken);
+            if (!json && workStore != null)
+                ViewData["WorkStates"] = await workStore.ReadLatestAsync("report", result.Items.Select(item => item.ReportId).ToArray(), cancellationToken);
             return json ? Json(result) : View("Index", result);
         }
         catch (ErrorReportSchemaException)
         {
             logger.LogWarning("ErrorReports schema lacks required columns or a non-null single-column unique index.");
             return StatusCode(503, new { message = "回報結構尚未核實：缺少已知欄位或單欄唯一鍵。請管理者提供 ErrorReports 結構證據；不是零筆回報。" });
+        }
+        catch (ManagementWorkUnavailableException)
+        {
+            return StatusCode(503, "處理紀錄尚未就緒，請先完成管理處理紀錄資料表部署；不是尚未處理。");
+        }
+        catch (System.Data.SqlClient.SqlException exception)
+        {
+            logger.LogError(exception, "Error reports or management work states could not be read.");
+            return StatusCode(503, "回報或處理紀錄暫時無法讀取，請稍後重試；不是零筆或尚未處理。");
         }
     }
 }

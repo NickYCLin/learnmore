@@ -1,0 +1,15 @@
+@model LearnMore.Services.ManagementWorkBadge
+@using LearnMore.Services
+<div class="mq-work-summary">
+    <span class="mq-badge @(Model.Current?.Status == "resolved" ? "mq-badge--resolved" : "mq-badge--attention")">人工處理：@ManagementWork.Label(Model.Current?.Status ?? "pending")</span>
+    @if (Model.Current is { } current)
+    {
+        <p class="mq-meta">@current.ActorEmail · @current.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+        <p class="mq-work-note">@current.Note</p>
+    }
+    else if (Model.Latest != null)
+    {
+        <p class="mq-meta">來源或校正工作有更新，舊的處理標記不套用到這次內容。</p>
+    }
+    <a class="mq-link" href="@Url.Content("~/Management/Work")?kind=@Uri.EscapeDataString(Model.Kind)&amp;itemId=@Uri.EscapeDataString(Model.ItemId)">更新處理狀態／查看紀錄</a>
+</div>

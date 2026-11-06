@@ -1,0 +1,62 @@
+@model LearnMore.Services.ManagementWorkDetail
+@using LearnMore.Services
+@{
+    ViewData["Title"] = "人工處理紀錄";
+    var status = Model.Current?.Status ?? "pending";
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
+}
+<section class="mq-page" aria-labelledby="workTitle">
+    <header class="mq-hero"><div><p class="mq-eyebrow">管理工作台 · @(Model.Target.Kind == "report" ? "錯誤回報" : "校正複核")</p><h1 id="workTitle">人工處理紀錄</h1><p class="mq-subtitle">@Model.Target.Title</p></div>
+        <a class="mq-link" href="@Url.Content(Model.Target.Kind == "report" ? "~/Management/ErrorReports" : "~/Management/ReviewQueue")">返回清單</a>
+    </header>
+    <aside class="mq-notice"><strong>記錄處理進度，不代替實際修復</strong><p>只有管理員主動儲存才會加上記號。「已處理」不會改寫原始回報、隱藏待校正歌曲或自動套用歌詞；請確認問題已解決再標記。舊資料不會自動結案。</p></aside>
+    @if (ViewData["Conflict"] is string conflict)
+    {
+        <div class="mq-notice" role="alert"><strong>@conflict</strong><p class="mq-work-note">本次未儲存的備註：@ViewData["AttemptedNote"]</p></div>
+    }
+    <article class="mq-card">
+        <p class="mq-meta">項目：@Model.Target.ItemId</p>
+        <div class="mq-description"><span class="mq-label">原始問題／待確認原因</span><p>@Model.Target.Description</p></div>
+        @if (Guid.TryParse(Model.Target.SongUid, out var songUid))
+        {
+            <a class="mq-link" href="@Url.Content("~/Lyrics/" + songUid)">開啟此影片版本的歌曲頁</a>
+        }
+        @await Html.PartialAsync("_ManagementWorkBadge", new ManagementWorkBadge(Model.Target.Kind, Model.Target.ItemId, Model.Target.EvidenceHash, Model.Latest))
+        <form method="post" action="@Url.Content("~/Management/Work")" class="mq-work-form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="kind" value="@Model.Target.Kind" />
+            <input type="hidden" name="itemId" value="@Model.Target.ItemId" />
+            <input type="hidden" name="ExpectedRevision" value="@(Model.Latest?.EventId ?? 0)" />
+            <input type="hidden" name="EvidenceHash" value="@Model.Target.EvidenceHash" />
+            <label for="workStatus">處理狀態</label>
+            <select id="workStatus" name="Status" required>
+                <option value="pending" selected="@(status == "pending")">待處理（可重新開啟）</option>
+                <option value="in_progress" selected="@(status == "in_progress")">處理中</option>
+                <option value="resolved" selected="@(status == "resolved")">已處理</option>
+            </select>
+            <label for="workNote">處理備註 <span class="mq-label">必填，最多 2000 字</span></label>
+            <textarea id="workNote" name="Note" rows="4" maxlength="2000" required placeholder="例如：已核對原影片並修正第 12 行起始秒數；重新播放確認正常。"></textarea>
+            <p class="mq-meta">儲存時記錄目前登入的管理員及 UTC 時間，每次變更都保留歷程。</p>
+            <button type="submit" class="mq-action-primary">儲存處理紀錄</button>
+        </form>
+    </article>
+    <div class="mq-list-heading"><h2>處理歷程</h2><span class="mq-label">顯示最近 50 筆，舊紀錄仍保留在資料庫</span></div>
+    @if (Model.History.Count == 0)
+    {
+        <div class="mq-empty" role="status">尚無人工處理紀錄，狀態為待處理。</div>
+    }
+    @foreach (var entry in Model.History)
+    {
+        <article class="mq-card">
+            <header class="mq-card-heading"><h2>@ManagementWork.Label(entry.Status)</h2><span class="mq-label">紀錄 #@entry.EventId</span></header>
+            <p class="mq-meta">@entry.ActorEmail · @entry.UpdatedAtUtc.ToString("yyyy-MM-dd HH:mm:ss") UTC</p>
+            <p class="mq-work-note">@entry.Note</p>
+            @if (entry.EvidenceHash != Model.Target.EvidenceHash)
+            {
+                <p class="mq-meta">此筆屬於較早的來源／校正工作內容，不代表目前問題已處理。</p>
+            }
+        </article>
+    }
+</section>

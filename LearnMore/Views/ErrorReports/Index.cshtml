@@ -1,6 +1,7 @@
 @model LearnMore.Services.ErrorReportPage
 @{
-    ViewData["Title"] = "歌詞或秒數錯誤回報（唯讀）";
+    ViewData["Title"] = "歌詞或秒數錯誤回報";
+    var workStates = ViewData["WorkStates"] as IReadOnlyDictionary<string, LearnMore.Services.ManagementWorkEvent>;
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
@@ -8,7 +9,7 @@
 <section class="mq-page" aria-labelledby="queueTitle">
     <header class="mq-hero">
         <div>
-            <p class="mq-eyebrow">管理工作台 <span class="mq-readonly">唯讀檢視</span></p>
+            <p class="mq-eyebrow">管理工作台 <span class="mq-readonly">處理進度</span></p>
             <h1 id="queueTitle">歌詞與秒數錯誤回報</h1>
             <p class="mq-subtitle">從使用者的回饋出發，逐筆核對歌詞、假名與時間軸。</p>
         </div>
@@ -23,7 +24,7 @@
         <div><span class="mq-label">目前頁次</span><strong>@(Model.TotalPages == 0 ? "—" : Model.Page.ToString()) <small>/ @Model.TotalPages 頁</small></strong></div>
         <div><span class="mq-label">每頁顯示</span><strong>@Model.PageSize <small>筆</small></strong></div>
     </div>
-    <aside class="mq-notice"><strong>保留原始回報・不變更狀態</strong><p>顯示所有原始狀態，包含未解決及新回報。狀態 0 為新回報；不提供狀態修改或刪除。</p></aside>
+    <aside class="mq-notice"><strong>原始回報與人工處理分開保存</strong><p>原狀態 0 為新回報。人工處理另記待處理、處理中或已處理，保留處理者、時間及備註；不刪除或改寫原始回報。</p></aside>
     <div class="mq-list-heading"><h2>回報紀錄</h2><span class="mq-label">最新回報優先</span></div>
     @if (Model.Items.Count == 0)
     {
@@ -35,6 +36,7 @@
             <header class="mq-card-heading"><div><p class="mq-eyebrow">回報 #@report.ReportId</p><h2>@report.Title</h2></div><span class="mq-badge @(report.Status == "0" ? "mq-badge--attention" : "")">@(report.Status == "0" ? "新回報" : $"原狀態：{report.Status ?? "NULL"}")</span></header>
             <p class="mq-meta">回報時間 @(report.ReportDate?.ToString("yyyy-MM-dd HH:mm") ?? "未提供") <span>（原始伺服器時間）</span></p>
             <div class="mq-description"><span class="mq-label">問題描述</span><p>@(string.IsNullOrWhiteSpace(report.Description) ? "此回報未填寫描述。" : report.Description)</p></div>
+            @await Html.PartialAsync("_ManagementWorkBadge", new LearnMore.Services.ManagementWorkBadge("report", report.ReportId, LearnMore.Services.ManagementWork.Evidence(report, Model.ReportIdColumn), workStates?.GetValueOrDefault(report.ReportId)))
             <div class="mq-actions">
             @if (Guid.TryParse(report.SongUid, out var songUid))
             {

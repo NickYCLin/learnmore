@@ -27,12 +27,7 @@ public sealed class ErrorReportReader(IConfiguration configuration) : IErrorRepo
     public static bool IsValidPage(int page, int pageSize) => page >= 1 && pageSize is >= 1 and <= 100;
     public static string QuoteIdentifier(string identifier) => "[" + identifier.Replace("]", "]]", StringComparison.Ordinal) + "]";
 
-    public async Task<ErrorReportPage> ReadAsync(int page, int pageSize, CancellationToken cancellationToken)
-    {
-        if (!IsValidPage(page, pageSize)) throw new ArgumentOutOfRangeException(nameof(page));
-        await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
-        await connection.OpenAsync(cancellationToken);
-        const string schemaSql = """
+    internal const string SchemaSql = """
             SELECT TOP (1) columns.name
             FROM sys.indexes indexes
             JOIN sys.index_columns keys ON keys.object_id = indexes.object_id AND keys.index_id = indexes.index_id AND keys.key_ordinal = 1
@@ -45,7 +40,13 @@ public sealed class ErrorReportReader(IConfiguration configuration) : IErrorRepo
                 ('UserEmail','ErrorDescription','ErrorSongUid','ErrorLyricID','ReportDate','Status')) = 6
             ORDER BY indexes.is_primary_key DESC, indexes.index_id;
             """;
-        await using var schemaCommand = new SqlCommand(schemaSql, connection);
+
+    public async Task<ErrorReportPage> ReadAsync(int page, int pageSize, CancellationToken cancellationToken)
+    {
+        if (!IsValidPage(page, pageSize)) throw new ArgumentOutOfRangeException(nameof(page));
+        await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
+        await connection.OpenAsync(cancellationToken);
+        await using var schemaCommand = new SqlCommand(SchemaSql, connection);
         var key = await schemaCommand.ExecuteScalarAsync(cancellationToken) as string;
         if (string.IsNullOrEmpty(key)) throw new ErrorReportSchemaException();
         var quotedKey = QuoteIdentifier(key);
