@@ -23,8 +23,9 @@ public class WhisperTranscribeWorkflowService : IWhisperTranscribeWorkflowServic
         _options = options.Value;
     }
 
-    public async Task<string> ExecuteAsync(TranscribeRequest request)
+    public async Task<string> ExecuteAsync(TranscribeRequest request, string userEmail)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userEmail);
         var audioFilePath = await DownloadYouTubeAudioAsync(request.YouTubeUrl);
         if (string.IsNullOrEmpty(audioFilePath))
         {
@@ -34,7 +35,7 @@ public class WhisperTranscribeWorkflowService : IWhisperTranscribeWorkflowServic
         try
         {
             var transcription = await _openAiClient.TranscribeAudioAsync(audioFilePath, request.Language);
-            string songUid = await _songPersistence.AddSongToDatabaseAsync(request);
+            string songUid = await _songPersistence.AddSongToDatabaseAsync(request, userEmail);
             await _songPersistence.CreateDynamicSongTableAsync(songUid);
             await _songPersistence.InsertTranscriptionToDynamicTableAsync(songUid, transcription);
             return transcription;

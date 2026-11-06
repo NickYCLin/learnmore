@@ -34,7 +34,7 @@ namespace LearnMore.Controllers
 
             try
             {
-                var transcription = await _transcribeWorkflow.ExecuteAsync(request);
+                var transcription = await _transcribeWorkflow.ExecuteAsync(request, HttpContext.Session.GetString("Email")!);
                 return Ok(new { transcription });
             }
             catch (Exception ex)

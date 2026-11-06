@@ -343,7 +343,7 @@ public class UploadQualityStatusMvpTests
             "WhisperSongPersistenceService.cs"));
 
         Assert.Contains("var songUid = Guid.NewGuid().ToString();", source);
-        Assert.Contains("INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl])", source);
+        Assert.Contains("INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl], [AddedByUserId])", source);
         Assert.Contains("command.Parameters.AddWithValue(\"@SongUid\", songUid);", source);
     }
 
@@ -375,7 +375,7 @@ public class UploadQualityStatusMvpTests
             "MediaController.cs"));
 
         var validationIndex = source.IndexOf("HasUsableManualSegments(request.Segments)", StringComparison.Ordinal);
-        var insertIndex = source.IndexOf("AddSongToDatabaseAsync(request.SongData)", StringComparison.Ordinal);
+        var insertIndex = source.IndexOf("AddSongToDatabaseAsync(request.SongData, userEmail)", StringComparison.Ordinal);
 
         Assert.True(validationIndex >= 0, "UpdateTranscription should validate usable segments.");
         Assert.True(insertIndex >= 0, "UpdateTranscription should create the Songs row.");
@@ -414,7 +414,7 @@ public class UploadQualityStatusMvpTests
         Assert.True(webTranscribeStart >= 0, "WebTranscribe action should exist.");
 
         var webTranscribeSource = source[webTranscribeStart..];
-        var appendIndex = webTranscribeSource.IndexOf("AppendProducerSongAsync(userEmail, songUid, CancellationToken.None)", StringComparison.Ordinal);
+        var appendIndex = webTranscribeSource.IndexOf("CreateSongWithPlaceholdersAsync(request, stableSegmentsToInsert, userEmail, ct)", StringComparison.Ordinal);
         var doneIndex = webTranscribeSource.IndexOf("await SendEvent(\"done\", new { songUid, redirectUrl = Url.Action(\"Manage\", \"Media\") });", StringComparison.Ordinal);
 
         Assert.True(appendIndex >= 0, "WebTranscribe should link the song to the uploader.");

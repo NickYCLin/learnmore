@@ -27,20 +27,24 @@ public class WhisperSongPersistenceService : IWhisperSongPersistenceService
         _logger = logger;
     }
 
-    public async Task<string> AddSongToDatabaseAsync(TranscribeRequest request)
+    public async Task<string> AddSongToDatabaseAsync(TranscribeRequest request, string userEmail)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userEmail);
         var songUid = Guid.NewGuid().ToString();
         var query = @"
-        INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl])
+        INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl], [AddedByUserId])
         OUTPUT INSERTED.[SongUid]
-        VALUES (@SongUid, @Title, @Artist, @Performer, @YouTubeVideoUrl)";
+        VALUES (@SongUid, @Title, @Artist, @Performer, @YouTubeVideoUrl, @AddedByUserId)";
 
         using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync();
         await EnsurePerformerColumnExistsAsync(connection);
-        await ThrowIfDuplicateYouTubeSongAsync(connection, null, request.YouTubeUrl, CancellationToken.None);
+        using var transaction = connection.BeginTransaction(System.Data.IsolationLevel.Serializable);
+        var uploaderId = await RecordUploaderAsync(connection, transaction, userEmail, songUid, CancellationToken.None);
+        await ThrowIfDuplicateYouTubeSongAsync(connection, transaction, request.YouTubeUrl, CancellationToken.None);
 
-        using var command = new SqlCommand(query, connection);
+        using var command = new SqlCommand(query, connection, transaction);
+        command.Parameters.AddWithValue("@AddedByUserId", uploaderId);
         command.Parameters.AddWithValue("@SongUid", songUid);
         command.Parameters.AddWithValue("@Title", request.Title);
         command.Parameters.AddWithValue("@Artist", request.Artist);
@@ -51,7 +55,8 @@ public class WhisperSongPersistenceService : IWhisperSongPersistenceService
         var insertedSongUid = await command.ExecuteScalarAsync();
         if (insertedSongUid is string persistedSongUid)
         {
-            await InsertSearchAliasesAsync(connection, null, persistedSongUid, request.Title, request.ChineseTitleAlias);
+            await InsertSearchAliasesAsync(connection, transaction, persistedSongUid, request.Title, request.ChineseTitleAlias);
+            await transaction.CommitAsync();
             await EnqueueAudioStemJobSafeAsync(persistedSongUid, request.YouTubeUrl, CancellationToken.None);
             return persistedSongUid;
         }
@@ -63,7 +68,7 @@ public class WhisperSongPersistenceService : IWhisperSongPersistenceService
     {
         var tableName = BuildSongTableName(songUid);
         var query = $@"
-        CREATE TABLE [language].[dbo].[{tableName}] (
+        CREATE TABLE [dbo].[{tableName}] (
             [LyricID] INT IDENTITY(1,1) PRIMARY KEY,
             [TimeStamp] FLOAT NOT NULL,
             [Japanese] NVARCHAR(MAX),
@@ -114,7 +119,7 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby)";
         try
         {
             string insertQuery = $@"
-INSERT INTO [language].[dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
+INSERT INTO [dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
 VALUES (@Start, @Text, @Chinese)";
 
             foreach (var segment in segments)
@@ -135,8 +140,9 @@ VALUES (@Start, @Text, @Chinese)";
         }
     }
 
-    public async Task<string> CreateSummonedSongAsync(SummonRequest request, IReadOnlyCollection<LyricEntry> lyrics, CancellationToken cancellationToken = default)
+    public async Task<string> CreateSummonedSongAsync(SummonRequest request, IReadOnlyCollection<LyricEntry> lyrics, string userEmail, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userEmail);
         var songUid = Guid.NewGuid().ToString();
         string tableName = BuildSongTableName(songUid);
         var connectionString = _configuration.GetConnectionString("DefaultConnection");
@@ -148,14 +154,16 @@ VALUES (@Start, @Text, @Chinese)";
 
         try
         {
+            var uploaderId = await RecordUploaderAsync(connection, transaction, userEmail, songUid, cancellationToken);
             await ThrowIfDuplicateYouTubeSongAsync(connection, transaction, request.YouTubeLink, cancellationToken);
 
             const string insertSongQuery = @"
-INSERT INTO [language].[dbo].[Songs] (SongUid, Title, Artist, Performer, Translator, YouTubeVideoUrl)
-VALUES (@SongUid, @Title, @Artist, @Performer, @Translator, @YouTubeVideoUrl)";
+INSERT INTO [dbo].[Songs] (SongUid, Title, Artist, Performer, Translator, YouTubeVideoUrl, AddedByUserId)
+VALUES (@SongUid, @Title, @Artist, @Performer, @Translator, @YouTubeVideoUrl, @AddedByUserId)";
 
             await using (var command = new SqlCommand(insertSongQuery, connection, transaction))
             {
+                command.Parameters.AddWithValue("@AddedByUserId", uploaderId);
                 command.Parameters.AddWithValue("@SongUid", songUid);
                 command.Parameters.AddWithValue("@Title", request.SongTitle);
                 command.Parameters.AddWithValue("@Artist", request.SongArtist);
@@ -169,7 +177,7 @@ VALUES (@SongUid, @Title, @Artist, @Performer, @Translator, @YouTubeVideoUrl)";
             await InsertSearchAliasesAsync(connection, transaction, songUid, request.SongTitle, request.ChineseTitleAlias, cancellationToken);
 
             string createTableQuery = $@"
-CREATE TABLE [language].[dbo].[{tableName}] (
+CREATE TABLE [dbo].[{tableName}] (
     LyricID INT IDENTITY(1,1) PRIMARY KEY,
     TimeStamp FLOAT NOT NULL,
     Japanese NVARCHAR(MAX),
@@ -184,7 +192,7 @@ CREATE TABLE [language].[dbo].[{tableName}] (
             }
 
             string insertLyricsQuery = $@"
-INSERT INTO [language].[dbo].[{tableName}] (TimeStamp, Japanese, Chinese, JapaneseRuby, Roman)
+INSERT INTO [dbo].[{tableName}] (TimeStamp, Japanese, Chinese, JapaneseRuby, Roman)
 VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby, @Roman)";
 
             foreach (var lyric in lyrics)
@@ -209,8 +217,9 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby, @Roman)";
         }
     }
 
-    public async Task<SongPlaceholderCreationResult> CreateSongWithPlaceholdersAsync(TranscribeRequest request, IReadOnlyCollection<LyricSegment> segments, CancellationToken cancellationToken = default)
+    public async Task<SongPlaceholderCreationResult> CreateSongWithPlaceholdersAsync(TranscribeRequest request, IReadOnlyCollection<LyricSegment> segments, string userEmail, CancellationToken cancellationToken = default)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userEmail);
         if (segments.Count == 0 || segments.Any(segment => string.IsNullOrWhiteSpace(segment.Japanese)))
             throw new ArgumentException("自動建檔需要完整的日文歌詞。", nameof(segments));
 
@@ -225,16 +234,18 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby, @Roman)";
 
         try
         {
+            var uploaderId = await RecordUploaderAsync(connection, transaction, userEmail, songUid, cancellationToken);
             await ThrowIfDuplicateYouTubeSongAsync(connection, transaction, request.YouTubeUrl, cancellationToken);
 
             const string insertSongQuery = @"
-INSERT INTO [language].[dbo].[Songs]
-    ([SongUid], [Title], [Artist], [Performer], [Translator], [TranslationSource], [YouTubeVideoUrl], [ChannelThumbnailUrl], [SongType], [AddedDate])
+INSERT INTO [dbo].[Songs]
+    ([SongUid], [Title], [Artist], [Performer], [Translator], [TranslationSource], [YouTubeVideoUrl], [ChannelThumbnailUrl], [SongType], [AddedDate], [AddedByUserId])
 VALUES
-    (@SongUid, @Title, @Artist, @Performer, NULL, NULL, @YouTubeVideoUrl, NULL, NULL, GETDATE())";
+    (@SongUid, @Title, @Artist, @Performer, NULL, NULL, @YouTubeVideoUrl, NULL, NULL, GETDATE(), @AddedByUserId)";
 
             await using (var insertSongCommand = new SqlCommand(insertSongQuery, connection, transaction))
             {
+                insertSongCommand.Parameters.AddWithValue("@AddedByUserId", uploaderId);
                 insertSongCommand.Parameters.AddWithValue("@SongUid", songUid);
                 insertSongCommand.Parameters.AddWithValue("@Title", string.IsNullOrWhiteSpace(request.Title) ? (object)DBNull.Value : request.Title);
                 insertSongCommand.Parameters.AddWithValue("@Artist", string.IsNullOrWhiteSpace(request.Artist) ? (object)DBNull.Value : request.Artist);
@@ -248,7 +259,7 @@ VALUES
 
             string tableName = BuildSongTableName(songUid);
             string createTableQuery = $@"
-        CREATE TABLE [language].[dbo].[{tableName}] (
+        CREATE TABLE [dbo].[{tableName}] (
             [LyricID] INT IDENTITY(1,1) PRIMARY KEY,
             [TimeStamp] FLOAT NOT NULL,
             [Japanese] NVARCHAR(MAX),
@@ -265,7 +276,7 @@ VALUES
             foreach (var segment in segments)
             {
                 string insertLyricQuery = $@"
-INSERT INTO [language].[dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
+INSERT INTO [dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
 OUTPUT INSERTED.LyricID
 VALUES (@Start, @Text, @Chinese)";
                 await using var insertLyricCommand = new SqlCommand(insertLyricQuery, connection, transaction);
@@ -307,7 +318,7 @@ VALUES (@Start, @Text, @Chinese)";
         {
             if (finalSegments.Count != lyricIds.Count)
             {
-                string deleteQuery = $"DELETE FROM [language].[dbo].[{tableName}]";
+                string deleteQuery = $"DELETE FROM [dbo].[{tableName}]";
                 await using (var deleteCommand = new SqlCommand(deleteQuery, connection, transaction))
                 {
                     await deleteCommand.ExecuteNonQueryAsync(cancellationToken);
@@ -317,7 +328,7 @@ VALUES (@Start, @Text, @Chinese)";
                 foreach (var segment in finalSegments)
                 {
                     string insertQuery = $@"
-INSERT INTO [language].[dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
+INSERT INTO [dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
 VALUES (@Start, @Text, @Chinese);
 SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     await using var insertCommand = new SqlCommand(insertQuery, connection, transaction);
@@ -332,7 +343,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             {
                 for (int i = 0; i < finalSegments.Count; i++)
                 {
-                    string updateQuery = $"UPDATE [language].[dbo].[{tableName}] SET Chinese = @Chinese, Japanese = @Japanese, TimeStamp = @TimeStamp WHERE LyricID = @LyricID";
+                    string updateQuery = $"UPDATE [dbo].[{tableName}] SET Chinese = @Chinese, Japanese = @Japanese, TimeStamp = @TimeStamp WHERE LyricID = @LyricID";
                     await using var updateCommand = new SqlCommand(updateQuery, connection, transaction);
                     updateCommand.Parameters.AddWithValue("@Chinese", string.IsNullOrWhiteSpace(finalSegments[i].Chinese) ? (object)DBNull.Value : finalSegments[i].Chinese);
                     updateCommand.Parameters.AddWithValue("@Japanese", string.IsNullOrWhiteSpace(finalSegments[i].Japanese) ? (object)DBNull.Value : finalSegments[i].Japanese);
@@ -365,7 +376,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
         const string query = @"
 IF COL_LENGTH('dbo.Songs', 'HighAccuracyStatus') IS NOT NULL
 BEGIN
-    UPDATE [language].[dbo].[Songs]
+    UPDATE [dbo].[Songs]
     SET [HighAccuracyStatus] = @HighAccuracyStatus,
         [HighAccuracyStatusReason] = CASE
             WHEN COL_LENGTH('dbo.Songs', 'HighAccuracyStatusReason') IS NOT NULL THEN @HighAccuracyStatusReason
@@ -380,59 +391,30 @@ END";
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task AppendProducerSongAsync(string userEmail, string songUid, CancellationToken cancellationToken = default)
+    private static async Task<int> RecordUploaderAsync(SqlConnection connection, SqlTransaction transaction, string userEmail, string songUid, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(userEmail))
+        ArgumentException.ThrowIfNullOrWhiteSpace(userEmail);
+        int userId;
+        await using (var command = new SqlCommand("SELECT Id FROM dbo.Users WITH (UPDLOCK, HOLDLOCK) WHERE Email = @Email", connection, transaction))
         {
-            throw new ArgumentException("Invalid userEmail.", nameof(userEmail));
+            command.Parameters.AddWithValue("@Email", userEmail);
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            if (!await reader.ReadAsync(cancellationToken))
+                throw new InvalidOperationException("找不到上傳者帳號，無法新增歌曲。");
+            userId = reader.GetInt32(0);
+            if (await reader.ReadAsync(cancellationToken))
+                throw new InvalidOperationException("上傳者帳號不唯一，無法新增歌曲。");
         }
-
-        if (string.IsNullOrWhiteSpace(songUid) || !SongUidPattern.IsMatch(songUid))
-        {
-            throw new ArgumentException("Invalid songUid.", nameof(songUid));
-        }
-
-        var connectionString = _configuration.GetConnectionString("DefaultConnection");
-        await using var connection = new SqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
-
-        try
-        {
-            string existingProducer = string.Empty;
-            const string getProducerQuery = "SELECT Producer FROM [language].[dbo].[Users] WITH (UPDLOCK, ROWLOCK) WHERE Email = @Email";
-            await using (var getProducerCommand = new SqlCommand(getProducerQuery, connection, transaction))
-            {
-                getProducerCommand.Parameters.AddWithValue("@Email", userEmail);
-                var result = await getProducerCommand.ExecuteScalarAsync(cancellationToken);
-                if (result == null || result == DBNull.Value)
-                {
-                    throw new InvalidOperationException($"User not found: {userEmail}");
-                }
-
-                existingProducer = result.ToString() ?? string.Empty;
-            }
-
-            if (!existingProducer.Split(',', StringSplitOptions.RemoveEmptyEntries).Contains(songUid, StringComparer.Ordinal))
-            {
-                string updatedProducer = string.IsNullOrEmpty(existingProducer)
-                    ? songUid
-                    : $"{existingProducer},{songUid}";
-
-                const string updateProducerQuery = "UPDATE [language].[dbo].[Users] SET Producer = @UpdatedProducer WHERE Email = @Email";
-                await using var updateProducerCommand = new SqlCommand(updateProducerQuery, connection, transaction);
-                updateProducerCommand.Parameters.AddWithValue("@UpdatedProducer", updatedProducer);
-                updateProducerCommand.Parameters.AddWithValue("@Email", userEmail);
-                await updateProducerCommand.ExecuteNonQueryAsync(cancellationToken);
-            }
-
-            await transaction.CommitAsync(cancellationToken);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            throw;
-        }
+        await using var update = new SqlCommand(@"
+UPDATE dbo.Users SET Producer = CASE
+    WHEN NULLIF(LTRIM(RTRIM(Producer)), '') IS NULL THEN @SongUid
+    ELSE Producer + ',' + @SongUid END
+WHERE Id = @UserId", connection, transaction);
+        update.Parameters.AddWithValue("@SongUid", songUid);
+        update.Parameters.AddWithValue("@UserId", userId);
+        if (await update.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("無法記錄上傳者，歌曲未新增。");
+        return userId;
     }
 
     private async Task EnqueueAudioStemJobSafeAsync(string songUid, string? youTubeVideoUrl, CancellationToken cancellationToken)
@@ -452,7 +434,7 @@ END";
         const string sql = @"
 IF COL_LENGTH('dbo.Songs', 'Performer') IS NULL
 BEGIN
-    ALTER TABLE [language].[dbo].[Songs] ADD [Performer] NVARCHAR(255) NULL;
+    ALTER TABLE [dbo].[Songs] ADD [Performer] NVARCHAR(255) NULL;
 END";
         await using var command = new SqlCommand(sql, connection);
         await command.ExecuteNonQueryAsync(cancellationToken);
@@ -568,11 +550,11 @@ END;";
         await EnsureSongAliasesTableAsync(connection, transaction, cancellationToken);
         const string sql = @"
 IF NOT EXISTS (
-    SELECT 1 FROM [language].[dbo].[SongAliases]
+    SELECT 1 FROM [dbo].[SongAliases]
     WHERE [SongUid] = @SongUid AND [AliasText] = @AliasText
 )
 BEGIN
-    INSERT INTO [language].[dbo].[SongAliases] ([SongUid], [AliasText], [AliasType], [Source])
+    INSERT INTO [dbo].[SongAliases] ([SongUid], [AliasText], [AliasType], [Source])
     VALUES (@SongUid, @AliasText, @AliasType, @Source)
 END";
 
@@ -631,7 +613,7 @@ END";
 
         const string query = @"
 SELECT SongUid, YouTubeVideoUrl
-FROM [language].[dbo].[Songs] WITH (UPDLOCK, HOLDLOCK)
+FROM [dbo].[Songs] WITH (UPDLOCK, HOLDLOCK)
 WHERE YouTubeVideoUrl IS NOT NULL AND LTRIM(RTRIM(YouTubeVideoUrl)) <> ''";
 
         await using var command = new SqlCommand(query, connection, transaction);

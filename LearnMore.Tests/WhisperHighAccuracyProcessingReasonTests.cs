@@ -188,12 +188,12 @@ public class WhisperHighAccuracyProcessingReasonTests
     {
         public List<string?> HighAccuracyStatuses { get; } = new();
         public List<string?> HighAccuracyStatusReasons { get; } = new();
-        public Task<string> AddSongToDatabaseAsync(TranscribeRequest request) => Task.FromResult(string.Empty);
+        public Task<string> AddSongToDatabaseAsync(TranscribeRequest request, string userEmail) => Task.FromResult(string.Empty);
         public Task CreateDynamicSongTableAsync(string songUid) => Task.CompletedTask;
         public Task InsertTranscriptionToDynamicTableAsync(string songUid, string transcriptionJson) => Task.CompletedTask;
-        public Task<string> CreateSummonedSongAsync(SummonRequest request, IReadOnlyCollection<LyricEntry> lyrics, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
+        public Task<string> CreateSummonedSongAsync(SummonRequest request, IReadOnlyCollection<LyricEntry> lyrics, string userEmail, CancellationToken cancellationToken = default) => Task.FromResult(string.Empty);
         public Task InsertManualSegmentsAsync(string songUid, IReadOnlyCollection<TranscriptionSegment> segments, CancellationToken cancellationToken = default) => Task.CompletedTask;
-        public Task<SongPlaceholderCreationResult> CreateSongWithPlaceholdersAsync(TranscribeRequest request, IReadOnlyCollection<LyricSegment> segments, CancellationToken cancellationToken = default) => Task.FromResult(new SongPlaceholderCreationResult());
+        public Task<SongPlaceholderCreationResult> CreateSongWithPlaceholdersAsync(TranscribeRequest request, IReadOnlyCollection<LyricSegment> segments, string userEmail, CancellationToken cancellationToken = default) => Task.FromResult(new SongPlaceholderCreationResult());
         public Task<List<int>> UpdateSongTranslationsAsync(string songUid, IReadOnlyList<LyricSegment> finalSegments, IReadOnlyList<int> existingLyricIds, CancellationToken cancellationToken = default) => Task.FromResult(existingLyricIds.ToList());
         public Task UpdateHighAccuracyStatusAsync(string songUid, string? highAccuracyStatus, string? highAccuracyStatusReason = null, CancellationToken cancellationToken = default)
         {
@@ -201,7 +201,6 @@ public class WhisperHighAccuracyProcessingReasonTests
             HighAccuracyStatusReasons.Add(highAccuracyStatusReason);
             return Task.CompletedTask;
         }
-        public Task AppendProducerSongAsync(string userEmail, string songUid, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
     private sealed class FakeWhisperPostProcessService : IWhisperPostProcessService

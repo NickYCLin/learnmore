@@ -4,5 +4,5 @@ namespace LearnMore.Services;
 
 public interface IWhisperTranscribeWorkflowService
 {
-    Task<string> ExecuteAsync(TranscribeRequest request);
+    Task<string> ExecuteAsync(TranscribeRequest request, string userEmail);
 }

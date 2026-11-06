@@ -74,6 +74,7 @@ public class WhisperControllerTests
         var json = System.Text.Json.JsonSerializer.Serialize(ok.Value);
         Assert.Contains("segments", json);
         Assert.Equal("https://youtu.be/test", workflow.LastRequest?.YouTubeUrl);
+        Assert.Equal("test@example.com", workflow.LastUserEmail);
     }
 
     [Fact]
@@ -273,10 +274,12 @@ public class WhisperControllerTests
     {
         public string Response { get; init; } = string.Empty;
         public TranscribeRequest? LastRequest { get; private set; }
+        public string? LastUserEmail { get; private set; }
 
-        public Task<string> ExecuteAsync(TranscribeRequest request)
+        public Task<string> ExecuteAsync(TranscribeRequest request, string userEmail)
         {
             LastRequest = request;
+            LastUserEmail = userEmail;
             return Task.FromResult(Response);
         }
     }

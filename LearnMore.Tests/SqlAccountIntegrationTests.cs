@@ -71,6 +71,53 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
     }
 
     [SqlAuditFact]
+    public async Task EverySongCreationRecordsUploaderAndProducerTogether()
+    {
+        await PrepareSongCreationSchemaAsync();
+        foreach (var mode in new[] { "manual", "summon", "automatic" })
+        {
+            await SqlAsync("UPDATE dbo.Users SET Producer = NULL WHERE Id = 1");
+            var uid = await CreateSongAsync(mode, "test@example.invalid");
+            Assert.Equal(1, await ScalarAsync($"SELECT COUNT(*) FROM dbo.Songs WHERE SongUid = '{uid}' AND AddedByUserId = 1"));
+            Assert.Equal(1, await ScalarAsync($"SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND Producer = '{uid}'"));
+            var nextUid = await CreateSongAsync(mode, "test@example.invalid");
+            Assert.Equal(1, await ScalarAsync($"SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND Producer = '{uid},{nextUid}'"));
+        }
+    }
+
+    [SqlAuditFact]
+    public async Task FailedSongInsertRollsBackProducerAndMissingAccountCannotCreateSong()
+    {
+        await PrepareSongCreationSchemaAsync();
+        await SqlAsync("UPDATE dbo.Users SET Producer = 'existing-song' WHERE Id = 1");
+        await SqlAsync("CREATE TRIGGER RejectNewSongs ON dbo.Songs AFTER INSERT AS THROW 51000, 'Synthetic insert failure', 1;");
+        foreach (var mode in new[] { "manual", "summon", "automatic" })
+        {
+            await Assert.ThrowsAnyAsync<SqlException>(() => CreateSongAsync(mode, "test@example.invalid"));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => CreateSongAsync(mode, "missing@example.invalid"));
+            Assert.Equal(1, await CountAsync("Songs"));
+            Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND Producer = 'existing-song'"));
+        }
+    }
+
+    private Task PrepareSongCreationSchemaAsync() => SqlAsync("""
+        ALTER TABLE dbo.Songs ADD Title nvarchar(255), Artist nvarchar(255), Performer nvarchar(255),
+            Translator nvarchar(255), TranslationSource nvarchar(255), SongType nvarchar(100), AddedDate datetime;
+        """);
+
+    private async Task<string> CreateSongAsync(string mode, string email)
+    {
+        var persistence = new WhisperSongPersistenceService(Configuration, null!, Stems, null!, NullLogger<WhisperSongPersistenceService>.Instance);
+        if (mode == "manual")
+            return await persistence.AddSongToDatabaseAsync(new() { Title = "", Artist = "", YouTubeUrl = "" }, email);
+        if (mode == "summon")
+            return await persistence.CreateSummonedSongAsync(new() { SongTitle = "", SongArtist = "", YouTubeLink = "" },
+                new[] { new LearnMore.Models.LyricEntry { Time = 0, Japanese = "歌詞" } }, email);
+        return (await persistence.CreateSongWithPlaceholdersAsync(new(),
+            new[] { new LearnMore.Models.LyricSegment { TimeStamp = 0, Japanese = "歌詞" } }, email)).SongUid;
+    }
+
+    [SqlAuditFact]
     public async Task MigrationIsIdempotentAndForeignKeysEnforceOwnership()
     {
         await using var db = new SqlConnection(connection);

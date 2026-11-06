@@ -69,11 +69,11 @@ public class WhisperSongPersistenceDelegationTests
     }
 
     [Fact]
-    public void WhisperSongPersistenceService_ShouldExposeProducerLinkMethod()
+    public void WhisperSongPersistenceService_ShouldNotExposeSeparateProducerLinkMethod()
     {
         var method = typeof(IWhisperSongPersistenceService).GetMethod("AppendProducerSongAsync");
 
-        Assert.NotNull(method);
+        Assert.Null(method);
     }
 
     [Fact]

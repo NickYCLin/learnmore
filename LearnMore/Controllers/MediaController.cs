@@ -94,12 +94,11 @@ namespace LearnMore.Controllers
             try
             {
                 await EnsureChineseTitleAliasAsync(request.SongData, cancellationToken);
-                string songUid = await _songPersistence.AddSongToDatabaseAsync(request.SongData);
+                string songUid = await _songPersistence.AddSongToDatabaseAsync(request.SongData, userEmail);
 
                 await _songPersistence.CreateDynamicSongTableAsync(songUid);
 
                 await _songPersistence.InsertManualSegmentsAsync(songUid, request.Segments, cancellationToken);
-                await _songPersistence.AppendProducerSongAsync(userEmail, songUid, CancellationToken.None);
 
                 await _postProcessService.RunRubyRomanEnrichmentAsync(songUid, cancellationToken);
                 return Json(new { success = true, redirectUrl = Url.Action("Manage", "Media") });
@@ -1060,7 +1059,7 @@ namespace LearnMore.Controllers
                 try
                 {
                     await EnsureChineseTitleAliasAsync(request, ct);
-                    placeholderPersistenceResult = await _songPersistence.CreateSongWithPlaceholdersAsync(request, stableSegmentsToInsert, ct);
+                    placeholderPersistenceResult = await _songPersistence.CreateSongWithPlaceholdersAsync(request, stableSegmentsToInsert, userEmail, ct);
                     _logger.LogInformation("Step 2: 歌曲與 placeholder 歌詞建立成功，SongUid={SongUid}, Lyrics={Count}",
                         placeholderPersistenceResult.SongUid,
                         placeholderPersistenceResult.LyricIds.Count);
@@ -1073,7 +1072,6 @@ namespace LearnMore.Controllers
 
                 string songUid = placeholderPersistenceResult.SongUid;
                 var lyricIds = placeholderPersistenceResult.LyricIds;
-                await _songPersistence.AppendProducerSongAsync(userEmail, songUid, CancellationToken.None);
 
                 // ── 立即推送 segments，讓使用者看到歌詞 ──
                 var placeholderSegments = stableSegmentsToInsert.Select((seg, idx) => new
@@ -1631,8 +1629,7 @@ namespace LearnMore.Controllers
             {
                 var preparedLyrics = await _summonPreparationService.PrepareLyricsAsync(request.Lyrics, HttpContext.RequestAborted);
                 await EnsureChineseTitleAliasAsync(request, HttpContext.RequestAborted);
-                string songUid = await _songPersistence.CreateSummonedSongAsync(request, preparedLyrics, HttpContext.RequestAborted);
-                await _songPersistence.AppendProducerSongAsync(userEmail, songUid, HttpContext.RequestAborted);
+                string songUid = await _songPersistence.CreateSummonedSongAsync(request, preparedLyrics, userEmail, HttpContext.RequestAborted);
 
                 return Ok(new { Message = "歌曲召喚成功", SongUid = songUid });
             }
