@@ -67,6 +67,7 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
             """, ("@Hash", HashToken(token)), ("@UserId", userId.Value));
         await session.ExecuteNonQueryAsync(ct);
         var user = await ReadUserAsync(db, tx, userId.Value, ct);
+        await AccountLoginRecorder.RecordAsync(db, tx, userId.Value, user!.Email, ct);
         await tx.CommitAsync(ct);
         return new(token, user!);
     }

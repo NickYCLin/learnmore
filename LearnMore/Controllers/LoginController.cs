@@ -44,6 +44,11 @@ namespace LearnMore.Controllers
                 return Unauthorized("帳號或密碼錯誤");
 
             var userProfile = await LoadPreferredUserProfileAsync(testEmail, null);
+            await using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync(HttpContext.RequestAborted);
+                await AccountLoginRecorder.RecordAsync(connection, null, int.Parse(userProfile.UserId), testEmail, HttpContext.RequestAborted);
+            }
             await _persistentLoginSessionService.PersistAsync(
                 HttpContext,
                 testEmail,
@@ -183,6 +188,7 @@ IF NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities WHERE Provider = 'google' AND 
                     bind.Parameters.AddWithValue("@UserId", int.Parse(userId!));
                     await bind.ExecuteNonQueryAsync();
                 }
+                await AccountLoginRecorder.RecordAsync(connection, transaction, int.Parse(userId!), accountEmail, HttpContext.RequestAborted);
                 await transaction.CommitAsync();
             }
 

@@ -1,0 +1,5 @@
+SET XACT_ABORT ON;
+BEGIN TRANSACTION;
+IF COL_LENGTH('dbo.Users', 'LastLoginAt') IS NULL
+    ALTER TABLE dbo.Users ADD LastLoginAt datetime2(7) NULL;
+COMMIT TRANSACTION;

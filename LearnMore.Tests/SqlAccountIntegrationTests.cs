@@ -56,6 +56,9 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
         var migration = await File.ReadAllTextAsync(Path.Combine(root, "docs", "sql", "001-mobile-accounts.sql"));
         await SqlAsync(migration);
         await SqlAsync(migration);
+        var loginMigration = await File.ReadAllTextAsync(Path.Combine(root, "docs", "sql", "006-account-last-login.sql"));
+        await SqlAsync(loginMigration);
+        await SqlAsync(loginMigration);
         await SqlAsync("INSERT dbo.Users (Email,Name,EnableRoman) VALUES ('test@example.invalid','Test',1); INSERT dbo.MobileIdentities (Provider,Subject,UserId) VALUES ('google','owner',1); INSERT dbo.Songs (SongUid,AddedByUserId) VALUES ('audit-song',1);");
         await Stems.EnsureSchemaAsync();
     }
@@ -68,6 +71,110 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
             await ExecuteAsync(master, $"ALTER DATABASE [{database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{database}]");
         }
         if (Directory.Exists(files)) Directory.Delete(files, true);
+    }
+
+    [SqlAuditFact]
+    public async Task PkceLoginRecordsOnlySuccessfulExchangeAndRevokesTokenWhenRecordingFails()
+    {
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var sessions = new MobileSessionService(cache, new AccountSessionValidator(Configuration));
+        var controller = new MobileApiController(new(Configuration), sessions, Configuration);
+        const string verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        var challenge = WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var code = sessions.IssueCode(new(1, "Test"), challenge);
+        Assert.IsType<UnauthorizedResult>(await controller.Exchange(new(code, new string('x', 43))));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+        Assert.IsType<OkObjectResult>(await controller.Exchange(new(code, verifier)));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NOT NULL"));
+        await SqlAsync("UPDATE dbo.Users SET LastLoginAt = NULL WHERE Id = 1");
+        await SqlAsync("CREATE TRIGGER RejectLoginTime ON dbo.Users AFTER UPDATE AS THROW 51000, 'Synthetic timestamp failure', 1;");
+        code = sessions.IssueCode(new(1, "Test"), challenge);
+        var before = cache.Count;
+        await Assert.ThrowsAsync<SqlException>(() => controller.Exchange(new(code, verifier)));
+        Assert.Equal(before - 1, cache.Count);
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+    }
+
+    [SqlAuditFact]
+    public async Task WebsiteTestLoginUpdatesTimestampOnlyAfterCredentialsPass()
+    {
+        await SqlAsync("ALTER TABLE dbo.Users ADD Picture nvarchar(255)");
+        var configuration = new ConfigurationBuilder().AddConfiguration(Configuration)
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["TestAccount:Email"] = "test@example.invalid",
+                ["TestAccount:Password"] = "synthetic-password",
+                ["TestAccount:SmokeToken"] = "synthetic-smoke-token"
+            }).Build();
+        var sessions = new PersistentLoginSessionService(new EphemeralDataProtectionProvider(), new AccountSessionValidator(configuration));
+        var controller = new LearnMore.Controllers.LoginController(configuration, sessions)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { Session = new AuditSession() } }
+        };
+        controller.Request.Headers["X-LearnMore-Smoke-Token"] = "synthetic-smoke-token";
+        var request = new LearnMore.Controllers.LoginController.TestLoginRequest { Email = "test@example.invalid", Password = "incorrect" };
+        Assert.IsType<UnauthorizedObjectResult>(await controller.TestLogin(request));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+        request.Password = "synthetic-password";
+        Assert.IsType<OkObjectResult>(await controller.TestLogin(request));
+        Assert.Equal("1", controller.HttpContext.Session.GetString("UserId"));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NOT NULL"));
+        await SqlAsync("UPDATE dbo.Users SET LastLoginAt = '2001-01-01' WHERE Id = 1");
+        await sessions.RestoreSessionAsync(controller.HttpContext);
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt = '2001-01-01'"));
+        Assert.IsType<OkObjectResult>(await controller.TestLogin(request));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt > '2001-01-01'"));
+    }
+
+    [SqlAuditFact]
+    public async Task NewGoogleAndAppleAccountsRecordFirstLogin()
+    {
+        foreach (var provider in new[] { "google", "apple" })
+        {
+            var session = await Store.SignInAsync(new ProviderIdentity(provider, "new-" + provider,
+                provider + "@example.invalid", "New account", true, AuthenticatedAt: DateTimeOffset.UtcNow), default);
+            Assert.Equal(1, await ScalarAsync($"SELECT COUNT(*) FROM dbo.Users WHERE Id = {session.User.Id} AND LastLoginAt IS NOT NULL"));
+        }
+    }
+
+    [SqlAuditFact]
+    public async Task SuccessfulMobileLoginUpdatesUtcTimestampButAuthenticationDoesNot()
+    {
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+        var session = await Store.SignInAsync(Proof(), default);
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt BETWEEN DATEADD(second,-10,SYSUTCDATETIME()) AND SYSUTCDATETIME()"));
+        await SqlAsync("UPDATE dbo.Users SET LastLoginAt = '2001-01-01' WHERE Id = 1");
+        Assert.NotNull(await Store.AuthenticateAsync(session.Token, default));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt = '2001-01-01'"));
+        await Store.SignInAsync(Proof(), default);
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt > '2001-01-01'"));
+    }
+
+    [SqlAuditFact]
+    public async Task LoginRecorderRejectsMismatchedAccountAndParticipatesInRollback()
+    {
+        await using var db = new SqlConnection(connection);
+        await db.OpenAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => AccountLoginRecorder.RecordAsync(db, null, 1, "other@example.invalid"));
+        using (var transaction = db.BeginTransaction())
+        {
+            await AccountLoginRecorder.RecordAsync(db, transaction, 1, "test@example.invalid");
+            await transaction.RollbackAsync();
+        }
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+        await AccountLoginRecorder.RecordAsync(db, null, 1, "test@example.invalid");
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NOT NULL"));
+    }
+
+    [SqlAuditFact]
+    public async Task FailedMobileSignInDoesNotUpdateLastLogin()
+    {
+        await Assert.ThrowsAsync<MobileAuthException>(() => Store.SignInAsync(Proof("unlinked-identity"), default));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+        await SqlAsync("CREATE TRIGGER RejectSessions ON dbo.MobileSessions AFTER INSERT AS THROW 51000, 'Synthetic session failure', 1;");
+        await Assert.ThrowsAsync<SqlException>(() => Store.SignInAsync(Proof(), default));
+        Assert.Equal(1, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE Id = 1 AND LastLoginAt IS NULL"));
+        Assert.Equal(0, await CountAsync("MobileSessions"));
     }
 
     [SqlAuditFact]

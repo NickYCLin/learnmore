@@ -1,5 +1,6 @@
 using LearnMore.Repository;
 using LearnMore.Services;
+using System.Data.SqlClient;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -21,10 +22,22 @@ public sealed class MobileApiController(MobileLibraryService library, MobileSess
     public IActionResult Status() => Ok(new { version = 1 });
 
     [HttpPost("session")]
-    public IActionResult Exchange(TokenRequest request)
+    public async Task<IActionResult> Exchange(TokenRequest request, CancellationToken cancellationToken = default)
     {
         var result = sessions.Exchange(request.Code, request.Verifier);
-        return result is null ? Unauthorized() : Ok(new { token = result.Value.Token, user = result.Value.User, expiresIn = 28800 });
+        if (result is null) return Unauthorized();
+        try
+        {
+            await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
+            await connection.OpenAsync(cancellationToken);
+            await AccountLoginRecorder.RecordAsync(connection, null, result.Value.User.Id, cancellationToken);
+            return Ok(new { token = result.Value.Token, user = result.Value.User, expiresIn = 28800 });
+        }
+        catch
+        {
+            sessions.Revoke("Bearer " + result.Value.Token);
+            throw;
+        }
     }
 
     [HttpDelete("session")]
