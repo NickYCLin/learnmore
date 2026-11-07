@@ -101,7 +101,6 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
     [SqlAuditFact]
     public async Task WebsiteTestLoginUpdatesTimestampOnlyAfterCredentialsPass()
     {
-        await SqlAsync("ALTER TABLE dbo.Users ADD Picture nvarchar(255)");
         var configuration = new ConfigurationBuilder().AddConfiguration(Configuration)
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -528,6 +527,21 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
         Assert.Equal(0, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE IsDisabled=1 OR AccountRevision<>0"));
         await SqlAsync("UPDATE dbo.Users SET Manager=0 WHERE Email='manager@example.invalid'");
         await Assert.ThrowsAsync<UserManagementConflictException>(() => manager.ChangeAsync("manager@example.invalid",1,0,"disable","test@example.invalid","權限撤銷",default));
+    }
+
+    [SqlAuditFact]
+    public async Task ManagerReadsUploadedAndProviderAvatarsInListAndDetails()
+    {
+        await SqlAsync("UPDATE dbo.Users SET Avatar='/avatars/member.png',Picture='https://example.invalid/google.png' WHERE Id=1");
+        var manager = new ManagerUserStore(Configuration);
+        var user = Assert.Single((await manager.ReadAsync("", "all", 1, default)).Items);
+        Assert.Equal("/avatars/member.png", user.Avatar);
+        Assert.Equal("https://example.invalid/google.png", user.Picture);
+        Assert.Equal(user, (await manager.DetailAsync(user.Id, default))!.User);
+        await SqlAsync("UPDATE dbo.Users SET Avatar=NULL,Picture=NULL WHERE Id=1");
+        user = (await manager.DetailAsync(user.Id, default))!.User;
+        Assert.Null(user.Avatar);
+        Assert.Null(user.Picture);
     }
 
     [SqlAuditFact]

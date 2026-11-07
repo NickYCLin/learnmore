@@ -30,6 +30,30 @@ public sealed class ManagementQueuePresentationTests
     }
 
     [Fact]
+    public async Task UserManagementShowsAvatarsOnListAndDetail()
+    {
+        foreach (var source in new[] {
+            (Avatar: (string?)"/avatars/member.png", Picture: (string?)"https://example.invalid/google.png", Expected: "/LearnMore/avatars/member.png"),
+            (Avatar: (string?)"/LearnMore/avatars/member.png", Picture: (string?)null, Expected: "/LearnMore/avatars/member.png"),
+            (Avatar: (string?)null, Picture: (string?)"https://example.invalid/google.png", Expected: "https://example.invalid/google.png"),
+            (Avatar: (string?)null, Picture: (string?)null, Expected: "/LearnMore/images/default-avatar.png") })
+        {
+            var user = new ManagedUser(17,"Test","","member@example.invalid",false,false,null,null,0,null,source.Avatar,source.Picture);
+            var pages = new[] {
+                await Render("ManagerUsers/Index",new ManagedUsersPage("","all",1,1,[user]),true),
+                await Render("ManagerUsers/Detail",new ManagedUserDetail(user,new Dictionary<string,long?>(),[],[]),true) };
+            foreach (var html in pages)
+            {
+                Assert.Contains("src=\"" + source.Expected + "\"", html);
+                Assert.Contains("class=\"um-avatar\"", html);
+                Assert.Contains("referrerpolicy=\"no-referrer\"", html);
+                Assert.Contains("this.onerror=null", html);
+                Assert.Contains("/LearnMore/images/default-avatar.png", html);
+            }
+        }
+    }
+
+    [Fact]
     public async Task DeletedUserViewRetainsAuditAndHidesMutationForm()
     {
         var user = new ManagedUser(17,"Test","","member@example.invalid",false,true,DateTime.UtcNow,null,1,null);

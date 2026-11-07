@@ -1,0 +1,5 @@
+@model LearnMore.Services.ManagedUser
+@{
+    var avatarUrl = LearnMore.Services.UserAvatarUrlResolver.Resolve(Model.Avatar, Model.Picture, Context.Request.PathBase);
+}
+<img class="um-avatar" src="@avatarUrl" alt="使用者頭貼" width="48" height="48" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='@Url.Content("~/images/default-avatar.png")';" />

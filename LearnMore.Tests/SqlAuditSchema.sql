@@ -1,4 +1,4 @@
-CREATE TABLE dbo.Users (Id int IDENTITY PRIMARY KEY, Email nvarchar(255) NOT NULL UNIQUE, Name nvarchar(100), NickName nvarchar(100), Avatar nvarchar(255), EnableRoman bit, Producer nvarchar(max), Collaboration nvarchar(max), Manager bit DEFAULT 0, CreatedAt datetime2 NULL);
+CREATE TABLE dbo.Users (Id int IDENTITY PRIMARY KEY, Email nvarchar(255) NOT NULL UNIQUE, Name nvarchar(100), NickName nvarchar(100), Avatar nvarchar(255), Picture nvarchar(255), EnableRoman bit, Producer nvarchar(max), Collaboration nvarchar(max), Manager bit DEFAULT 0, CreatedAt datetime2 NULL);
 CREATE TABLE dbo.Songs (SongID int IDENTITY PRIMARY KEY, SongUid nvarchar(100) NOT NULL UNIQUE, AddedByUserId int REFERENCES dbo.Users(Id), ChannelThumbnailUrl nvarchar(100), YouTubeVideoUrl nvarchar(100));
 CREATE TABLE dbo.SongGroup (GroupId int IDENTITY PRIMARY KEY, GroupUid nvarchar(100), GroupName nvarchar(100), UserId nvarchar(100), CreateTime datetime2);
 CREATE TABLE dbo.SongGroupMapping (GroupId int REFERENCES dbo.SongGroup(GroupId), SongUid nvarchar(100) REFERENCES dbo.Songs(SongUid));

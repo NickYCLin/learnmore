@@ -11,7 +11,7 @@
     <link rel="stylesheet" href="~/css/manager-users.css" asp-append-version="true" />
 }
 <section class="mq-page um-page" aria-labelledby="userTitle">
-    <header class="mq-hero"><div><p class="mq-eyebrow">使用者檔案 · ID @user.Id</p><h1 id="userTitle">@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</h1><p class="mq-subtitle um-email">@user.Email</p></div><a class="mq-link" asp-action="Index">返回使用者清單 ↗</a></header>
+    <header class="mq-hero"><div class="um-identity um-profile"><partial name="~/Views/ManagerUsers/_Avatar.cshtml" model="user" /><div><p class="mq-eyebrow">使用者檔案 · ID @user.Id</p><h1 id="userTitle">@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</h1><p class="mq-subtitle um-email">@user.Email</p></div></div><a class="mq-link" asp-action="Index">返回使用者清單 ↗</a></header>
     <div class="um-grid">
         <article class="mq-card"><h2>帳號資料</h2><dl class="um-details">
             <dt>姓名</dt><dd>@user.Name</dd><dt>暱稱</dt><dd>@(string.IsNullOrWhiteSpace(user.NickName) ? "尚未設定" : user.NickName)</dd>

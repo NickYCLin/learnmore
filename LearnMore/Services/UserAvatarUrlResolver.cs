@@ -11,9 +11,9 @@ public static class UserAvatarUrlResolver
             return ResolveUploadedAvatar(uploadedAvatarPath, pathBase);
         }
 
-        if (!string.IsNullOrWhiteSpace(googlePictureUrl) && !string.Equals(googlePictureUrl, "None", StringComparison.OrdinalIgnoreCase))
+        if (IsWebUrl(googlePictureUrl))
         {
-            return googlePictureUrl;
+            return googlePictureUrl!;
         }
 
         return BuildPathBaseUrl(pathBase, "/images/default-avatar.png");
@@ -21,7 +21,7 @@ public static class UserAvatarUrlResolver
 
     private static string ResolveUploadedAvatar(string uploadedAvatarPath, PathString pathBase)
     {
-        if (Uri.TryCreate(uploadedAvatarPath, UriKind.Absolute, out _))
+        if (IsWebUrl(uploadedAvatarPath))
         {
             return uploadedAvatarPath;
         }
@@ -44,4 +44,7 @@ public static class UserAvatarUrlResolver
         string basePath = pathBase.HasValue ? pathBase.Value ?? string.Empty : string.Empty;
         return basePath + localPath;
     }
+
+    private static bool IsWebUrl(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var url)
+        && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps);
 }

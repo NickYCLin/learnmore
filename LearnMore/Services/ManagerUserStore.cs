@@ -4,7 +4,8 @@ using System.Data.SqlClient;
 namespace LearnMore.Services;
 
 public sealed record ManagedUser(int Id, string Name, string NickName, string Email, bool Manager,
-    bool IsDisabled, DateTime? DeletedAt, DateTime? LastLoginAt, long Revision, DateTime? CreatedAt);
+    bool IsDisabled, DateTime? DeletedAt, DateTime? LastLoginAt, long Revision, DateTime? CreatedAt,
+    string? Avatar = null, string? Picture = null);
 public sealed record ManagedUserEvent(string Action, string Reason, int ActorUserId, DateTime CreatedAt);
 public sealed record ManagedUserDetail(ManagedUser User, IReadOnlyDictionary<string, long?> Activity,
     IReadOnlyList<string> Providers, IReadOnlyList<ManagedUserEvent> Events);
@@ -18,7 +19,7 @@ public sealed class UserManagementConflictException(string message) : Exception(
 
 public sealed class ManagerUserStore(IConfiguration configuration)
 {
-    private const string Columns = "Id, COALESCE(Name,''), COALESCE(NickName,''), Email, ISNULL(Manager,0), IsDisabled, DeletedAt, LastLoginAt, AccountRevision, CreatedAt";
+    private const string Columns = "Id, COALESCE(Name,''), COALESCE(NickName,''), Email, ISNULL(Manager,0), IsDisabled, DeletedAt, LastLoginAt, AccountRevision, CreatedAt, Avatar, Picture";
     private SqlConnection Connection() => new(configuration.GetConnectionString("DefaultConnection"));
 
     public async Task<bool> IsManagerAsync(string? email, CancellationToken ct)
@@ -135,5 +136,6 @@ public sealed class ManagerUserStore(IConfiguration configuration)
     private static ManagedUser ReadUser(SqlDataReader reader) => new(reader.GetInt32(0), reader.GetString(1),
         reader.GetString(2), reader.GetString(3), reader.GetBoolean(4), reader.GetBoolean(5),
         reader.IsDBNull(6) ? null : reader.GetDateTime(6), reader.IsDBNull(7) ? null : reader.GetDateTime(7), reader.GetInt64(8),
-        reader.IsDBNull(9) ? null : reader.GetDateTime(9));
+        reader.IsDBNull(9) ? null : reader.GetDateTime(9),
+        reader.IsDBNull(10) ? null : reader.GetString(10), reader.IsDBNull(11) ? null : reader.GetString(11));
 }

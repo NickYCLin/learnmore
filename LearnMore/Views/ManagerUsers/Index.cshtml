@@ -24,7 +24,7 @@
     <div class="um-table-wrap"><table class="table align-middle um-table"><thead><tr><th>使用者</th><th>權限／狀態</th><th>最後登入（UTC）</th><th>操作</th></tr></thead><tbody>
         @foreach (var user in Model.Items)
         {
-            <tr><td><strong>@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</strong><div class="um-email">@user.Email</div><small class="text-muted">ID @user.Id</small></td>
+            <tr><td><div class="um-identity"><partial name="~/Views/ManagerUsers/_Avatar.cshtml" model="user" /><div><strong>@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</strong><div class="um-email">@user.Email</div><small class="text-muted">ID @user.Id</small></div></div></td>
                 <td><span class="um-badge">@(user.Manager ? "Manager" : "一般會員")</span> <span class="um-badge">@UserState(user)</span></td>
                 <td>@(user.LastLoginAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "尚無紀錄")</td>
                 <td><a class="btn btn-outline-primary btn-sm" asp-action="Detail" asp-route-id="@user.Id">查看詳情</a></td></tr>
