@@ -1,0 +1,38 @@
+@model LearnMore.Models.ManagementQueuePagination
+@{
+    var startPage = Math.Max(1L, Model.Page - 2L);
+    var endPage = Math.Min(Model.TotalPages, Model.Page + 2L);
+    string PageUrl(long page) => Url.Content($"~/{Model.Path}?page={page}&pageSize={Model.PageSize}");
+}
+<nav aria-label="@Model.Label" class="mq-pagination">
+    @if (Model.Page > 1)
+    {
+        <a href="@PageUrl(1)">第一頁</a>
+        <a href="@PageUrl(Model.Page - 1L)">上一頁</a>
+    }
+    else
+    {
+        <span aria-disabled="true">上一頁</span>
+    }
+    @for (var pageNumber = startPage; pageNumber <= endPage; pageNumber++)
+    {
+        if (pageNumber == Model.Page)
+        {
+            <span aria-current="page" aria-label="第 @pageNumber 頁">@pageNumber</span>
+        }
+        else
+        {
+            <a href="@PageUrl(pageNumber)" aria-label="第 @pageNumber 頁">@pageNumber</a>
+        }
+    }
+    @if (Model.Page < Model.TotalPages)
+    {
+        <a href="@PageUrl(Model.Page + 1L)">下一頁</a>
+        <a href="@PageUrl(Model.TotalPages)">最後頁</a>
+    }
+    else
+    {
+        <span aria-disabled="true">下一頁</span>
+    }
+    <span class="mq-page-number" role="status">@(Model.TotalPages == 0 ? "尚無資料" : $"第 {Model.Page} 頁 / 共 {Model.TotalPages} 頁")</span>
+</nav>

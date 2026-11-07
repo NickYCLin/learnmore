@@ -95,17 +95,53 @@ public sealed class ManagementQueuePresentationTests
         Assert.Contains("/LearnMore/Management/Work", html);
     }
 
-    private static async Task<string> Render<TModel>(string viewName, TModel model)
+    [Theory]
+    [InlineData("TimingReviewQueue", "Management/ReviewQueue")]
+    [InlineData("ErrorReports", "Management/ErrorReports")]
+    public async Task NumberedPaginationIsBoundedAndPreservesPageSize(string viewName, string path)
+    {
+        object model = viewName == "TimingReviewQueue"
+            ? new TimingReviewQueuePage(50, 1, 100, true, [])
+            : new ErrorReportPage(50, 1, 100, []);
+        var html = WebUtility.HtmlDecode(await Render(viewName, model));
+        Assert.Contains($"/LearnMore/{path}?page=1&pageSize=1", html);
+        Assert.Contains($"/LearnMore/{path}?page=100&pageSize=1", html);
+        Assert.Contains($"/LearnMore/{path}?page=48&pageSize=1", html);
+        Assert.Contains($"/LearnMore/{path}?page=52&pageSize=1", html);
+        Assert.DoesNotContain($"/LearnMore/{path}?page=47&pageSize=1", html);
+        Assert.Contains("aria-current=\"page\"", html);
+    }
+
+    [Fact]
+    public async Task SongPaginationPreservesOtherSectionAndPathBase()
+    {
+        var html = WebUtility.HtmlDecode(await Render("Shared/_ManageSongPagination", new LearnMore.Models.ManageSongPagination("producer", 2, 85, 3), true));
+        Assert.Contains("producerPage=1&collaborationPage=3#producer-songs", html);
+        Assert.Contains("producerPage=5&collaborationPage=3#producer-songs", html);
+        Assert.Contains("/LearnMore/Media/Manage?", html);
+        Assert.Contains("21–40", html);
+        Assert.Contains("aria-current=\"page\"", html);
+        var empty = WebUtility.HtmlDecode(await Render("Shared/_ManageSongPagination", new LearnMore.Models.ManageSongPagination("collaboration", 1, 0, 2), true));
+        Assert.Contains("0–0", empty);
+        Assert.Contains("aria-disabled=\"true\"", empty);
+    }
+
+    private static async Task<string> Render<TModel>(string viewName, TModel model, bool partial = false)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         { ApplicationName = typeof(TimingReviewQueueController).Assembly.FullName, EnvironmentName = "Testing" });
         builder.Services.AddControllersWithViews().AddApplicationPart(typeof(TimingReviewQueueController).Assembly);
         await using var application = builder.Build();
+        application.MapControllerRoute("default", "{controller=Home}/{action=Index}/{id?}");
+        application.Urls.Add("http://127.0.0.1:0");
+        await application.StartAsync();
         using var scope = application.Services.CreateScope();
         var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
         context.Request.PathBase = "/LearnMore";
+        context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, new EndpointMetadataCollection(), "Razor preview"));
         var action = new ActionContext(context, new RouteData(), new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor());
-        var view = scope.ServiceProvider.GetRequiredService<IRazorViewEngine>().GetView(null, $"/Views/{viewName}/Index.cshtml", false);
+        var viewPath = partial ? $"/Views/{viewName}.cshtml" : $"/Views/{viewName}/Index.cshtml";
+        var view = scope.ServiceProvider.GetRequiredService<IRazorViewEngine>().GetView(null, viewPath, false);
         Assert.True(view.Success);
         var data = new ViewDataDictionary<TModel>(new EmptyModelMetadataProvider(), new ModelStateDictionary()) { Model = model };
         var temp = new TempDataDictionary(context, scope.ServiceProvider.GetRequiredService<ITempDataProvider>());

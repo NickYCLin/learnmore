@@ -70,23 +70,5 @@
         </article>
     }
     <p class="mq-footnote">依回報日期、回報唯一鍵遞減排序。清單為即時資料；新回報可能使跨頁位置變動。</p>
-    <nav aria-label="回報清單分頁" class="mq-pagination">
-        @if (Model.Page > 1)
-        {
-            <a asp-action="Index" asp-route-page="@(Model.Page - 1)" asp-route-pageSize="@Model.PageSize">上一頁</a>
-        }
-        else
-        {
-            <span aria-disabled="true">上一頁</span>
-        }
-        <span class="mq-page-number">@(Model.TotalPages == 0 ? "尚無資料" : $"第 {Model.Page} 頁 / 共 {Model.TotalPages} 頁")</span>
-        @if (Model.Page < Model.TotalPages)
-        {
-            <a asp-action="Index" asp-route-page="@(Model.Page + 1)" asp-route-pageSize="@Model.PageSize">下一頁</a>
-        }
-        else
-        {
-            <span aria-disabled="true">下一頁</span>
-        }
-    </nav>
+    @await Html.PartialAsync("_ManagementQueuePagination", new LearnMore.Models.ManagementQueuePagination("Management/ErrorReports", "回報清單分頁", Model.Page, Model.PageSize, Model.TotalPages))
 </section>

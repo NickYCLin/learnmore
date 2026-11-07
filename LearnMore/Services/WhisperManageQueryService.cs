@@ -1,4 +1,6 @@
 using System.Data.SqlClient;
+using System.Data;
+using System.Xml.Linq;
 using LearnMore.Models;
 
 namespace LearnMore.Services;
@@ -13,24 +15,36 @@ public class WhisperManageQueryService : IWhisperManageQueryService
     }
 
     public async Task<ManageViewModel> GetManageViewModelAsync(string userEmail, CancellationToken cancellationToken = default)
+        => await GetViewModelAsync(userEmail, null, null, cancellationToken);
+
+    public async Task<ManageViewModel> GetPagedManageViewModelAsync(string userEmail, int producerPage,
+        int collaborationPage, CancellationToken cancellationToken = default)
+    {
+        if (producerPage < 1) throw new ArgumentOutOfRangeException(nameof(producerPage));
+        if (collaborationPage < 1) throw new ArgumentOutOfRangeException(nameof(collaborationPage));
+        return await GetViewModelAsync(userEmail, producerPage, collaborationPage, cancellationToken);
+    }
+
+    private async Task<ManageViewModel> GetViewModelAsync(string userEmail, int? producerPage,
+        int? collaborationPage, CancellationToken cancellationToken)
     {
         await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync(cancellationToken);
 
         var (producerUids, collaborationUids) = await LoadUserSongLinksAsync(connection, userEmail, cancellationToken);
 
-        var producerSongs = producerUids.Count == 0
-            ? new List<Songs>()
-            : await GetSongsByUidsAsync(connection, producerUids, cancellationToken);
+        var producer = await GetSongsByUidsAsync(connection, producerUids, producerPage, cancellationToken);
 
-        var collaborationSongs = collaborationUids.Count == 0
-            ? new List<Songs>()
-            : await GetSongsByUidsAsync(connection, collaborationUids, cancellationToken);
+        var collaboration = await GetSongsByUidsAsync(connection, collaborationUids, collaborationPage, cancellationToken);
 
         return new ManageViewModel
         {
-            ProducerSongs = producerSongs,
-            CollaborationSongs = collaborationSongs
+            ProducerSongs = producer.Songs,
+            CollaborationSongs = collaboration.Songs,
+            ProducerPagination = producerPage.HasValue
+                ? new("producer", producer.Page, producer.TotalCount, collaboration.Page) : null,
+            CollaborationPagination = collaborationPage.HasValue
+                ? new("collaboration", collaboration.Page, collaboration.TotalCount, producer.Page) : null
         };
     }
 
@@ -57,11 +71,13 @@ public class WhisperManageQueryService : IWhisperManageQueryService
             collaborationUids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList());
     }
 
-    private static async Task<List<Songs>> GetSongsByUidsAsync(
+    private static async Task<(List<Songs> Songs, int Page, long TotalCount)> GetSongsByUidsAsync(
         SqlConnection connection,
         IReadOnlyList<string> songUids,
+        int? requestedPage,
         CancellationToken cancellationToken)
     {
+        if (songUids.Count == 0) return ([], 1, 0);
         bool hasPerformerColumn = await HasColumnAsync(connection, "Performer", cancellationToken);
         bool hasHighAccuracyStatusColumn = await HasColumnAsync(connection, "HighAccuracyStatus", cancellationToken);
         bool hasHighAccuracyStatusReasonColumn = await HasColumnAsync(connection, "HighAccuracyStatusReason", cancellationToken);
@@ -88,34 +104,45 @@ public class WhisperManageQueryService : IWhisperManageQueryService
             : @",
                 CAST(0 AS bit) AS HasInstrumentalAudioStem,
                 CAST(0 AS bit) AS HasVocalsAudioStem";
-        string query = $"SELECT Title, Artist{performerSelect}, YouTubeVideoUrl, SongUid, SongType{highAccuracyStatusSelect}{highAccuracyStatusReasonSelect}{audioStemSelect} FROM Songs WHERE SongUid IN ({string.Join(",", songUids.Select((_, i) => $"@uid{i}"))})";
-        await using var command = new SqlCommand(query, connection);
-
-        for (int i = 0; i < songUids.Count; i++)
+        const string songFilter = "FROM dbo.Songs WHERE SongUid IN (SELECT item.value('.', 'nvarchar(450)') FROM @SongUids.nodes('/songs/uid') AS links(item))";
+        await using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
+        await using var command = new SqlCommand("SELECT COUNT_BIG(*) " + songFilter, connection, transaction);
+        command.Parameters.Add("@SongUids", SqlDbType.Xml).Value = new XElement("songs",
+            songUids.Distinct(StringComparer.Ordinal).Select(uid => new XElement("uid", uid))).ToString(SaveOptions.DisableFormatting);
+        var totalCount = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        var page = (int)Math.Min(requestedPage ?? 1, Math.Max(1, (totalCount + ManageSongPagination.PageSize - 1) / ManageSongPagination.PageSize));
+        command.CommandText = $"SELECT Title, Artist{performerSelect}, YouTubeVideoUrl, SongUid, SongType{highAccuracyStatusSelect}{highAccuracyStatusReasonSelect}{audioStemSelect} "
+            + songFilter + " ORDER BY SongID DESC, SongUid";
+        if (requestedPage.HasValue)
         {
-            command.Parameters.AddWithValue($"@uid{i}", songUids[i]);
+            command.CommandText += " OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
+            command.Parameters.Add("@Offset", SqlDbType.BigInt).Value = ((long)page - 1) * ManageSongPagination.PageSize;
+            command.Parameters.Add("@PageSize", SqlDbType.Int).Value = ManageSongPagination.PageSize;
         }
 
         var songs = new List<Songs>();
-        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        while (await reader.ReadAsync(cancellationToken))
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
-            songs.Add(new Songs
+            while (await reader.ReadAsync(cancellationToken))
             {
-                Title = reader["Title"].ToString() ?? string.Empty,
-                Artist = reader["Artist"].ToString() ?? string.Empty,
-                Performer = reader["Performer"].ToString(),
-                YouTubeVideoUrl = reader["YouTubeVideoUrl"].ToString() ?? string.Empty,
-                SongUid = reader["SongUid"].ToString() ?? string.Empty,
-                SongType = reader["SongType"].ToString(),
-                HighAccuracyStatus = reader["HighAccuracyStatus"].ToString(),
-                HighAccuracyStatusReason = reader["HighAccuracyStatusReason"].ToString(),
-                HasInstrumentalAudioStem = reader["HasInstrumentalAudioStem"] is bool hasInstrumental && hasInstrumental,
-                HasVocalsAudioStem = reader["HasVocalsAudioStem"] is bool hasVocals && hasVocals
-            });
+                songs.Add(new Songs
+                {
+                    Title = reader["Title"].ToString() ?? string.Empty,
+                    Artist = reader["Artist"].ToString() ?? string.Empty,
+                    Performer = reader["Performer"].ToString(),
+                    YouTubeVideoUrl = reader["YouTubeVideoUrl"].ToString() ?? string.Empty,
+                    SongUid = reader["SongUid"].ToString() ?? string.Empty,
+                    SongType = reader["SongType"].ToString(),
+                    HighAccuracyStatus = reader["HighAccuracyStatus"].ToString(),
+                    HighAccuracyStatusReason = reader["HighAccuracyStatusReason"].ToString(),
+                    HasInstrumentalAudioStem = reader["HasInstrumentalAudioStem"] is bool hasInstrumental && hasInstrumental,
+                    HasVocalsAudioStem = reader["HasVocalsAudioStem"] is bool hasVocals && hasVocals
+                });
+            }
         }
 
-        return songs;
+        await transaction.CommitAsync(cancellationToken);
+        return (songs, page, totalCount);
     }
 
     private static async Task<bool> HasColumnAsync(SqlConnection connection, string columnName, CancellationToken cancellationToken)

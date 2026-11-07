@@ -1,0 +1,43 @@
+@model LearnMore.Models.ManageSongPagination
+@{
+    var producer = Model.Section == "producer";
+    var label = producer ? "主負責" : "協同合作";
+    var anchor = producer ? "producer-songs" : "collaboration-songs";
+    var startPage = Math.Max(1L, Model.Page - 2L);
+    var endPage = Math.Min(Model.TotalPages, Model.Page + 2L);
+}
+<nav aria-label="@(label)歌曲分頁" class="mt-3">
+    <p class="small text-muted" role="status">共 @Model.TotalCount 首 · 第 @(Model.FirstItem)–@(Model.LastItem) 首 · 每頁 @ManageSongPagination.PageSize 首</p>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+        @if (Model.Page > 1)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="Media" asp-action="Manage" asp-route-producerPage="@(producer ? 1 : Model.OtherPage)" asp-route-collaborationPage="@(producer ? Model.OtherPage : 1)" asp-fragment="@anchor">第一頁</a>
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="Media" asp-action="Manage" asp-route-producerPage="@(producer ? Model.Page - 1 : Model.OtherPage)" asp-route-collaborationPage="@(producer ? Model.OtherPage : Model.Page - 1)" asp-fragment="@anchor">上一頁</a>
+        }
+        else
+        {
+            <span class="btn btn-sm btn-outline-secondary disabled" aria-disabled="true">上一頁</span>
+        }
+        @for (var pageNumber = startPage; pageNumber <= endPage; pageNumber++)
+        {
+            if (pageNumber == Model.Page)
+            {
+                <span class="btn btn-sm btn-primary" aria-current="page">@pageNumber</span>
+            }
+            else
+            {
+                <a class="btn btn-sm btn-outline-primary" aria-label="第 @pageNumber 頁" asp-controller="Media" asp-action="Manage" asp-route-producerPage="@(producer ? pageNumber : Model.OtherPage)" asp-route-collaborationPage="@(producer ? Model.OtherPage : pageNumber)" asp-fragment="@anchor">@pageNumber</a>
+            }
+        }
+        @if (Model.Page < Model.TotalPages)
+        {
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="Media" asp-action="Manage" asp-route-producerPage="@(producer ? Model.Page + 1 : Model.OtherPage)" asp-route-collaborationPage="@(producer ? Model.OtherPage : Model.Page + 1)" asp-fragment="@anchor">下一頁</a>
+            <a class="btn btn-sm btn-outline-secondary" asp-controller="Media" asp-action="Manage" asp-route-producerPage="@(producer ? Model.TotalPages : Model.OtherPage)" asp-route-collaborationPage="@(producer ? Model.OtherPage : Model.TotalPages)" asp-fragment="@anchor">最後頁</a>
+        }
+        else
+        {
+            <span class="btn btn-sm btn-outline-secondary disabled" aria-disabled="true">下一頁</span>
+        }
+        <span class="small">第 @Model.Page / @Model.TotalPages 頁</span>
+    </div>
+</nav>

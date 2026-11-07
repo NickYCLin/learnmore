@@ -34,5 +34,15 @@ namespace LearnMore.Models
     {
         public List<Songs> ProducerSongs { get; set; } = new List<Songs>();
         public List<Songs> CollaborationSongs { get; set; } = new List<Songs>();
+        public ManageSongPagination? ProducerPagination { get; set; }
+        public ManageSongPagination? CollaborationPagination { get; set; }
+    }
+
+    public sealed record ManageSongPagination(string Section, int Page, long TotalCount, int OtherPage)
+    {
+        public const int PageSize = 20;
+        public long TotalPages => Math.Max(1, (TotalCount + PageSize - 1) / PageSize);
+        public long FirstItem => TotalCount == 0 ? 0 : ((long)Page - 1) * PageSize + 1;
+        public long LastItem => Math.Min((long)Page * PageSize, TotalCount);
     }
 }

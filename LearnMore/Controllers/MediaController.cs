@@ -1247,7 +1247,7 @@ namespace LearnMore.Controllers
         #endregion
 
         #region 音樂管理 (包含主管理與協同管理)
-        public async Task<IActionResult> Manage()
+        public async Task<IActionResult> Manage(int producerPage = 1, int collaborationPage = 1)
         {
             string? userEmail = HttpContext.Session.GetString("Email");
 
@@ -1256,7 +1256,10 @@ namespace LearnMore.Controllers
                 return RedirectToAction("Index", "Home");
             }
 
-            var viewModel = await _manageQueryService.GetManageViewModelAsync(userEmail, HttpContext.RequestAborted);
+            if (!ModelState.IsValid || producerPage < 1 || collaborationPage < 1)
+                return BadRequest("頁碼必須是大於零的整數。");
+            var viewModel = await _manageQueryService.GetPagedManageViewModelAsync(userEmail, producerPage,
+                collaborationPage, HttpContext.RequestAborted);
             return View(viewModel);
         }
 

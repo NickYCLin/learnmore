@@ -75,23 +75,5 @@
         </article>
     }
     <p class="mq-footnote">依 SongID、SongUid 穩定排序；清單為即時資料，跨頁期間若狀態變更，請重新核對總數與 SongUid。</p>
-    <nav aria-label="全站待校正分頁" class="mq-pagination">
-        @if (Model.Page > 1)
-        {
-            <a href="@Url.Content($"~/Management/ReviewQueue?page={Model.Page - 1}&pageSize={Model.PageSize}")">上一頁</a>
-        }
-        else
-        {
-            <span aria-disabled="true">上一頁</span>
-        }
-        <span class="mq-page-number">@(Model.TotalPages == 0 ? "尚無資料" : $"第 {Model.Page} 頁 / 共 {Model.TotalPages} 頁")</span>
-        @if (Model.Page < Model.TotalPages)
-        {
-            <a href="@Url.Content($"~/Management/ReviewQueue?page={Model.Page + 1}&pageSize={Model.PageSize}")">下一頁</a>
-        }
-        else
-        {
-            <span aria-disabled="true">下一頁</span>
-        }
-    </nav>
+    @await Html.PartialAsync("_ManagementQueuePagination", new LearnMore.Models.ManagementQueuePagination("Management/ReviewQueue", "全站待校正分頁", Model.Page, Model.PageSize, Model.TotalPages))
 </section>
