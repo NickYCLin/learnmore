@@ -32,6 +32,7 @@ namespace LearnMore.Models
 
     public class ManageViewModel
     {
+        public bool IsManager { get; set; }
         public List<Songs> ProducerSongs { get; set; } = new List<Songs>();
         public List<Songs> CollaborationSongs { get; set; } = new List<Songs>();
         public ManageSongPagination? ProducerPagination { get; set; }

@@ -25,7 +25,7 @@ public sealed class ManagePaginationSqlTests : IAsyncLifetime
         builder.InitialCatalog = database;
         connection = builder.ConnectionString;
         await Execute(connection, """
-            CREATE TABLE dbo.Users(Email nvarchar(255),Producer nvarchar(max),Collaboration nvarchar(max));
+            CREATE TABLE dbo.Users(Email nvarchar(255),Producer nvarchar(max),Collaboration nvarchar(max),Manager bit NULL);
             CREATE TABLE dbo.Songs(SongID int PRIMARY KEY,SongUid nvarchar(100) UNIQUE,
                 Title nvarchar(255),Artist nvarchar(255),YouTubeVideoUrl nvarchar(255),SongType nvarchar(50));
             DECLARE @number int=1;
@@ -35,7 +35,7 @@ public sealed class ManagePaginationSqlTests : IAsyncLifetime
             END;
             INSERT dbo.Users VALUES('owner',
                 (SELECT STRING_AGG(SongUid,',') FROM dbo.Songs WHERE SongID<=45)+',song1,missing',
-                (SELECT STRING_AGG(SongUid,',') FROM dbo.Songs WHERE SongID>45));
+                (SELECT STRING_AGG(SongUid,',') FROM dbo.Songs WHERE SongID>45),0);
             """);
     }
 
@@ -44,6 +44,17 @@ public sealed class ManagePaginationSqlTests : IAsyncLifetime
         if (master == null) return;
         SqlConnection.ClearAllPools();
         await Execute(master, $"ALTER DATABASE [{database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{database}];");
+    }
+
+    [SqlAuditFact]
+    public async Task ManagementLinksFollowCurrentDatabasePermission()
+    {
+        Assert.False((await Service.GetPagedManageViewModelAsync("owner", 1, 1)).IsManager);
+        await Execute(connection!, "UPDATE dbo.Users SET Manager=1 WHERE Email='owner';");
+        Assert.True((await Service.GetPagedManageViewModelAsync("owner", 1, 1)).IsManager);
+        await Execute(connection!, "UPDATE dbo.Users SET Manager=NULL WHERE Email='owner';");
+        Assert.False((await Service.GetPagedManageViewModelAsync("owner", 1, 1)).IsManager);
+        Assert.False((await Service.GetPagedManageViewModelAsync("unknown", 1, 1)).IsManager);
     }
 
     [SqlAuditFact]

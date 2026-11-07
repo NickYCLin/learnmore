@@ -17,6 +17,20 @@ namespace LearnMore.Tests;
 public sealed class ManagementQueuePresentationTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ManageOnlyShowsGlobalManagementLinksToManagers(bool isManager)
+    {
+        var html = WebUtility.HtmlDecode(await Render("Media/Manage",
+            new LearnMore.Models.ManageViewModel { IsManager = isManager }, true));
+        Assert.Contains("待校正清單", html);
+        Assert.Equal(isManager, html.Contains("全站待校正（限管理員）"));
+        Assert.Equal(isManager, html.Contains("錯誤回報（限管理員）"));
+        Assert.Equal(isManager, html.Contains("/Management/ReviewQueue"));
+        Assert.Equal(isManager, html.Contains("/Management/ErrorReports"));
+    }
+
+    [Theory]
     [InlineData("high_accuracy_partial", "部分完成")]
     [InlineData("high_accuracy_needs_review", "待人工檢查")]
     [InlineData("high_accuracy_failed", "校正失敗")]
