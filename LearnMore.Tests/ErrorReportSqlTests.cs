@@ -28,12 +28,12 @@ public sealed class ErrorReportSqlTests : IAsyncLifetime
         builder.InitialCatalog = database;
         connection = builder.ConnectionString;
         await Execute(connection, """
-            CREATE TABLE dbo.Users (Email nvarchar(255), Manager bit NULL);
+            CREATE TABLE dbo.Users (Email nvarchar(255), Manager bit NULL, IsDisabled bit DEFAULT 0, DeletedAt datetime2 NULL);
             CREATE TABLE dbo.Songs (SongUid nvarchar(100) PRIMARY KEY, Title nvarchar(255), YouTubeVideoUrl nvarchar(255));
             CREATE TABLE dbo.ErrorReports (AuditReportNumber int NOT NULL PRIMARY KEY,
                 UserEmail nvarchar(255), ErrorDescription nvarchar(max), ErrorSongUid nvarchar(100),
                 ErrorLyricID int, ReportDate datetime2, Status int NULL);
-            INSERT dbo.Users VALUES ('manager@example.invalid',1),('member@example.invalid',0),('unknown@example.invalid',NULL);
+            INSERT dbo.Users (Email,Manager) VALUES ('manager@example.invalid',1),('member@example.invalid',0),('unknown@example.invalid',NULL);
             INSERT dbo.Songs VALUES ('version-a','same title','video-a'),('version-b','same title','video-b');
             INSERT dbo.ErrorReports VALUES
               (1,'member@example.invalid','first','version-a',10,'2026-11-04',0),

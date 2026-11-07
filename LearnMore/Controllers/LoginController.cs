@@ -47,7 +47,8 @@ namespace LearnMore.Controllers
             await using (var connection = new SqlConnection(_connectionString))
             {
                 await connection.OpenAsync(HttpContext.RequestAborted);
-                await AccountLoginRecorder.RecordAsync(connection, null, int.Parse(userProfile.UserId), testEmail, HttpContext.RequestAborted);
+                try { await AccountLoginRecorder.RecordAsync(connection, null, int.Parse(userProfile.UserId), testEmail, HttpContext.RequestAborted); }
+                catch (InvalidOperationException) { return StatusCode(403, "帳號無法登入，請聯絡站方。"); }
             }
             await _persistentLoginSessionService.PersistAsync(
                 HttpContext,
@@ -188,7 +189,12 @@ IF NOT EXISTS (SELECT 1 FROM dbo.MobileIdentities WHERE Provider = 'google' AND 
                     bind.Parameters.AddWithValue("@UserId", int.Parse(userId!));
                     await bind.ExecuteNonQueryAsync();
                 }
-                await AccountLoginRecorder.RecordAsync(connection, transaction, int.Parse(userId!), accountEmail, HttpContext.RequestAborted);
+                try { await AccountLoginRecorder.RecordAsync(connection, transaction, int.Parse(userId!), accountEmail, HttpContext.RequestAborted); }
+                catch (InvalidOperationException)
+                {
+                    await transaction.RollbackAsync(HttpContext.RequestAborted);
+                    return StatusCode(403, "帳號無法登入，請聯絡站方。");
+                }
                 await transaction.CommitAsync();
             }
 

@@ -59,6 +59,9 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
         var loginMigration = await File.ReadAllTextAsync(Path.Combine(root, "docs", "sql", "006-account-last-login.sql"));
         await SqlAsync(loginMigration);
         await SqlAsync(loginMigration);
+        var managerMigration = await File.ReadAllTextAsync(Path.Combine(root, "docs", "sql", "008-manager-users.sql"));
+        await SqlAsync(managerMigration);
+        await SqlAsync(managerMigration);
         await SqlAsync("INSERT dbo.Users (Email,Name,EnableRoman) VALUES ('test@example.invalid','Test',1); INSERT dbo.MobileIdentities (Provider,Subject,UserId) VALUES ('google','owner',1); INSERT dbo.Songs (SongUid,AddedByUserId) VALUES ('audit-song',1);");
         await Stems.EnsureSchemaAsync();
     }
@@ -465,6 +468,115 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
         Assert.Equal(1, await CountAsync("MobileAppleRevocationJobs"));
         Assert.Empty(verifier.Revoked);
         Assert.Equal(0, await CountAsync("Users"));
+    }
+
+    [SqlAuditFact]
+    public async Task ManagerCanDisableEnableAndSoftDeleteWithoutRemovingHistory()
+    {
+        await SqlAsync("INSERT dbo.Users (Email,Manager) VALUES ('manager@example.invalid',1); INSERT dbo.Comments VALUES (1,'test@example.invalid','audit-song');");
+        var manager = new ManagerUserStore(Configuration);
+        var session = await Store.SignInAsync(Proof(), default);
+        Assert.True(await manager.IsManagerAsync("manager@example.invalid", default));
+        Assert.False(await manager.IsManagerAsync("test@example.invalid", default));
+        await manager.ChangeAsync("manager@example.invalid", 1, 0, "disable", "test@example.invalid", "停止違規使用", default);
+        Assert.False(new AccountSessionValidator(Configuration).Exists(1));
+        Assert.Null(await Store.AuthenticateAsync(session.Token, default));
+        await Assert.ThrowsAsync<MobileAuthException>(() => Store.SignInAsync(Proof(), default));
+        Assert.Equal(0, await CountAsync("MobileSessions"));
+        var detail = (await manager.DetailAsync(1, default))!;
+        Assert.True(detail.User.IsDisabled);
+        Assert.Equal(1, detail.User.Revision);
+        Assert.Equal(1L, detail.Activity["上傳歌曲"]);
+        Assert.Equal(1L, detail.Activity["歌曲留言"]);
+        Assert.Equal("google", Assert.Single(detail.Providers));
+        Assert.Equal("停止違規使用", Assert.Single(detail.Events).Reason);
+        await manager.ChangeAsync("manager@example.invalid", 1, 1, "enable", "test@example.invalid", "申訴通過", default);
+        Assert.True(new AccountSessionValidator(Configuration).Exists(1));
+        Assert.Null(await Store.AuthenticateAsync(session.Token, default));
+        await manager.ChangeAsync("manager@example.invalid", 1, 2, "delete", "test@example.invalid", "刪除違規帳號", default);
+        detail = (await manager.DetailAsync(1, default))!;
+        Assert.NotNull(detail.User.DeletedAt);
+        Assert.True(detail.User.IsDisabled);
+        Assert.Equal(3, detail.Events.Count);
+        Assert.Equal(1, await CountAsync("Songs"));
+        Assert.Equal(1, await CountAsync("Comments"));
+        Assert.Equal(1, await CountAsync("MobileIdentities"));
+        Assert.False(new AccountSessionValidator(Configuration).Exists(1));
+        await Assert.ThrowsAsync<UserManagementConflictException>(() => manager.ChangeAsync("manager@example.invalid", 1, 3, "enable", "test@example.invalid", "不可還原", default));
+        await Assert.ThrowsAsync<MobileAuthException>(() => Store.SignInAsync(Proof(), default));
+    }
+
+    [SqlAuditFact]
+    public async Task ManagerRejectsUnauthorizedStaleAndUnconfirmedChangesAtomically()
+    {
+        await SqlAsync("INSERT dbo.Users (Email,Manager) VALUES ('manager@example.invalid',1),('other-manager@example.invalid',1);");
+        var manager = new ManagerUserStore(Configuration);
+        foreach (var request in new[] {
+            ("test@example.invalid",1,0L,"disable","test@example.invalid","無權限"),
+            ("manager@example.invalid",2,0L,"disable","manager@example.invalid","自己"),
+            ("manager@example.invalid",3,0L,"delete","other-manager@example.invalid","其他管理員"),
+            ("manager@example.invalid",1,1L,"disable","test@example.invalid","過期版本"),
+            ("manager@example.invalid",1,0L,"disable","wrong@example.invalid","錯誤確認"),
+            ("manager@example.invalid",1,0L,"enable","test@example.invalid","重複狀態"),
+            ("manager@example.invalid",1,0L,"unknown","test@example.invalid","錯誤操作"),
+            ("manager@example.invalid",1,0L,"delete","test@example.invalid"," "),
+            ("manager@example.invalid",999,0L,"delete","test@example.invalid","不存在") })
+        {
+            await Assert.ThrowsAsync<UserManagementConflictException>(() => manager.ChangeAsync(request.Item1,request.Item2,request.Item3,request.Item4,request.Item5,request.Item6,default));
+        }
+        Assert.Equal(0, await CountAsync("UserManagementEvents"));
+        Assert.Equal(0, await ScalarAsync("SELECT COUNT(*) FROM dbo.Users WHERE IsDisabled=1 OR AccountRevision<>0"));
+        await SqlAsync("UPDATE dbo.Users SET Manager=0 WHERE Email='manager@example.invalid'");
+        await Assert.ThrowsAsync<UserManagementConflictException>(() => manager.ChangeAsync("manager@example.invalid",1,0,"disable","test@example.invalid","權限撤銷",default));
+    }
+
+    [SqlAuditFact]
+    public async Task ManagerSearchPaginatesAndTreatsSearchAsLiteralText()
+    {
+        await SqlAsync("INSERT dbo.Users (Email,Name) SELECT CONCAT('member',value,'@example.invalid'),'Member' FROM GENERATE_SERIES(1,52); UPDATE dbo.Users SET NickName='literal%_[]' WHERE Id=2; UPDATE dbo.Users SET IsDisabled=1 WHERE Id=3; UPDATE dbo.Users SET IsDisabled=1,DeletedAt=SYSUTCDATETIME() WHERE Id=4;");
+        var manager = new ManagerUserStore(Configuration);
+        var page = await manager.ReadAsync("","all",1,default);
+        Assert.Equal(53, page.TotalCount);
+        Assert.Equal(25, page.Items.Count);
+        Assert.Equal(53, page.Items[0].Id);
+        page = await manager.ReadAsync("","all",int.MaxValue,default);
+        Assert.Equal(3, page.Page);
+        Assert.Equal(3, page.Items.Count);
+        Assert.Equal(3, Assert.Single((await manager.ReadAsync("","disabled",1,default)).Items).Id);
+        Assert.Single((await manager.ReadAsync("","deleted",1,default)).Items);
+        Assert.Single((await manager.ReadAsync("%_[]","all",1,default)).Items);
+        Assert.Empty((await manager.ReadAsync("' OR 1=1 --","all",1,default)).Items);
+        Assert.Null(await manager.DetailAsync(999,default));
+    }
+
+    [SqlAuditFact]
+    public async Task ManagerWorksWithoutOptionalMobileTablesAndRejectsExistingWebsiteAndLegacySessions()
+    {
+        await SqlAsync("INSERT dbo.Users (Email,Manager) VALUES ('manager@example.invalid',1); DROP TABLE dbo.MobileSessions; DROP TABLE dbo.MobileIdentities;");
+        var manager = new ManagerUserStore(Configuration);
+        var detail = (await manager.DetailAsync(1,default))!;
+        Assert.Null(detail.Activity["有效 App 工作階段"]);
+        Assert.Empty(detail.Providers);
+        var validator = new AccountSessionValidator(Configuration);
+        var persistent = new PersistentLoginSessionService(new EphemeralDataProtectionProvider(), validator);
+        var context = new DefaultHttpContext { Session = new AuditSession() };
+        await persistent.PersistAsync(context,"test@example.invalid","1","Test");
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var legacy = new MobileSessionService(cache,validator);
+        const string verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        var challenge = WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
+        var code = legacy.IssueCode(new(1,"Test"),challenge);
+        var token = legacy.Exchange(code,verifier)!.Value.Token;
+        var pendingCode = legacy.IssueCode(new(1,"Test"),challenge);
+        await manager.ChangeAsync("manager@example.invalid",1,0,"disable","test@example.invalid","測試無 App 資料表",default);
+        await persistent.RestoreSessionAsync(context);
+        Assert.Null(context.Session.GetString("Email"));
+        Assert.Null(legacy.Read("Bearer " + token));
+        Assert.Null(legacy.Exchange(pendingCode,verifier));
+        await using var db = new SqlConnection(connection);
+        await db.OpenAsync();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => AccountLoginRecorder.RecordAsync(db,null,1,"test@example.invalid"));
+        Assert.Null((await manager.DetailAsync(1,default))!.User.LastLoginAt);
     }
 
     private sealed class SyntheticVerifier : IMobileIdentityVerifier

@@ -105,6 +105,7 @@ builder.Services
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<MobileSessionService>();
 builder.Services.AddSingleton<IAccountSessionValidator, AccountSessionValidator>();
+builder.Services.AddScoped<ManagerUserStore>();
 builder.Services.AddScoped<MobileLibraryService>();
 builder.Services.AddRateLimiter(options =>
 {

@@ -59,6 +59,9 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
                 """, ("@Token", protector.Protect(identity.RefreshToken)), ("@Provider", identity.Provider), ("@Subject", identity.Subject));
             await update.ExecuteNonQueryAsync(ct);
         }
+        using var active = Command(db, tx, "SELECT COUNT(*) FROM dbo.Users WHERE Id=@Id AND IsDisabled=0 AND DeletedAt IS NULL", ("@Id", userId.Value));
+        if (Convert.ToInt32(await active.ExecuteScalarAsync(ct)) != 1)
+            throw new MobileAuthException("帳號已停用或刪除，請聯絡站方。", 403);
         var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
         using var session = Command(db, tx, """
             DELETE FROM dbo.MobileSessions WHERE ExpiresAt <= SYSUTCDATETIME();
@@ -79,7 +82,7 @@ public sealed partial class MobileAccountStore(IConfiguration configuration, IDa
         await db.OpenAsync(ct);
         using var cmd = Command(db, null, """
             SELECT S.UserId FROM dbo.MobileSessions S INNER JOIN dbo.Users U ON U.Id = S.UserId
-            WHERE S.TokenHash = @Hash AND S.ExpiresAt > SYSUTCDATETIME()
+            WHERE S.TokenHash = @Hash AND S.ExpiresAt > SYSUTCDATETIME() AND U.IsDisabled=0 AND U.DeletedAt IS NULL
             """, ("@Hash", HashToken(token)));
         var id = await cmd.ExecuteScalarAsync(ct);
         return id is null ? null : await ReadUserAsync(db, null, Convert.ToInt32(id), ct);

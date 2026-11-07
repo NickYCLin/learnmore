@@ -1,0 +1,42 @@
+@model LearnMore.Services.ManagedUsersPage
+@{
+    ViewData["Title"] = "使用者管理";
+    string UserState(LearnMore.Services.ManagedUser user) => user.DeletedAt.HasValue ? "已刪除" : user.IsDisabled ? "已停用" : "使用中";
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/manager-users.css" asp-append-version="true" />
+}
+<section class="mq-page um-page" aria-labelledby="usersTitle">
+    <header class="mq-hero">
+        <div><p class="mq-eyebrow">管理工作台 <span class="mq-readonly">Manager 專用</span></p>
+            <h1 id="usersTitle">使用者管理</h1><p class="mq-subtitle">掌握帳號、登入紀錄與使用情形，安全管理每個成員。</p></div>
+        <a class="mq-link" asp-controller="Media" asp-action="Manage">返回歌曲管理 ↗</a>
+    </header>
+    <form method="get" class="um-filter" asp-action="Index">
+        <div><label for="userSearch">搜尋使用者</label><input id="userSearch" name="search" value="@Model.Search" maxlength="200" placeholder="姓名、暱稱、Email 或 ID" class="form-control" /></div>
+        <div><label for="userStatus">帳號狀態</label><select id="userStatus" name="status" class="form-select">
+            @foreach (var option in new[] { ("active", "使用中"), ("disabled", "已停用"), ("deleted", "已刪除"), ("manager", "Manager"), ("all", "全部") })
+            { <option value="@option.Item1" selected="@(Model.Status == option.Item1)">@option.Item2</option> }
+        </select></div><button class="btn btn-primary" type="submit">搜尋</button>
+    </form>
+    <p class="text-muted" role="status">共 @Model.TotalCount 個帳號 · 第 @Model.Page / @Model.TotalPages 頁 · 每頁 25 筆</p>
+    <div class="um-table-wrap"><table class="table align-middle um-table"><thead><tr><th>使用者</th><th>權限／狀態</th><th>最後登入（UTC）</th><th>操作</th></tr></thead><tbody>
+        @foreach (var user in Model.Items)
+        {
+            <tr><td><strong>@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</strong><div class="um-email">@user.Email</div><small class="text-muted">ID @user.Id</small></td>
+                <td><span class="um-badge">@(user.Manager ? "Manager" : "一般會員")</span> <span class="um-badge">@UserState(user)</span></td>
+                <td>@(user.LastLoginAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "尚無紀錄")</td>
+                <td><a class="btn btn-outline-primary btn-sm" asp-action="Detail" asp-route-id="@user.Id">查看詳情</a></td></tr>
+        }
+        @if (Model.Items.Count == 0) { <tr><td colspan="4" class="text-center py-4">沒有符合條件的帳號。</td></tr> }
+    </tbody></table></div>
+    <nav aria-label="使用者分頁" class="um-pagination">
+        @if (Model.Page > 1) { <a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-page="1">第一頁</a><a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-page="@(Model.Page - 1)">上一頁</a> }
+        @for (long number = Math.Max(1, Model.Page - 2); number <= Math.Min(Model.TotalPages, (long)Model.Page + 2); number++)
+        {
+            <a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-page="@number" aria-current="@(number == Model.Page ? "page" : null)">@number</a>
+        }
+        @if (Model.Page < Model.TotalPages) { <a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-page="@(Model.Page + 1)">下一頁</a><a asp-action="Index" asp-route-search="@Model.Search" asp-route-status="@Model.Status" asp-route-page="@Model.TotalPages">最後一頁</a> }
+    </nav>
+</section>

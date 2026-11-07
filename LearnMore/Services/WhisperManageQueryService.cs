@@ -31,7 +31,7 @@ public class WhisperManageQueryService : IWhisperManageQueryService
         await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync(cancellationToken);
 
-        await using var managerCommand = new SqlCommand("SELECT Manager FROM Users WHERE Email = @Email", connection);
+        await using var managerCommand = new SqlCommand("SELECT Manager FROM Users WHERE Email = @Email AND IsDisabled=0 AND DeletedAt IS NULL", connection);
         managerCommand.Parameters.AddWithValue("@Email", userEmail);
         object? managerValue = await managerCommand.ExecuteScalarAsync(cancellationToken);
         bool isManager = managerValue != null && managerValue != DBNull.Value && Convert.ToBoolean(managerValue);

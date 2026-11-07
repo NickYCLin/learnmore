@@ -25,7 +25,7 @@ internal static class ControllerAccessGuard
         await using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync(cancellationToken);
 
-        await using var command = new SqlCommand("SELECT Manager FROM Users WHERE Email = @Email", connection);
+        await using var command = new SqlCommand("SELECT Manager FROM Users WHERE Email = @Email AND IsDisabled=0 AND DeletedAt IS NULL", connection);
         command.Parameters.AddWithValue("@Email", email);
         object? result = await command.ExecuteScalarAsync(cancellationToken);
 

@@ -18,7 +18,7 @@ public static class AccountLoginRecorder
         if (userId <= 0) throw new ArgumentOutOfRangeException(nameof(userId));
         await using var command = new SqlCommand(@"
 UPDATE dbo.Users SET LastLoginAt = SYSUTCDATETIME()
-WHERE Id = @UserId AND (@Email IS NULL OR Email = @Email)", connection, transaction);
+WHERE Id = @UserId AND (@Email IS NULL OR Email = @Email) AND IsDisabled=0 AND DeletedAt IS NULL", connection, transaction);
         command.Parameters.AddWithValue("@UserId", userId);
         command.Parameters.AddWithValue("@Email", (object?)email ?? DBNull.Value);
         if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)

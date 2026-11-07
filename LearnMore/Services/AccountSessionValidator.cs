@@ -14,7 +14,7 @@ public sealed class AccountSessionValidator(IConfiguration configuration) : IAcc
         if (userId <= 0) return false;
         using var connection = new SqlConnection(configuration.GetConnectionString("DefaultConnection"));
         connection.Open();
-        using var command = new SqlCommand("SELECT COUNT(*) FROM dbo.Users WHERE Id = @Id AND (@Email IS NULL OR Email = @Email)", connection);
+        using var command = new SqlCommand("SELECT COUNT(*) FROM dbo.Users WHERE Id = @Id AND (@Email IS NULL OR Email = @Email) AND IsDisabled=0 AND DeletedAt IS NULL", connection);
         command.Parameters.AddWithValue("@Id", userId);
         command.Parameters.AddWithValue("@Email", (object?)email ?? DBNull.Value);
         return Convert.ToInt32(command.ExecuteScalar()) == 1;

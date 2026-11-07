@@ -16,6 +16,30 @@ namespace LearnMore.Tests;
 
 public sealed class ManagementQueuePresentationTests
 {
+    [Fact]
+    public async Task UserManagementEncodesIdentityAndPreservesSearchPagination()
+    {
+        var user = new ManagedUser(17,"<script>bad</script>","","member@example.invalid",false,false,null,null,0,null);
+        var html = await Render("ManagerUsers/Index",new ManagedUsersPage("member","all",2,100,[user]),true);
+        Assert.Contains("&lt;script&gt;bad&lt;/script&gt;",html);
+        Assert.Contains("status=all",html);
+        Assert.Contains("search=member",html);
+        Assert.Contains("page=4",html);
+        Assert.Contains("aria-current=\"page\"",html);
+        Assert.Contains("member@example.invalid",html);
+    }
+
+    [Fact]
+    public async Task DeletedUserViewRetainsAuditAndHidesMutationForm()
+    {
+        var user = new ManagedUser(17,"Test","","member@example.invalid",false,true,DateTime.UtcNow,null,1,null);
+        var html = WebUtility.HtmlDecode(await Render("ManagerUsers/Detail",new ManagedUserDetail(user,
+            new Dictionary<string,long?> { ["上傳歌曲"]=1 },[],[new("delete","<script>reason</script>",2,DateTime.UtcNow)]),true));
+        Assert.Contains("此帳號已刪除",html);
+        Assert.DoesNotContain("name=\"reason\"",html);
+        Assert.Contains("操作者 ID 2",html);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -150,7 +174,7 @@ public sealed class ManagementQueuePresentationTests
         application.Urls.Add("http://127.0.0.1:0");
         await application.StartAsync();
         using var scope = application.Services.CreateScope();
-        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider };
+        var context = new DefaultHttpContext { RequestServices = scope.ServiceProvider, Session = new PreviewSession() };
         context.Request.PathBase = "/LearnMore";
         context.SetEndpoint(new Endpoint(_ => Task.CompletedTask, new EndpointMetadataCollection(), "Razor preview"));
         var action = new ActionContext(context, new RouteData(), new Microsoft.AspNetCore.Mvc.Abstractions.ActionDescriptor());
@@ -162,5 +186,18 @@ public sealed class ManagementQueuePresentationTests
         using var writer = new StringWriter();
         await view.View.RenderAsync(new ViewContext(action, view.View, data, temp, writer, new HtmlHelperOptions()));
         return writer.ToString();
+    }
+
+    private sealed class PreviewSession : ISession
+    {
+        public bool IsAvailable => true;
+        public string Id => "preview";
+        public IEnumerable<string> Keys => [];
+        public void Clear() { }
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public void Remove(string key) { }
+        public void Set(string key, byte[] value) { }
+        public bool TryGetValue(string key, out byte[] value) { value = []; return false; }
     }
 }

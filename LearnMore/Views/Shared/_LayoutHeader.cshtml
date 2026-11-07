@@ -1472,6 +1472,7 @@
                                 <li><a class="dropdown-item" href="@Url.Action("Upload","Media")"><i class="fas fa-upload"></i> 歌曲召喚(懶得填歌詞版)</a></li>
                                 <li><a class="dropdown-item" href="@Url.Action("Summon","Media")"><i class="fas fa-hat-wizard"></i> 歌曲召喚</a></li>
                                 <li><a class="dropdown-item" href="@Url.Action("Manage","Media")"><i class="fas fa-music"></i> 歌曲管理</a></li>
+                                @await Component.InvokeAsync("ManagerNavigation")
                                 <li><a class="dropdown-item" href="@Url.Action("Wish","Media")"><i class="fas fa-star"></i> 許願留言板</a></li>
                                 <li><hr class="dropdown-divider"></li>
                                 <li><a class="dropdown-item" href="@Url.Action("About","User")"><i class="fas fa-info-circle"></i> 說明</a></li>
@@ -1520,6 +1521,7 @@
                         <li class="nav-item"><a class="nav-link" href="@Url.Action("Upload","Media")"><i class="fas fa-upload"></i> 歌曲召喚(懶得填歌詞版)</a></li>
                         <li class="nav-item"><a class="nav-link" href="@Url.Action("Summon","Media")"><i class="fas fa-hat-wizard"></i> 歌曲召喚</a></li>
                         <li class="nav-item"><a class="nav-link" href="@Url.Action("Manage","Media")"><i class="fas fa-music"></i> 歌曲管理</a></li>
+                        @await Component.InvokeAsync("ManagerNavigation", new { mobile = true })
                         <li class="nav-item"><a class="nav-link" href="@Url.Action("Wish","Media")"><i class="fas fa-star"></i> 許願留言板</a></li>
                         <li class="nav-divider"></li>
                         <li class="nav-item"><a class="nav-link" href="@Url.Action("About","User")"><i class="fas fa-info-circle"></i> 說明</a></li>
