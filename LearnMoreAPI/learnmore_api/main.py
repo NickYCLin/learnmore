@@ -2499,7 +2499,13 @@ def align_high_accuracy_lyrics_to_asr_sequence(
             if line_start <= match[0] < line_end
         ]
         coverage = len({match[0] for match in line_matches}) / max(len(normalized), 1)
-        if normalized and is_reliable_global_sequence_coverage(coverage, len(normalized), line_matches):
+        if (
+            normalized
+            and is_reliable_global_sequence_coverage(coverage, len(normalized), line_matches)
+            and has_intact_sequence_word_boundaries(
+                line_matches, line_start, line_end, char_to_word, previous_reliable_end, duration
+            )
+        ):
             first_match = min(line_matches, key=lambda match: (match[0], match[1]))
             last_match = max(line_matches, key=lambda match: (match[0], match[1]))
             prefix_chars = max(0, first_match[0] - line_start)
@@ -2508,8 +2514,8 @@ def align_high_accuracy_lyrics_to_asr_sequence(
             estimated_end_char = min(len(char_to_word) - 1, last_match[1] + suffix_chars)
             first_word = char_to_word[estimated_start_char]
             last_word = char_to_word[estimated_end_char]
-            start = max(previous_reliable_end, min(float(first_word.start), duration))
-            end = max(start + 0.25, min(float(last_word.end), duration))
+            start = float(first_word.start)
+            end = float(last_word.end)
             previous_reliable_end = end
             aligned.append(
                 AlignedLyricLine(
@@ -2551,6 +2557,36 @@ def align_high_accuracy_lyrics_to_asr_sequence(
         )
 
     return promote_contextual_timestamp_bridges(enforce_monotonic_times(aligned, duration))
+
+
+def has_intact_sequence_word_boundaries(
+    matches: list[tuple[int, int, WhisperWord]],
+    line_start: int,
+    line_end: int,
+    char_to_word: list[WhisperWord],
+    previous_end: float,
+    duration: float,
+) -> bool:
+    first_match = min(matches, key=lambda match: (match[0], match[1]))
+    last_match = max(matches, key=lambda match: (match[0], match[1]))
+    first_position = first_match[1] - (first_match[0] - line_start)
+    last_position = last_match[1] + (line_end - 1 - last_match[0])
+    if not 0 <= first_position <= last_position < len(char_to_word):
+        return False
+    first_word = char_to_word[first_position]
+    last_word = char_to_word[last_position]
+    if first_position > 0 and char_to_word[first_position - 1] is first_word:
+        return False
+    if last_position + 1 < len(char_to_word) and char_to_word[last_position + 1] is last_word:
+        return False
+    selected_words = char_to_word[first_position:last_position + 1]
+    if any(
+        not math.isfinite(word.start) or not math.isfinite(word.end)
+        or not 0 <= word.start < word.end <= duration
+        for word in selected_words
+    ):
+        return False
+    return previous_end <= first_word.start < last_word.end <= duration
 
 
 def build_lyric_sequence_index(
@@ -3412,7 +3448,10 @@ def enforce_monotonic_times(lines: list[AlignedLyricLine], duration: float) -> l
         start = max(previous_start, min(line.start, duration))
         end = max(start + 0.25, min(line.end, duration))
         previous_start = start
-        adjusted.append(line.model_copy(update={"start": round(start, 3), "end": round(end, 3)}))
+        updates = {"start": round(start, 3), "end": round(end, 3)}
+        if (start != line.start or end != line.end) and is_reliable_audio_alignment(line):
+            updates.update(source=f"{line.source}_timing_adjusted_unverified", score=0.0)
+        adjusted.append(line.model_copy(update=updates))
     return adjusted
 
 
