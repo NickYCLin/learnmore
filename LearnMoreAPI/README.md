@@ -51,6 +51,34 @@ Docker image 內建 NLTK `punkt_tab`；部署時須預熱 Kotoba、日文 Whispe
 `/health` 回報設定的模型、裝置、WhisperX 開關與部署提交編號；
 健康檢查不代表模型已載入或所有歌曲皆可命中，仍須以實際音訊請求驗收。
 
+## GB10 的 CTranslate2 CUDA 執行環境
+
+PyTorch 能使用 GPU，不代表 faster-whisper 使用的 CTranslate2 也支援 CUDA。
+若 CTranslate2 回報 `This CTranslate2 package was not compiled with CUDA support`，
+不能只把 `WHISPER_DEVICE` 改成 `cuda`，也不能停用高精度配置檢查。
+
+`Dockerfile.ctranslate2-cuda` 可在既有 API 映像上補建 CUDA 版 CTranslate2，
+保留該映像中的 API 程式及其他套件。來源固定為 CTranslate2 4.8.2 的完整提交，
+預設針對 GB10 的 compute capability 12.1；須在 ARM64 主機建置，
+`API_IMAGE` 應指定已核實 digest 的映像來源，或為現行映像建立專用本機標籤
+並核對標籤的映像 ID，不使用可變的 `latest` 或裸 `sha256:` 映像 ID。
+建置階段也修正 Ubuntu CMake 舊 FindCUDA 模組只接受單位數架構的解析式，
+讓 `12.1` 能產生對應的 NVCC 架構旗標；不改動 CTranslate2 或網站的驗證規則。
+
+```sh
+docker build --build-arg API_IMAGE=learnmore-api:verified-base \
+  -f LearnMoreAPI/Dockerfile.ctranslate2-cuda \
+  -t learnmore-api:cuda-candidate LearnMoreAPI
+docker run --rm --device nvidia.com/gpu=all --entrypoint python \
+  learnmore-api:cuda-candidate -c \
+  'import ctranslate2; assert "float16" in ctranslate2.get_supported_compute_types("cuda")'
+```
+
+建置不會改動執行中的服務，也不會自動切換模型或網站位址。部署前仍須隔離驗證
+Kotoba 模型載入、WhisperX 日文對齊、Demucs 與既有 API 契約，保留回復映像及
+完整設定；不得複製或輸出私有環境變數。正式配置須通過 capabilities 檢查，
+歌曲則仍經 report、preview/hash、apply 與讀回驗證，不能以建置或 health 成功代替。
+
 ## 選用離線 Qwen 補充證據
 
 安裝 [Qwen 容器工具](qwen-asr/README.md) 後，可在同時包含最新 API 程式

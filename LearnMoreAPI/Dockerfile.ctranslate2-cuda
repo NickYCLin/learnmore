@@ -1,0 +1,49 @@
+ARG API_IMAGE=learnmore-api:verified-base
+FROM nvidia/cuda:12.9.1-cudnn-devel-ubuntu24.04 AS ctranslate2-builder
+
+ARG CTRANSLATE2_COMMIT=d44d2d069eb88c7b7804da864c10c201501cb4a9
+ARG CUDA_ARCH_LIST=12.1
+ARG BUILD_JOBS=4
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates cmake g++ git libopenblas-dev ninja-build \
+        python3-dev python3-pip python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN git clone --filter=blob:none --no-checkout https://github.com/OpenNMT/CTranslate2.git /src \
+    && git -C /src checkout "${CTRANSLATE2_COMMIT}" \
+    && git -C /src submodule update --init --recursive --depth 1
+
+RUN python3 -c 'from pathlib import Path; path = next(Path("/usr/share").glob("cmake-*/Modules/FindCUDA/select_compute_arch.cmake")); lines = path.read_text().splitlines(keepends=True); matches = [index for index, line in enumerate(lines) if "if(arch_name MATCHES" in line and "[0-9]" in line]; assert len(matches) == 1; index = matches[0]; lines[index] = lines[index].replace("[0-9]", "[0-9]+"); path.write_text("".join(lines))'
+
+RUN cmake -S /src -B /src/build -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/opt/ctranslate2 \
+        -DWITH_MKL=OFF -DWITH_OPENBLAS=ON -DWITH_RUY=ON \
+        -DOPENMP_RUNTIME=COMP -DWITH_CUDA=ON -DWITH_CUDNN=ON \
+        -DCUDA_DYNAMIC_LOADING=ON -DCUDA_ARCH_LIST="${CUDA_ARCH_LIST}" \
+        -DBUILD_CLI=OFF -DBUILD_TESTS=OFF \
+    && cmake --build /src/build --parallel "${BUILD_JOBS}" \
+    && cmake --install /src/build
+
+RUN python3 -m venv /build-venv \
+    && /build-venv/bin/pip install --no-cache-dir setuptools wheel pybind11 \
+    && cd /src/python \
+    && CTRANSLATE2_ROOT=/opt/ctranslate2 CMAKE_BUILD_PARALLEL_LEVEL="${BUILD_JOBS}" \
+        /build-venv/bin/python setup.py bdist_wheel
+
+FROM ${API_IMAGE}
+
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 libopenblas0-pthread \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ctranslate2-builder /opt/ctranslate2 /opt/ctranslate2
+COPY --from=ctranslate2-builder /src/python/dist/ /tmp/ctranslate2-wheels/
+RUN pip install --no-cache-dir --no-deps --force-reinstall /tmp/ctranslate2-wheels/*.whl \
+    && rm -rf /tmp/ctranslate2-wheels
+
+ENV LD_LIBRARY_PATH=/opt/ctranslate2/lib:/usr/local/lib/python3.12/site-packages/torch/lib:${LD_LIBRARY_PATH}
+USER 1000:1000
