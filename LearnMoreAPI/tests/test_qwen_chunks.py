@@ -44,7 +44,7 @@ def test_chunk_merging_keeps_each_input_separate_and_restores_absolute_times():
     assert merged[1]["timeStamps"]["items"][0]["start_time"] == 0.2
 
 
-@pytest.mark.parametrize("start,end", [(-0.1, 0.5), (0.2, 2.1), (1.0, 0.5), (float("nan"), 1)])
+@pytest.mark.parametrize("start,end", [(-0.1, 0.5), (0.2, 2.1), (1.0, 0.5), (float("nan"), 1), (0.2, 0.2)])
 def test_invalid_local_times_cannot_be_hidden_by_an_absolute_offset(start, end):
     with pytest.raises(ValueError):
         cli.merge_chunks([Path("a.wav")], [(0, Path("part.wav"), 30, 2)], [result(start, end)])
@@ -98,3 +98,44 @@ def test_concurrent_chunk_resume_is_rejected(tmp_path):
     journal.with_name("chunks.json.lock").touch()
     with pytest.raises(FileExistsError):
         cli.transcribe_chunks(None, [], [], "English", journal)
+
+
+def test_zero_duration_chunk_is_not_completed_and_valid_neighbors_are_reused(tmp_path):
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"audio")
+    tasks = [(0, source, 0, 2), (0, source, 2, 2), (0, source, 4, 2)]
+    journal = tmp_path / "chunks.json"
+    calls = []
+
+    def transcribe(**kwargs):
+        calls.append(kwargs)
+        return [result(end=0.2 if len(calls) == 2 else 0.8)]
+
+    model = SimpleNamespace(transcribe=transcribe)
+    with pytest.raises(ValueError, match="chunk_transcription_incomplete"):
+        cli.transcribe_chunks(model, [source], tasks, "English", journal)
+    saved = json.loads(journal.read_text())
+    assert [entry["completed"] for entry in saved["chunks"]] == [True, False, True]
+    assert saved["chunks"][1]["error"] == "invalid_chunk_word_timing"
+    cli.transcribe_chunks(model, [source], tasks, "English", journal, resume=True)
+    assert len(calls) == 4
+    saved = json.loads(journal.read_text())
+    assert all(entry["completed"] for entry in saved["chunks"])
+    assert saved["chunks"][1]["attempts"][0]["raw"]["time_stamps"]["items"][0]["end_time"] == 0.2
+
+
+def test_resume_rejects_legacy_completed_zero_duration_without_inference(tmp_path):
+    source = tmp_path / "source.wav"
+    source.write_bytes(b"audio")
+    tasks = [(0, source, 0, 2)]
+    journal = tmp_path / "chunks.json"
+    model = SimpleNamespace(transcribe=lambda **kwargs: [result()])
+    cli.transcribe_chunks(model, [source], tasks, "English", journal)
+    saved = json.loads(journal.read_text())
+    saved["chunks"][0]["raw"]["time_stamps"]["items"][0]["end_time"] = 0.2
+    journal.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match="chunk_transcription_incomplete"):
+        cli.transcribe_chunks(None, [source], tasks, "English", journal, resume=True)
+    saved = json.loads(journal.read_text())
+    assert saved["chunks"][0]["completed"] is False
+    assert saved["chunks"][0]["error"] == "invalid_chunk_word_timing"

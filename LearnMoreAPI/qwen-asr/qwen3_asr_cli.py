@@ -142,7 +142,7 @@ def merge_chunks(paths: list[Path], tasks, results):
             start, end = word["start_time"], word["end_time"]
             if (type(start) not in {int, float} or type(end) not in {int, float}
                     or not math.isfinite(start) or not math.isfinite(end) or start < previous
-                    or not 0 <= start <= end <= duration):
+                    or not 0 <= start < end <= duration):
                 raise ValueError("invalid_chunk_word_timing")
             previous = start
             merged[index]["timeStamps"]["items"].append(
