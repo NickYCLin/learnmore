@@ -60,6 +60,27 @@ def test_subprocess_receives_audio_without_lyrics_or_website_credentials(tmp_pat
     assert [w["text"] for w in words] == ["Stand", "by"]
 
 
+@pytest.mark.parametrize("diagnostic,expected", [
+    ("chunk_transcription_incomplete", "chunk_transcription_incomplete"),
+    ("private-test-placeholder", None),
+])
+def test_subprocess_diagnostics_keep_only_known_codes(tmp_path, monkeypatch, diagnostic, expected):
+    audio = tmp_path / "vocals.wav"
+    audio.write_bytes(b"audio evidence")
+    monkeypatch.setenv("QWEN_DIAGNOSTICS_DIR", str(tmp_path))
+
+    def run(*args, **kwargs):
+        raise subprocess.CalledProcessError(1, ["private-command"], stderr=(
+            "private-test-placeholder\nqwen_asr_diagnostic: " + diagnostic).encode())
+
+    monkeypatch.setattr(qwen.subprocess, "run", run)
+    with pytest.raises(subprocess.CalledProcessError):
+        qwen.transcribe(audio, 5, ["python", "local-asr.py"], 17)
+    receipt = next(tmp_path.glob("evidence-*/diagnostic.json")).read_text()
+    assert "private-test-placeholder" not in receipt and "private-command" not in receipt
+    assert json.loads(receipt).get("subprocessErrorCode") == expected
+
+
 def test_repeated_words_and_partial_word_matches_are_not_promoted(tmp_path):
     audio = tmp_path / "vocals.wav"
     audio.write_bytes(b"audio evidence")

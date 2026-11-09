@@ -104,6 +104,16 @@ def transcribe(audio_path: Path, duration: float, command: list[str], timeout: f
             code = str(error)
         receipt.update(state="failed", errorCode=code,
                        exitCode=error.returncode if isinstance(error, subprocess.CalledProcessError) else None)
+        if isinstance(error, subprocess.CalledProcessError):
+            stderr = error.stderr or b""
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", errors="replace")
+            allowed = {"chunk_transcription_incomplete", "invalid_chunk_word_timing",
+                       "chunk_result_count_mismatch", "chunk_journal_contract_mismatch",
+                       "transcription_failed"}
+            for line in stderr[-4096:].splitlines():
+                if line.startswith("qwen_asr_diagnostic: ") and line[21:] in allowed:
+                    receipt["subprocessErrorCode"] = line[21:]
         logging.getLogger(__name__).warning("Qwen evidence failed diagnosticId=%s code=%s", directory.name, code)
         raise
     finally:
