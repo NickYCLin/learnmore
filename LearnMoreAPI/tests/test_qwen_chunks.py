@@ -139,3 +139,70 @@ def test_resume_rejects_legacy_completed_zero_duration_without_inference(tmp_pat
     saved = json.loads(journal.read_text())
     assert saved["chunks"][0]["completed"] is False
     assert saved["chunks"][0]["error"] == "invalid_chunk_word_timing"
+
+
+def recovery_audio(tmp_path):
+    source = tmp_path / "source.wav"
+    samples = b"\x01\x02" * 30101
+    with wave.open(str(source), "wb") as output:
+        output.setparams((1, 2, 1000, 0, "NONE", "not compressed"))
+        output.writeframes(samples)
+    return source, samples
+
+
+def test_recovery_retranscribes_exact_audio_halves_without_repairing_invalid_words(tmp_path):
+    source, samples = recovery_audio(tmp_path)
+    calls = []
+
+    def transcribe(**kwargs):
+        with wave.open(kwargs["audio"][0]) as audio:
+            calls.append(audio.readframes(audio.getnframes()))
+        return [result(end=0.2 if len(calls) == 1 else 0.8)]
+
+    journal = tmp_path / "journal.json"
+    tasks = [(0, source, 60, 30.101)]
+    results = cli.transcribe_chunks(SimpleNamespace(transcribe=transcribe), [source], tasks,
+                                    "Japanese", journal)
+    assert calls[0] == samples and calls[1] + calls[2] == samples
+    merged = cli.merge_chunks([source], tasks, results)[0]
+    assert [word["start_time"] for word in merged["timeStamps"]["items"]] == [60.2, 75.25]
+    saved = json.loads(journal.read_text())
+    assert saved["verificationStatus"] == "unreviewed"
+    entry = saved["chunks"][0]
+    assert entry["completed"] and entry["recoveryAttempted"]
+    assert entry["attempts"][0]["raw"]["time_stamps"]["items"][0]["end_time"] == 0.2
+    cli.transcribe_chunks(None, [source], tasks, "Japanese", journal, resume=True)
+    assert len(calls) == 3
+
+
+def test_unfixable_recovery_is_bounded_and_preserves_every_failed_attempt(tmp_path):
+    source, _ = recovery_audio(tmp_path)
+    calls = []
+
+    def transcribe(**kwargs):
+        calls.append(kwargs)
+        return [result(end=0.2)]
+
+    journal = tmp_path / "journal.json"
+    with pytest.raises(ValueError, match="chunk_transcription_incomplete"):
+        cli.transcribe_chunks(SimpleNamespace(transcribe=transcribe), [source],
+                              [(0, source, 0, 30.101)], "Japanese", journal)
+    assert len(calls) == 7
+    journals = list(tmp_path.rglob("*.json"))
+    assert len(journals) == 4
+    entries = [entry for path in journals for entry in json.loads(path.read_text())["chunks"]]
+    assert len(entries) == 7 and all(not entry["completed"] and entry["raw"] for entry in entries)
+
+
+def test_model_failure_does_not_trigger_audio_recovery(tmp_path):
+    source, _ = recovery_audio(tmp_path)
+    calls = []
+
+    def transcribe(**kwargs):
+        calls.append(kwargs)
+        raise RuntimeError("model unavailable")
+
+    with pytest.raises(ValueError, match="chunk_transcription_incomplete"):
+        cli.transcribe_chunks(SimpleNamespace(transcribe=transcribe), [source],
+                              [(0, source, 0, 30.101)], "Japanese", tmp_path / "journal.json")
+    assert len(calls) == 1 and not list(tmp_path.glob("*.recovery-*"))

@@ -75,8 +75,37 @@ def persist_journal(path: Path, payload):
         Path(temporary).unlink(missing_ok=True)
 
 
-def transcribe_chunks(model, paths, tasks, language, journal_path, *, resume=False, max_new_tokens=512):
+def recover_chunk(model, task, language, journal_path, position, depth, max_new_tokens):
+    directory = journal_path.parent / f"{journal_path.name}.recovery-{position}"
+    directory.mkdir(exist_ok=True)
+    with wave.open(str(task[1])) as source:
+        frame_count = source.getnframes()
+        rate = source.getframerate()
+        midpoint = frame_count // 2
+        if midpoint < rate * 5 or frame_count - midpoint < rate * 5:
+            raise ValueError("invalid_chunk_word_timing")
+        children = []
+        for part, (start, stop) in enumerate(((0, midpoint), (midpoint, frame_count))):
+            target = directory / f"{part}.wav"
+            data = source.readframes(stop - start)
+            with wave.open(str(target), "wb") as output:
+                output.setparams(source.getparams())
+                output.writeframes(data)
+            children.append((0, target, start / rate, (stop - start) / rate))
+    child_journal = directory / "chunks.json"
+    results = transcribe_chunks(model, [task[1]], children, language, child_journal,
+                                resume=child_journal.exists(), max_new_tokens=max_new_tokens,
+                                _recovery_depth=depth + 1)
+    merged = merge_chunks([task[1]], children, results)[0]
+    return {"language": merged["language"], "text": merged["text"],
+            "time_stamps": merged["timeStamps"]}
+
+
+def transcribe_chunks(model, paths, tasks, language, journal_path, *, resume=False, max_new_tokens=512,
+                      _recovery_depth=0):
     contract = {"models": MODELS, "language": language, "maxNewTokens": max_new_tokens,
+                "recovery": {"strategy": "contiguous-halves-v1", "maxDepth": 2,
+                             "minimumChildSeconds": 5, "depth": _recovery_depth},
                 "inputs": [file_digest(path) for path in paths], "chunks": [
                     {"input": index, "sha256": file_digest(path), "offset": offset, "duration": duration}
                     for index, path, offset, duration in tasks]}
@@ -113,7 +142,20 @@ def transcribe_chunks(model, paths, tasks, language, journal_path, *, resume=Fal
                     journal["chunks"][position] = entry
                     persist_journal(journal_path, journal)
                 result = SimpleNamespace(**entry["raw"])
-                merge_chunks(paths, [task], [result])
+                try:
+                    merge_chunks(paths, [task], [result])
+                except ValueError as error:
+                    if (str(error) != "invalid_chunk_word_timing" or entry.get("completed")
+                            or _recovery_depth >= 2 or task[3] < 10):
+                        raise
+                    entry["recoveryAttempted"] = True
+                    persist_journal(journal_path, journal)
+                    recovered = recover_chunk(model, task, language, journal_path, position,
+                                              _recovery_depth, max_new_tokens)
+                    entry["attempts"].append({"raw": entry["raw"], "error": str(error)})
+                    entry["raw"] = recovered
+                    result = SimpleNamespace(**recovered)
+                    merge_chunks(paths, [task], [result])
                 entry.update(completed=True, error=None)
                 results.append(result)
             except Exception as error:
@@ -254,4 +296,8 @@ if __name__ == "__main__":
         raise SystemExit(main())
     except Exception as error:
         print(f"qwen_asr_failed: {type(error).__name__}", file=sys.stderr)
+        code = str(error) if isinstance(error, ValueError) and str(error) in {
+            "chunk_transcription_incomplete", "invalid_chunk_word_timing",
+            "chunk_result_count_mismatch", "chunk_journal_contract_mismatch"} else "transcription_failed"
+        print("qwen_asr_diagnostic: " + code, file=sys.stderr)
         raise SystemExit(1)
