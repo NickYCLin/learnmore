@@ -12,7 +12,7 @@ namespace LearnMore.Services;
 
 public class WhisperHighAccuracyInitialPassService : IWhisperHighAccuracyInitialPassService
 {
-    private static readonly string HighAccuracyTracePath = @"D:\Data\learnmore-high-accuracy-trace.log";
+    private static readonly string HighAccuracyTracePath = LearnMore.Hosting.ReverseProxyHosting.TraceFilePath("learnmore-high-accuracy-trace.log");
     private static readonly SemaphoreSlim HighAccuracyQueueGate = new(1, 1);
     private static readonly ConcurrentQueue<string> HighAccuracyQueue = new();
     private static readonly ConcurrentDictionary<string, byte> QueuedOrRunningSongUids = new(StringComparer.Ordinal);
