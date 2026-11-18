@@ -61,6 +61,7 @@ public class LyricsPracticePlayerSurfaceTests
         Assert.Contains(".practice-controls-mobile", source);
         Assert.Contains(".group-practice-controls", source);
         Assert.Contains(".practice-mobile-only", source);
+        Assert.Contains(".toggle-container.practice-mobile-only", source);
         Assert.Contains("@media (max-width: 991.98px)", source);
     }
 
