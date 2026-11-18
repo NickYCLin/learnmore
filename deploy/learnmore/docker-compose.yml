@@ -1,0 +1,70 @@
+# LearnMore 內網部署（yangchen-MS-7E06）。只綁 127.0.0.1，不對外。
+# 使用方式：
+#   cp deploy/learnmore/.env.example /data/yangchen/learnmore-deploy/.env  # 填密碼，chmod 600
+#   docker compose --env-file /data/yangchen/learnmore-deploy/.env -f deploy/learnmore/docker-compose.yml up -d
+name: learnmore-web
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: learnmore-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      # Express 可免費用於正式環境（單一資料庫上限 10 GB）；超過時再評估授權
+      MSSQL_PID: ${MSSQL_PID:-Express}
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?set MSSQL_SA_PASSWORD in .env}
+      MSSQL_COLLATION: ${MSSQL_COLLATION:-Chinese_Taiwan_Stroke_CI_AS}
+      TZ: Asia/Taipei
+    ports:
+      - "127.0.0.1:${SQL_HOST_PORT:-14334}:1433"
+    volumes:
+      - ${LEARNMORE_STORAGE_ROOT:?set LEARNMORE_STORAGE_ROOT}/mssql/data:/var/opt/mssql/data
+      - ${LEARNMORE_STORAGE_ROOT}/mssql/log:/var/opt/mssql/log
+      - ${LEARNMORE_STORAGE_ROOT}/mssql/secrets:/var/opt/mssql/secrets
+      - ${LEARNMORE_STORAGE_ROOT}/mssql/backup:/var/opt/mssql/backup
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/learnmore/Dockerfile
+    image: learnmore-web:local
+    container_name: learnmore-web
+    restart: unless-stopped
+    profiles: ["web"]   # 資料庫還原前不自動啟動；還原後用 --profile web up -d
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=${LEARNMORE_DB_NAME:-language};User Id=${LEARNMORE_DB_USER:-sa};Password=${LEARNMORE_DB_PASSWORD:-${MSSQL_SA_PASSWORD}};TrustServerCertificate=True;MultipleActiveResultSets=true;"
+      YtDlpCookiesPath: ${YTDLP_COOKIES_PATH:-}
+      HighAccuracyRemoteApi__Enabled: ${HIGH_ACCURACY_REMOTE_ENABLED:-false}
+      HighAccuracyRemoteApi__BaseUrl: ${LEARNMORE_API_BASE_URL:-http://learnmore-api:8080}
+      HighAccuracyRemoteApi__Token: ${LEARNMORE_API_TOKEN:-}
+      AudioStemProcessing__RemoteApiBaseUrl: ${LEARNMORE_API_BASE_URL:-http://learnmore-api:8080}
+      AudioStemProcessing__RemoteApiToken: ${LEARNMORE_API_TOKEN:-}
+      Hosting__KnownNetworks__0: 172.16.0.0/12
+      Hosting__KnownNetworks__1: 127.0.0.0/8
+    ports:
+      - "127.0.0.1:${WEB_HOST_PORT:-18090}:8080"
+    volumes:
+      - ${LEARNMORE_STORAGE_ROOT}/web/data:/var/lib/learnmore/data
+      - ${LEARNMORE_STORAGE_ROOT}/web/dataprotection-keys:/var/lib/learnmore/dataprotection-keys
+      - ${LEARNMORE_STORAGE_ROOT}/web/cookies:/var/lib/learnmore/cookies:ro
+      - ${LEARNMORE_STORAGE_ROOT}/web/uploads:/app/wwwroot/uploads
+      - ${LEARNMORE_STORAGE_ROOT}/web/audio-stems:/app/wwwroot/audio-stems
+      - ${LEARNMORE_STORAGE_ROOT}/web/appsettings.Local.json:/app/appsettings.Local.json:ro
+    networks:
+      - default
+      - ycspace_apps   # 與 learnmore-api（Whisper/UVR）同網路，用 http://learnmore-api:8080 連線
+
+networks:
+  ycspace_apps:
+    external: true

@@ -5,7 +5,7 @@ namespace LearnMore.Services;
 
 public sealed class AudioStemProcessingHostedService : BackgroundService
 {
-    private static readonly string TracePath = @"D:\Data\learnmore-audio-stems-trace.log";
+    private static readonly string TracePath = LearnMore.Hosting.ReverseProxyHosting.TraceFilePath("learnmore-audio-stems-trace.log");
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AudioStemProcessingHostedService> _logger;
     private readonly AudioStemProcessingOptions _options;

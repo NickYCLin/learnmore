@@ -1,0 +1,18 @@
+# 根目錄 build context 只給 deploy/learnmore/Dockerfile（LearnMore 網站）使用
+**/bin/
+**/obj/
+**/publish/
+**/node_modules/
+.git/
+.github/
+ios/
+mobile/
+LearnMoreAPI/
+LearnMoreMCP/
+LearnMore.Tests/
+skills/
+deploy/learnmore/.env
+**/appsettings.Local.json
+**/appsettings.*.local.json
+LearnMore/wwwroot/uploads/
+LearnMore/wwwroot/audio-stems/

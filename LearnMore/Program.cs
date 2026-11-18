@@ -1,5 +1,6 @@
 using LearnMore.Controllers;
 using LearnMore.Controllers.API;
+using LearnMore.Hosting;
 using LearnMore.Options;
 using LearnMore.Services;
 using Microsoft.AspNetCore.DataProtection;
@@ -244,6 +245,8 @@ builder.Services.AddHttpClient("jcinfo", client =>
 
 var app = builder.Build();
 
+app.UseLearnMoreReverseProxy();
+
 await EnsureSongsPerformerColumnAsync(app.Configuration);
 
 app.UseSession();
@@ -353,9 +356,9 @@ static async Task EnsureSongsPerformerColumnAsync(IConfiguration configuration)
     }
 
     const string sql = @"
-IF COL_LENGTH('dbo.Songs', 'Performer') IS NULL
+IF OBJECT_ID(N'dbo.Songs', N'U') IS NOT NULL AND COL_LENGTH('dbo.Songs', 'Performer') IS NULL
 BEGIN
-    ALTER TABLE [language].[dbo].[Songs] ADD [Performer] NVARCHAR(255) NULL;
+    ALTER TABLE [dbo].[Songs] ADD [Performer] NVARCHAR(255) NULL;
 END";
 
     await using var connection = new SqlConnection(connectionString);
