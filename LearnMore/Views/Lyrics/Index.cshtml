@@ -1,6 +1,7 @@
 ﻿@model SongViewModel
 @{
     ViewData["Title"] = Model.Title;
+    ViewData["PlayerLayout"] = true;
     // 支援 youtube.com/watch 和 youtu.be 短網址
     var isYouTubeVideo = Model.VideoPath != null && 
         (Model.VideoPath.Contains("youtube.com/watch") || Model.VideoPath.Contains("youtu.be/"));
@@ -34,6 +35,18 @@
 @await Html.PartialAsync("_ProcessingNotice", Model)
 <div class="title-container">
     <h1>@Model.Title</h1>
+    <div class="player-title-actions">
+        <button type="button" class="lyrics-favorite" aria-label="收藏歌曲" aria-pressed="false"
+                data-song-uid="@Model.SongUid" data-logged-in="@isLoggedIn.ToString().ToLowerInvariant()"
+                data-login-url="@Url.Action("Index", "Login")"
+                data-groups-url="@Url.Action("GetGroups", "SongGroup")"
+                data-containing-url="@Url.Action("GetGroupsContainingSong", "SongGroup")"
+                data-create-url="@Url.Action("CreateGroup", "SongGroup")"
+                data-add-url="@Url.Action("AddSongToGroup", "SongGroup")"
+                data-remove-url="@Url.Action("RemoveSongFromGroup", "SongGroup")">♡</button>
+        <button type="button" class="player-share">複製連結</button>
+        <span class="player-action-status" role="status"></span>
+    </div>
     <p class="subtitle song-detail-meta">
         @if (!string.IsNullOrEmpty(Model.Performer))
         {
@@ -303,7 +316,7 @@
     </div>
 </div>
 
-<div id="navigation-bar" style="display: none;">
+<div id="navigation-bar" hidden aria-label="歌詞導覽">
     <button id="current-lyric-button" onclick="scrollToCurrentLyric()">跳到目前歌詞</button>
     <button id="top-button" onclick="scrollToTop()">回到頂部</button>
 </div>
@@ -1492,7 +1505,7 @@
         const sanitizeAllow = value => String(value || '')
             .split(';')
             .map(part => part.trim())
-            .filter(part => part && part !== 'web-share')
+            .filter(part => part && part !== 'web-share' && part !== 'picture-in-picture')
             .join('; ');
 
         const originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
@@ -1593,6 +1606,7 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                pausePlaybackMedia();
                 releasePracticeWakeLock();
                 return;
             }
@@ -1979,6 +1993,7 @@
     }
 
     function onPlayerStateChange(event) {
+        if (document.hidden && event.data === YT.PlayerState.PLAYING) { pausePlaybackMedia(); return; }
         if (karaokeAudioActive) {
             if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
                 pauseKaraokeAudioFromOriginalPlayback();
@@ -2031,7 +2046,7 @@
 
     function adjustControlsForScreenSize() {
         const controls = document.querySelectorAll('.controls');
-        const isMobile = window.innerWidth <= 768;
+        const isMobile = window.matchMedia('(max-width: 991.98px)').matches;
 
         controls.forEach(control => {
             if (isMobile) {
@@ -2114,7 +2129,8 @@
     }
 
     function scrollToCurrentLyric() {
-        const highlightedLine = document.querySelector('.lyrics-line.highlight');
+        const highlightedLine = currentMode === 2 ? document.getElementById('current-lyric-combined')
+            : document.querySelector(currentMode === 4 ? '.mode4-line.highlight' : currentMode === 5 ? '.mode5-line.highlight' : '#mode-1 .lyrics-line.highlight');
         if (highlightedLine) {
             highlightedLine.scrollIntoView({
                 behavior: 'smooth',

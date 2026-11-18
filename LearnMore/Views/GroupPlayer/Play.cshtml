@@ -1,10 +1,11 @@
 @model LearnMore.Models.GroupPlayerViewModel
 @{
     ViewData["Title"] = $"播放：{Model.GroupName}";
+    ViewData["PlayerLayout"] = true;
     ViewData["LayoutContainerClass"] = "container-fluid group-player-layout-container";
 }
 
-<link rel="stylesheet" href="~/css/lyrics.css" />
+<link rel="stylesheet" href="~/css/lyrics.css" asp-append-version="true" />
 
 <style>
     .playlist-container { background: var(--bg-primary); border-radius: 12px; box-shadow: var(--shadow-md); border: 1px solid var(--border-color); overflow: hidden; }
@@ -177,7 +178,7 @@
 
         .group-player-main-content .video-sticky-stack {
             position: sticky;
-            top: 0;
+            top: var(--player-navbar-height, calc(123px + env(safe-area-inset-top, 0px)));
             z-index: 30;
             background: var(--bg-primary);
             padding-bottom: 8px;
@@ -257,7 +258,7 @@
     }
 </style>
 
-<div id="autoplayConsent" class="autoplay-overlay hidden">
+<div id="autoplayConsent" class="autoplay-overlay hidden" role="region" aria-label="開始播放">
     <h2>點擊以開始播放</h2>
     <p>為符合瀏覽器的自動播放政策，我們需要您的互動才能啟動未靜音的播放。按下方按鈕後將開始播放歌曲並啟用音訊。</p>
     <button id="startPlaybackBtn" class="autoplay-btn"><i class="fas fa-play me-2"></i>開始播放</button>
@@ -267,6 +268,8 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">群組播放 － @Model.GroupName</h5>
+            <button type="button" class="player-share">複製連結</button>
+            <span class="player-action-status" role="status"></span>
             <div>
                 <button id="prevBtn" class="btn btn-sm btn-outline-primary">上一首</button>
                 <button id="playPauseBtn" class="btn btn-sm btn-primary">播放</button>
@@ -337,7 +340,7 @@
             const sanitizeAllow = value => String(value || '')
                 .split(';')
                 .map(part => part.trim())
-                .filter(part => part && part !== 'web-share')
+                .filter(part => part && part !== 'web-share' && part !== 'picture-in-picture')
                 .join('; ');
 
             const originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
@@ -385,6 +388,10 @@
         const currentUserLoggedIn = @((!string.IsNullOrWhiteSpace(Model.UserEmail)).ToString().ToLowerInvariant());
 
         let currentIndex = 0;
+        let groupLoopA = null;
+        let groupLoopB = null;
+        let groupLineLoop = null;
+        let groupLoopGuardUntil = 0;
         window.rightYTPlayer = null;
         let autoSyncLyricsRight = true;
         let showRomanRight = false;
@@ -482,9 +489,33 @@
             if (groupPracticePlaybackRate !== 1) {
                 applyGroupPracticePlaybackRate(1);
             }
+            groupLoopA = groupLoopB = groupLineLoop = null;
+            document.querySelectorAll('.group-practice-controls input').forEach(input => { input.checked = false; });
+            updateGroupPracticeStatus();
         }
 
         function bindGroupPracticeControls() {
+            document.querySelectorAll('[data-group-practice]').forEach(button => button.addEventListener('click', () => {
+                if (!isGroupPracticeMobileViewport()) return;
+                const action = button.dataset.groupPractice;
+                const time = getGroupPlaybackTime();
+                if (action === 'back' || action === 'forward') seekGroupPractice(time + (action === 'back' ? -5 : 5), isOriginalRightPlaying());
+                if (action === 'a') { groupLoopA = time; groupLoopB = null; }
+                if (action === 'b') {
+                    if (groupLoopA === null || time <= groupLoopA + 0.2) {
+                        document.getElementById('group-practice-status').textContent = '請先設 A 點，B 點須在 A 點之後';
+                        return;
+                    }
+                    groupLoopB = time;
+                }
+                if (action === 'clear') groupLoopA = groupLoopB = null;
+                updateGroupPracticeStatus();
+            }));
+            document.getElementById('group-practice-line-loop')?.addEventListener('change', event => {
+                const line = document.querySelector('#lyric-card-right .lyrics-line.highlight');
+                groupLineLoop = event.target.checked && line ? Number(line.dataset.timestamp) : null;
+                event.target.checked = groupLineLoop !== null;
+            });
             const speedSelect = document.getElementById('group-practice-speed');
             if (speedSelect) {
                 const option = Array.from(speedSelect.options).find(item => Number(item.value) === groupPracticePlaybackRate);
@@ -511,6 +542,8 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                pauseOriginalRightPlayback();
+                getGroupKaraokeAudioPlayer()?.pause();
                 releaseGroupPracticeWakeLock();
                 return;
             }
@@ -1031,13 +1064,15 @@
                     if (audio === getGroupKaraokeAudioPlayer()) {
                         updatePlaybackButtonsRight(false);
                         setHeaderPlayButton(false);
-                        setTimeout(() => playNext(), 500);
+                        finishGroupPracticePlayback();
                     }
                 });
             });
         }
 
         function renderRightArea(payload, shouldAutoPlay = false, shouldUnmute = false, isUserLoggedIn=false) {
+            groupLoopA = groupLoopB = groupLineLoop = null;
+            groupLoopGuardUntil = 0;
             cancelRightRaf();
             stopGroupKaraokeAudio();
             const song = payload.song || {};
@@ -1067,6 +1102,10 @@
                         ${isYouTubeVideo ? '<div class="video-container"><div id="youtube-player-right"></div></div>' : `<div class=\"video-container\"><video id=\"video-player-right\" controls playsinline webkit-playsinline><source src=\"${htmlEncode(youtubeVideoUrl || getSongProperty(song, 'VideoPath', 'videoPath'))}\" type=\"video/mp4\"></video></div>`}
                         <div class="practice-controls group-practice-controls" role="region" aria-label="播放速度">
                             <div class="practice-controls-row">
+                                <button type="button" class="practice-control-button" data-group-practice="back">-5 秒</button>
+                                <button type="button" class="practice-control-button" data-group-practice="forward">+5 秒</button>
+                            </div>
+                            <div class="practice-controls-row">
                                 <label class="practice-speed-label" for="group-practice-speed">速度
                                     <select id="group-practice-speed" class="practice-speed-select" aria-label="播放速度">
                                         <option value="0.5">0.5×</option>
@@ -1077,6 +1116,16 @@
                                         <option value="2">2×</option>
                                     </select>
                                 </label>
+                            </div>
+                            <div class="practice-controls-row">
+                                <button type="button" class="practice-control-button" data-group-practice="a">設 A 點</button>
+                                <button type="button" class="practice-control-button" data-group-practice="b">設 B 點</button>
+                                <button type="button" class="practice-control-button" data-group-practice="clear">清除 A-B</button>
+                                <span id="group-practice-status" role="status">A-B 未設定</span>
+                            </div>
+                            <div class="practice-controls-row practice-control-toggles">
+                                <label class="toggle-container"><input type="checkbox" id="group-practice-line-loop"><span class="toggle-switch"></span><span>單句循環</span></label>
+                                <label class="toggle-container"><input type="checkbox" id="group-practice-song-loop"><span class="toggle-switch"></span><span>整首重播</span></label>
                             </div>
                         </div>
                         </div>
@@ -1239,6 +1288,7 @@
                             },
                             onStateChange: function (event) {
                                 if (event.data === YT.PlayerState.PLAYING) {
+                                    if (document.hidden) { pauseOriginalRightPlayback(); return; }
                                     applyGroupPracticePlaybackRate();
                                     if (groupKaraokeAudioActive) {
                                         muteOriginalRightForKaraoke();
@@ -1266,7 +1316,7 @@
                                     setHeaderPlayButton(false);
                                     releaseGroupPracticeWakeLock();
                                 }
-                                if (event.data === YT.PlayerState.ENDED) { cancelRightRaf(); updatePlaybackButtonsRight(false); setHeaderPlayButton(false); releaseGroupPracticeWakeLock(); setTimeout(() => playNext(), 500); }
+                                if (event.data === YT.PlayerState.ENDED) { cancelRightRaf(); updatePlaybackButtonsRight(false); setHeaderPlayButton(false); releaseGroupPracticeWakeLock(); finishGroupPracticePlayback(); }
                             }
                         }
                     });
@@ -1311,13 +1361,49 @@
                         updatePlaybackButtonsRight(false);
                         setHeaderPlayButton(false);
                     });
-                    v.addEventListener('ended', function(){ updatePlaybackButtonsRight(false); setHeaderPlayButton(false); setTimeout(() => playNext(), 500); });
+                    v.addEventListener('ended', function(){ updatePlaybackButtonsRight(false); setHeaderPlayButton(false); finishGroupPracticePlayback(); });
                     v.addEventListener('loadeddata', function(){ if (shouldAutoPlay) { try { if (!consentGranted) v.muted = true; v.play().catch(()=>{}); } catch {} } if (shouldUnmute && consentGranted) { v.muted = false; } });
                 }
             }
         }
 
+        function updateGroupPracticeStatus() {
+            const status = document.getElementById('group-practice-status');
+            if (status) status.textContent = groupLoopA === null ? 'A-B 未設定' : `A ${groupLoopA.toFixed(1)} 秒 / B ${groupLoopB === null ? '未設定' : groupLoopB.toFixed(1) + ' 秒'}`;
+        }
+
+        function seekGroupPractice(time, shouldPlay = true) {
+            const audio = getGroupKaraokeAudioPlayer();
+            const duration = groupKaraokeAudioActive && audio ? audio.duration : window.rightYTPlayer?.getDuration?.() || getRightVideoPlayer()?.duration;
+            const target = Math.max(0, Number.isFinite(duration) ? Math.min(time, duration) : time);
+            groupLoopGuardUntil = performance.now() + 400;
+            if (groupKaraokeAudioActive && audio) {
+                audio.currentTime = target;
+                if (shouldPlay) audio.play().catch(() => {});
+            }
+            seekOriginalRightPlayback(target, shouldPlay);
+        }
+
+        function finishGroupPracticePlayback() {
+            if (document.hidden) return;
+            const loopStart = groupLoopB !== null ? groupLoopA : groupLineLoop;
+            if (isGroupPracticeMobileViewport() && loopStart !== null) seekGroupPractice(loopStart);
+            else if (isGroupPracticeMobileViewport() && document.getElementById('group-practice-song-loop')?.checked) seekGroupPractice(0);
+            else setTimeout(() => { if (!document.hidden) playNext(); }, 500);
+        }
+
         function updateLyricsDisplayRight(currentTime) {
+            const audio = getGroupKaraokeAudioPlayer();
+            const playing = groupKaraokeAudioActive && audio ? !audio.paused : isOriginalRightPlaying();
+            if (!document.hidden && playing && isGroupPracticeMobileViewport() && performance.now() > groupLoopGuardUntil) {
+                const lines = Array.from(document.querySelectorAll('#lyric-card-right .lyrics-line'));
+                const nextLine = lines.find(line => Number(line.dataset.timestamp) > groupLineLoop);
+                const duration = window.rightYTPlayer?.getDuration?.() || getRightVideoPlayer()?.duration || getGroupKaraokeAudioPlayer()?.duration;
+                const loopStart = groupLoopB !== null ? groupLoopA : groupLineLoop;
+                const loopEnd = groupLoopB ?? (groupLineLoop !== null ? Number(nextLine?.dataset.timestamp || duration) : null);
+                const playbackTime = getGroupPlaybackTime();
+                if (loopStart !== null && loopEnd !== null && (playbackTime >= loopEnd || playbackTime < loopStart - 0.2)) seekGroupPractice(loopStart);
+            }
             const lyrics = document.querySelectorAll('#lyric-card-right .lyrics-line');
             let idx = -1;
             for (let i = 0; i < lyrics.length; i++) {

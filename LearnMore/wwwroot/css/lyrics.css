@@ -507,7 +507,7 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 
     .video-sticky-stack {
         position: sticky;
-        top: 0;
+        top: var(--player-navbar-height, calc(123px + env(safe-area-inset-top, 0px)));
         z-index: 30;
         margin-bottom: 12px;
         padding-bottom: 8px;
