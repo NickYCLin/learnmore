@@ -52,12 +52,17 @@ services:
       AudioStemProcessing__RemoteApiToken: ${LEARNMORE_API_TOKEN:-}
       Hosting__KnownNetworks__0: 172.16.0.0/12
       Hosting__KnownNetworks__1: 127.0.0.0/8
+      # /Mobile/Privacy、/Mobile/Support 需要這四項，空白時回 503
+      MobilePublication__SupportEmail: ${MOBILE_SUPPORT_EMAIL:-}
+      MobilePublication__OperatorName: ${MOBILE_OPERATOR_NAME:-}
+      MobilePublication__LogRetentionDays: ${MOBILE_LOG_RETENTION_DAYS:-}
+      MobilePublication__BackupRetentionDays: ${MOBILE_BACKUP_RETENTION_DAYS:-}
     ports:
       - "127.0.0.1:${WEB_HOST_PORT:-18090}:8080"
     volumes:
       - ${LEARNMORE_STORAGE_ROOT}/web/data:/var/lib/learnmore/data
       - ${LEARNMORE_STORAGE_ROOT}/web/dataprotection-keys:/var/lib/learnmore/dataprotection-keys
-      - ${LEARNMORE_STORAGE_ROOT}/web/cookies:/var/lib/learnmore/cookies:ro
+      - ${LEARNMORE_STORAGE_ROOT}/web/cookies:/var/lib/learnmore/cookies   # yt-dlp 結束時會寫回 cookies，不能唯讀
       - ${LEARNMORE_STORAGE_ROOT}/web/uploads:/app/wwwroot/uploads
       - ${LEARNMORE_STORAGE_ROOT}/web/audio-stems:/app/wwwroot/audio-stems
       - ${LEARNMORE_STORAGE_ROOT}/web/appsettings.Local.json:/app/appsettings.Local.json:ro

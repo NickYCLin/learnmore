@@ -276,7 +276,7 @@
                                 {
                                     var s = Model.Songs[i];
                                     var videoId = GetYouTubeVideoId(s.YouTubeVideoUrl);
-                                    var thumbnailUrl = !string.IsNullOrEmpty(videoId) ? $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg" : "/images/placeholder.png";
+                                    var thumbnailUrl = !string.IsNullOrEmpty(videoId) ? $"https://img.youtube.com/vi/{videoId}/hqdefault.jpg" : Url.Content("~/favicon-192.png");
                                     <div class="playlist-item" data-index="@i" data-songuid="@s.SongUid">
                                         <img src="@thumbnailUrl" alt="@s.Title" />
                                         <div class="playlist-item-content">

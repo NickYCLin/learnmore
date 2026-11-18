@@ -89,6 +89,7 @@ namespace LearnMore.Controllers
         /// 驗證 Google 登入授權
         /// </summary>
         /// <returns></returns>
+        [HttpPost]
         public async Task<IActionResult> ValidGoogleLogin()
         {
             string? formCredential = Request.Form["credential"]; //回傳憑證
