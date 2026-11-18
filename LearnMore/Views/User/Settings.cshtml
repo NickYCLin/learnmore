@@ -22,7 +22,7 @@
 
             $.post("@Url.Action("UpdateEnableRoman", "User")", { enableRoman: enableRoman }, function (data) {
                 if (data.success) {
-                    window.location.href = "@Url.Action("Index", "Home")";
+                    window.location.href = "@Url.HomeIndex()";
                 } else {
                     alert("儲存失敗：" + data.message);
                 }
