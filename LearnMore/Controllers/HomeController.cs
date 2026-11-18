@@ -291,7 +291,8 @@ LEFT JOIN [Songs] BaseSongs ON BaseSongs.SongUid = S.SongUid ";
                     : repository.GetGroups(userId);
             }
 
-            return View(songs);
+            // GroupByUid (/GroupUid/{groupUid}) reuses Index, so the view name must be explicit.
+            return View("Index", songs);
         }
 
         // ?? �s�W�H GroupUid ���|��������s�պq���G /GroupUid/{groupUid}

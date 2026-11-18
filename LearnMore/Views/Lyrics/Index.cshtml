@@ -1814,7 +1814,7 @@
             ReplyMessage: replyMessage
         };
 
-        fetch("/Lyrics/ReplyComment", {
+        fetch("@Url.Content("~/Lyrics/ReplyComment")", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(replyData)
