@@ -1429,10 +1429,11 @@
            ============================================ */
     @media (max-width: 991.98px) {
         #group-buttons-container {
+            mask-image: linear-gradient(to right, transparent, black 12px, black calc(100% - 24px), transparent);
             justify-content: flex-start !important;
             flex-wrap: nowrap !important;
             overflow-x: auto;
-            padding: 0 0.25rem 0.5rem;
+            padding: 0 24px 0.5rem 12px;
             margin-left: -0.25rem;
             margin-right: -0.25rem;
             scroll-snap-type: x proximity;

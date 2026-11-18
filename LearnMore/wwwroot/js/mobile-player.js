@@ -1,4 +1,14 @@
 (function () {
+    const originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
+    const sanitizeAllow = value => String(value || '').split(';').map(part => part.trim()).filter(part => part && part !== 'picture-in-picture').join('; ');
+    HTMLIFrameElement.prototype.setAttribute = function (name, value) {
+        return originalSetAttribute.call(this, name, String(name).toLowerCase() === 'allow' ? sanitizeAllow(value) : value);
+    };
+    const descriptor = Object.getOwnPropertyDescriptor(HTMLIFrameElement.prototype, 'allow');
+    if (descriptor?.set) Object.defineProperty(HTMLIFrameElement.prototype, 'allow', {
+        configurable: true, enumerable: descriptor.enumerable, get: descriptor.get,
+        set(value) { descriptor.set.call(this, sanitizeAllow(value)); }
+    });
     const parents = new Set(['capacitor://localhost', 'http://localhost:5173', 'http://127.0.0.1:5173']);
     let player;
     let parentOrigin = '';
@@ -15,7 +25,7 @@
         player = new YT.Player('player', {
             videoId: document.body.dataset.videoId, width: '100%', height: '100%',
             playerVars: { playsinline: 1, controls: 1, origin: location.origin, widget_referrer: 'https://tw.learnmore.app' },
-            events: { onReady: function () { ready = true; status(); }, onError: function (event) { status(String(event.data)); } }
+            events: { onReady: function () { ready = true; status(); }, onStateChange: function (event) { if (document.hidden && ready && event.data === YT.PlayerState.PLAYING) player.pauseVideo(); }, onError: function (event) { status(String(event.data)); } }
         });
     };
     window.addEventListener('message', function (event) {

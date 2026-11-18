@@ -174,6 +174,8 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
         window.addEventListener('resize', closeOnResize, { passive: true });
         window.addEventListener('wheel', closeOnScroll, { passive: true });
         window.addEventListener('touchstart', () => closeWithCooldown(), { passive: true });
+        window.matchMedia('(min-width: 992px)').addEventListener('change', () => closeWithCooldown());
+        document.addEventListener('visibilitychange', () => { if (document.hidden) closeWithCooldown(); });
 
         document.addEventListener('keydown', (e) => {
             if (['Escape','PageDown','PageUp','ArrowDown','ArrowUp',' '].includes(e.key)) {
@@ -481,6 +483,7 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
     }
 
     function showPreview(card, previewEl) {
+        if (!window.matchMedia('(min-width: 992px)').matches || document.hidden) return;
         previewEl._ver = (previewEl._ver || 0) + 1;
         const myVer = previewEl._ver;
 
@@ -526,7 +529,7 @@ const HOME_CONFIG = window.learnMoreHomeConfig || { urls: {} };
 
             if (vid) {
                 iframe = document.createElement('iframe');
-                iframe.allow = 'accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; autoplay';
+                iframe.allow = 'accelerometer; clipboard-write; encrypted-media; gyroscope; autoplay';
                 iframe.src = `https://www.youtube.com/embed/${vid}?autoplay=1&mute=1&playsinline=1&controls=0&rel=0&modestbranding=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}`;
                 videoWrap.appendChild(iframe);
             }

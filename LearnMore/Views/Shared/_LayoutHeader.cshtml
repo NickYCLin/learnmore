@@ -2,6 +2,7 @@
 @using Microsoft.AspNetCore.Http
 @{
     var siteRoot = $"{Context.Request.Scheme}://{Context.Request.Host}{Context.Request.PathBase}".TrimEnd('/');
+    var playerLayout = ViewData["PlayerLayout"] is true;
     var shareMetadata = ShareMetadataBuilder.Build(
         siteRoot: siteRoot,
         currentPathAndQuery: $"{Context.Request.Path}{Context.Request.QueryString}",
@@ -48,7 +49,7 @@
 <head>
     <meta charset="utf-8" />
     <script src="~/js/theme-init.js" asp-append-version="true"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>@shareMetadata.PageTitle</title>
     <meta name="description" content="@shareMetadata.Description" />
     <meta name="keywords" content="唱歌學日文,唱歌學日語,日文歌詞,日語學習,日文歌學日文,羅馬拼音,假名標註,中文翻譯,JPOP,日本歌曲,振り仮名,歌詞同步,日文學習網站" />
@@ -1191,11 +1192,11 @@
                         -------------------------------------------*/
         @@media (max-width: 991.98px) {
             body {
-                padding-top: 116px;
+                padding-top: calc(116px + env(safe-area-inset-top, 0px));
             }
 
             .navbar {
-                padding: 6px 0;
+                padding: calc(6px + env(safe-area-inset-top, 0px)) env(safe-area-inset-right, 0px) 6px env(safe-area-inset-left, 0px);
             }
 
             .navbar .container-fluid {
@@ -1425,8 +1426,13 @@
     </style>
     <link rel="stylesheet" href="~/css/front-pages.css" asp-append-version="true" />
     @await RenderSectionAsync("Styles", required: false)
+    @if (playerLayout)
+    {
+        <link rel="stylesheet" href="~/css/player-layout.css" asp-append-version="true" />
+        <script src="~/js/player-layout.js" asp-append-version="true" defer></script>
+    }
 </head>
-<body>
+<body class="@(playerLayout ? "player-layout" : "")">
     <script>window.LearnMoreTheme?.applyToBody();</script>
     <nav class="navbar navbar-expand-lg navbar-light">
         <div class="container-fluid">
@@ -1437,7 +1443,11 @@
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="search-container search-container-stays-visible" data-search-rwd="true">
+            @if (playerLayout)
+            {
+                <button type="button" class="player-search-toggle" aria-label="展開搜尋" aria-expanded="false" aria-controls="player-navbar-search"><i class="fas fa-search" aria-hidden="true"></i></button>
+            }
+            <div id="player-navbar-search" class="search-container search-container-stays-visible" data-search-rwd="true">
                 <form asp-controller="Home" asp-action="Search" method="get" class="search-form search-surface" data-search-url="@Url.Content("~/api/search/suggestions")">
                     <input type="text" name="query" class="search-input" placeholder="請輸入歌手/ 演唱者/ 歌名/ 中文歌名" aria-label="搜尋" autocomplete="off" aria-autocomplete="list" aria-expanded="false" aria-controls="search-suggestions">
                     <button type="submit" class="search-btn"><i class="fas fa-search"></i></button>
