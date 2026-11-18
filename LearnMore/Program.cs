@@ -20,6 +20,21 @@ using Microsoft.IdentityModel.Tokens;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
+// Linux（ICU）的 zh-TW 時間格式是 "Bh:mm:ss"，.NET 不支援 B（上午/下午），會變成 "2026/10/31 1:38:48" 分不出上下午。
+// 改回舊 Windows zh-TW 的格式："2026/10/31 下午 01:38:48"。Windows 上本來就是這個格式，不受影響。
+if (System.Globalization.CultureInfo.CurrentCulture.Name == "zh-TW"
+    && !System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.LongTimePattern.Contains('t'))
+{
+    var zhTw = (System.Globalization.CultureInfo)System.Globalization.CultureInfo.CurrentCulture.Clone();
+    zhTw.DateTimeFormat.ShortDatePattern = "yyyy/M/d";
+    zhTw.DateTimeFormat.LongTimePattern = "tt hh:mm:ss";
+    zhTw.DateTimeFormat.ShortTimePattern = "tt hh:mm";
+    System.Globalization.CultureInfo.DefaultThreadCurrentCulture = zhTw;
+    System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = zhTw;
+    System.Globalization.CultureInfo.CurrentCulture = zhTw;
+    System.Globalization.CultureInfo.CurrentUICulture = zhTw;
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Configuration
