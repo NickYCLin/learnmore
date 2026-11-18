@@ -51,6 +51,7 @@ public class LyricsPracticePlayerSurfaceTests
         Assert.Contains("display: contents", source);
         Assert.Contains("overflow-x: visible", source);
         Assert.Contains(".practice-controls", source);
+        Assert.Contains(".practice-control-toggles input[type=\"checkbox\"]", source);
     }
 
     [Fact]
@@ -66,5 +67,7 @@ public class LyricsPracticePlayerSurfaceTests
         Assert.Contains("requestGroupPracticeWakeLock", source);
         Assert.Contains("releaseGroupPracticeWakeLock", source);
         Assert.Contains("display: contents", source);
+        Assert.Contains(".group-player-page-container > .card", source);
+        Assert.Contains("overflow: visible", source);
     }
 }

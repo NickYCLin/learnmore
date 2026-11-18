@@ -190,6 +190,16 @@ video, #youtube-player, #youtube-player-right, #yt-player { width: 100%; height:
     color: var(--text-primary);
     min-width: 112px;
 }
+.practice-control-toggles input[type="checkbox"] {
+    display: none;
+}
+.practice-control-toggles input:checked + .toggle-switch {
+    background: var(--accent-orange);
+    border-color: var(--accent-orange);
+}
+.practice-control-toggles input:checked + .toggle-switch::before {
+    transform: translateX(24px);
+}
 
 
 .karaoke-audio-panel {
