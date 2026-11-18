@@ -72,6 +72,7 @@
             }
         </div>
         <div class="practice-controls" role="region" aria-label="練習播放控制">
+            <div class="practice-controls-mobile">
             <div class="practice-controls-row">
                 <button type="button" id="practice-skip-back" class="practice-control-button" aria-label="倒退 5 秒">-5 秒</button>
                 <button type="button" id="practice-skip-forward" class="practice-control-button" aria-label="前進 5 秒">+5 秒</button>
@@ -92,8 +93,9 @@
                 <button type="button" id="practice-clear-ab" class="practice-control-button">清除 A-B</button>
                 <span id="practice-ab-status" class="practice-ab-status">A-B 未設定</span>
             </div>
+            </div>
             <div class="practice-controls-row practice-control-toggles">
-                <label class="toggle-container" for="practice-line-loop">
+                <label class="toggle-container practice-mobile-only" for="practice-line-loop">
                     <input type="checkbox" id="practice-line-loop">
                     <span class="toggle-switch"></span>
                     <span class="label">單句循環</span>
@@ -322,6 +324,7 @@
     };
     let youtubePlayer;
     const PRACTICE_SONG_LOOP_STORAGE_KEY = 'learnmore.lyrics.autoReplay';
+    const PRACTICE_MOBILE_MEDIA = '(max-width: 991.98px)';
     let practicePlaybackRate = 1;
     let practiceWakeLock = null;
     let practiceLoopA = null;
@@ -330,6 +333,25 @@
     let practiceLineLoopStart = null;
     let practiceSongLoopEnabled = true;
     let practiceLoopGuardUntil = 0;
+
+    function isPracticeMobileViewport() {
+        return window.matchMedia(PRACTICE_MOBILE_MEDIA).matches;
+    }
+
+    function syncPracticeControlsToViewport() {
+        if (isPracticeMobileViewport()) {
+            return;
+        }
+        if (practiceLoopA != null || practiceLoopB != null) {
+            clearPracticeAbLoop();
+        }
+        if (practiceLineLoopEnabled) {
+            setPracticeLineLoop(false);
+        }
+        if (practicePlaybackRate !== 1) {
+            applyPracticePlaybackRate(1);
+        }
+    }
 
     function loadPracticeSongLoopPreference() {
         try {
@@ -538,6 +560,9 @@
     }
 
     function getActivePracticeRange() {
+        if (!isPracticeMobileViewport()) {
+            return null;
+        }
         if (practiceLoopA != null && practiceLoopB != null) {
             return {
                 start: Math.min(practiceLoopA, practiceLoopB),
@@ -1557,6 +1582,14 @@
         });
         updatePracticeAbStatus();
         applyPracticePlaybackRate();
+        syncPracticeControlsToViewport();
+        const practiceMobileQuery = window.matchMedia(PRACTICE_MOBILE_MEDIA);
+        const onPracticeViewportChange = () => syncPracticeControlsToViewport();
+        if (typeof practiceMobileQuery.addEventListener === 'function') {
+            practiceMobileQuery.addEventListener('change', onPracticeViewportChange);
+        } else if (typeof practiceMobileQuery.addListener === 'function') {
+            practiceMobileQuery.addListener(onPracticeViewportChange);
+        }
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {

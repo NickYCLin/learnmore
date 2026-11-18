@@ -39,6 +39,12 @@ public class LyricsPracticePlayerSurfaceTests
         Assert.Contains("audio.playbackRate = practicePlaybackRate", source);
         Assert.Contains("handlePlaybackEnded", source);
         Assert.Contains("video-sticky-stack", source);
+        Assert.Contains("practice-controls-mobile", source);
+        Assert.Contains("practice-mobile-only", source);
+        Assert.Contains("isPracticeMobileViewport", source);
+        Assert.Contains("syncPracticeControlsToViewport", source);
+        Assert.Contains("PRACTICE_MOBILE_MEDIA", source);
+        Assert.Contains("(max-width: 991.98px)", source);
     }
 
     [Fact]
@@ -52,6 +58,10 @@ public class LyricsPracticePlayerSurfaceTests
         Assert.Contains("overflow-x: visible", source);
         Assert.Contains(".practice-controls", source);
         Assert.Contains(".practice-control-toggles input[type=\"checkbox\"]", source);
+        Assert.Contains(".practice-controls-mobile", source);
+        Assert.Contains(".group-practice-controls", source);
+        Assert.Contains(".practice-mobile-only", source);
+        Assert.Contains("@media (max-width: 991.98px)", source);
     }
 
     [Fact]
@@ -69,5 +79,8 @@ public class LyricsPracticePlayerSurfaceTests
         Assert.Contains("display: contents", source);
         Assert.Contains(".group-player-page-container > .card", source);
         Assert.Contains("overflow: visible", source);
+        Assert.Contains("isGroupPracticeMobileViewport", source);
+        Assert.Contains("syncGroupPracticeControlsToViewport", source);
+        Assert.Contains("(max-width: 991.98px)", source);
     }
 }

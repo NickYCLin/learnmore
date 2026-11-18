@@ -164,6 +164,12 @@ video, #youtube-player, #youtube-player-right, #yt-player { width: 100%; height:
 .practice-control-toggles {
     gap: 16px;
 }
+/* Desktop keeps 整首重播; skip/speed/A-B/單句循環 stay mobile-only. */
+.practice-controls-mobile,
+.group-practice-controls,
+.practice-mobile-only {
+    display: none;
+}
 .playback-continue-prompt {
     display: flex;
     flex-wrap: wrap;
@@ -452,6 +458,17 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 
 /* Responsive */
 @media (max-width: 991.98px) {
+    .practice-controls-mobile,
+    .group-practice-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .practice-mobile-only {
+        display: flex;
+    }
+
     .title-container,
     .feature-section,
     .lyrics-section,
