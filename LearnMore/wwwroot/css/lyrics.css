@@ -167,7 +167,7 @@ video, #youtube-player, #youtube-player-right, #yt-player { width: 100%; height:
 /* Desktop keeps 整首重播; skip/speed/A-B/單句循環 stay mobile-only. */
 .practice-controls-mobile,
 .group-practice-controls,
-.practice-mobile-only {
+.toggle-container.practice-mobile-only {
     display: none;
 }
 .playback-continue-prompt {
@@ -465,7 +465,7 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
         gap: 8px;
     }
 
-    .practice-mobile-only {
+    .toggle-container.practice-mobile-only {
         display: flex;
     }
 
