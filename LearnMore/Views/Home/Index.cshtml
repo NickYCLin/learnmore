@@ -174,20 +174,20 @@
 </header>
 
 <div id="group-buttons-container" class="d-flex flex-wrap justify-content-center gap-3 mb-4" data-aos="fade-up" data-aos-delay="50">
-    <a href="@Url.Action("Index", "Home", new { type = "all" })"
+    <a href="@Url.HomeIndex(new { type = "all" })"
        class="btn btn-outline-primary px-4 py-2 rounded-pill @(ViewBag.Type == "all" && ViewBag.GroupId == null ? "active" : "")">全部</a>
-    <a href="@Url.Action("Index", "Home", new { type = "weekly" })"
+    <a href="@Url.HomeIndex(new { type = "weekly" })"
        class="btn btn-outline-warning px-4 py-2 rounded-pill @(ViewBag.Type == "weekly" ? "active" : "")">周排行 🔥</a>
-    <a href="@Url.Action("Index", "Home", new { type = "monthly" })"
+    <a href="@Url.HomeIndex(new { type = "monthly" })"
        class="btn btn-outline-soft-yellow px-4 py-2 rounded-pill @(ViewBag.Type == "monthly" ? "active-yellow" : "")">月排行 🌟</a>
-    <a href="@Url.Action("Index", "Home", new { type = "new" })"
+    <a href="@Url.HomeIndex(new { type = "new" })"
        class="btn btn-outline-success px-4 py-2 rounded-pill @(ViewBag.Type == "new" ? "active" : "")">本站新上架 🌱</a>
 
     @if (ViewBag.Groups != null)
     {
         foreach (var group in ViewBag.Groups)
         {
-            <a href="@Url.Action("Index", "Home", new { groupId = group.GroupId })"
+            <a href="@Url.HomeIndex(new { groupId = (int?)group.GroupId })"
                class="btn btn-purple px-4 py-2 rounded-pill group-btn @(ViewBag.GroupId == group.GroupId ? "active" : "")"
                data-group-id="@group.GroupId"
                data-group-name="@group.GroupName"
@@ -213,7 +213,7 @@
             <div class="performer-collection-actions" aria-label="演唱者合輯滑動控制">
                 @if (!string.IsNullOrWhiteSpace(selectedPerformer))
                 {
-                    <a class="performer-collection-clear" asp-action="Index" asp-controller="Home" asp-route-type="all">顯示全部歌曲</a>
+                    <a class="performer-collection-clear" href="@Url.HomeIndex(new { type = "all" })">顯示全部歌曲</a>
                 }
                 <button type="button" class="performer-collection-nav performer-collection-prev" aria-label="向左滑動演唱者合輯">
                     <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -362,20 +362,14 @@
         </div>
         <div class="home-pagination-controls" aria-label="頁碼與分頁操作">
             <a class="home-pagination-link home-pagination-edge @(currentPage == 1 ? "disabled" : "")"
-               asp-action="Index"
-               asp-controller="Home"
-               asp-route-type="@ViewBag.Type"
-               asp-route-page="1"
+               href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = 1 })"
                aria-disabled="@(currentPage == 1 ? "true" : null)"
                tabindex="@(currentPage == 1 ? "-1" : null)">
                 <i class="fa-solid fa-angles-left" aria-hidden="true"></i>
                 <span>第一頁</span>
             </a>
             <a class="home-pagination-link home-pagination-edge @(currentPage == 1 ? "disabled" : "")"
-               asp-action="Index"
-               asp-controller="Home"
-               asp-route-type="@ViewBag.Type"
-               asp-route-page="@(Math.Max(1, currentPage - 1))"
+               href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = (Math.Max(1, currentPage - 1)) })"
                aria-disabled="@(currentPage == 1 ? "true" : null)"
                tabindex="@(currentPage == 1 ? "-1" : null)">
                 <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
@@ -386,10 +380,7 @@
                 @if (firstPage > 1)
                 {
                     <a class="home-pagination-number"
-                       asp-action="Index"
-                       asp-controller="Home"
-                       asp-route-type="@ViewBag.Type"
-                       asp-route-page="1">1</a>
+                       href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = 1 })">1</a>
                     @if (firstPage > 2)
                     {
                         <span class="home-pagination-ellipsis" aria-hidden="true">...</span>
@@ -405,10 +396,7 @@
                     else
                     {
                         <a class="home-pagination-number"
-                           asp-action="Index"
-                           asp-controller="Home"
-                           asp-route-type="@ViewBag.Type"
-                           asp-route-page="@pageNumber">@pageNumber</a>
+                           href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = pageNumber })">@pageNumber</a>
                     }
                 }
 
@@ -419,28 +407,19 @@
                         <span class="home-pagination-ellipsis" aria-hidden="true">...</span>
                     }
                     <a class="home-pagination-number"
-                       asp-action="Index"
-                       asp-controller="Home"
-                       asp-route-type="@ViewBag.Type"
-                       asp-route-page="@totalPages">@totalPages</a>
+                       href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = totalPages })">@totalPages</a>
                 }
             </div>
 
             <a class="home-pagination-link home-pagination-edge @(currentPage == totalPages ? "disabled" : "")"
-               asp-action="Index"
-               asp-controller="Home"
-               asp-route-type="@ViewBag.Type"
-               asp-route-page="@(Math.Min(totalPages, currentPage + 1))"
+               href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = (Math.Min(totalPages, currentPage + 1)) })"
                aria-disabled="@(currentPage == totalPages ? "true" : null)"
                tabindex="@(currentPage == totalPages ? "-1" : null)">
                 <span>下一頁</span>
                 <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
             </a>
             <a class="home-pagination-link home-pagination-edge @(currentPage == totalPages ? "disabled" : "")"
-               asp-action="Index"
-               asp-controller="Home"
-               asp-route-type="@ViewBag.Type"
-               asp-route-page="@totalPages"
+               href="@Url.HomeIndex(new { type = (string?)ViewBag.Type, page = totalPages })"
                aria-disabled="@(currentPage == totalPages ? "true" : null)"
                tabindex="@(currentPage == totalPages ? "-1" : null)">
                 <span>最後頁</span>
@@ -470,8 +449,8 @@
         urls: {
             groupPlay: '@Url.Action("PlayByQuery", "GroupPlayer")',
             deleteGroup: '@Url.Action("DeleteGroup", "SongGroup")',
-            homeAll: '@Url.Action("Index", "Home", new { type = "all" })',
-            home: '@Url.Action("Index", "Home")',
+            homeAll: '@Url.HomeIndex(new { type = "all" })',
+            home: '@Url.HomeIndex()',
             groupsContainingSong: '@Url.Action("GetGroupsContainingSong", "SongGroup")',
             createGroup: '@Url.Action("CreateGroup", "SongGroup")',
             getGroups: '@Url.Action("GetGroups", "SongGroup")',

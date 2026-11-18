@@ -18,7 +18,7 @@
             <h1>我的收藏</h1>
             <p>加入任一自訂群組的歌曲都會收在這裡，目前共有 <strong>@Model.Count</strong> 首。</p>
         </div>
-        <a class="favorites-browse-link" asp-controller="Home" asp-action="Index" asp-route-type="all">
+        <a class="favorites-browse-link" href="@Url.HomeIndex(new { type = "all" })">
             <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
             繼續找歌
         </a>
@@ -28,7 +28,7 @@
         <span class="favorites-empty-icon"><i class="fa-regular fa-heart" aria-hidden="true"></i></span>
         <h2>還沒有收藏歌曲</h2>
         <p>在歌曲清單點一下愛心，把歌曲加入群組後就會出現在這裡。</p>
-        <a asp-controller="Home" asp-action="Index" asp-route-type="all">前往歌曲清單</a>
+        <a href="@Url.HomeIndex(new { type = "all" })">前往歌曲清單</a>
     </section>
 
     @if (Model.Count > 0)
@@ -102,9 +102,7 @@
                                 @foreach (var group in favorite.Groups)
                                 {
                                     <a class="favorite-group-chip"
-                                       asp-controller="Home"
-                                       asp-action="Index"
-                                       asp-route-groupId="@group.GroupId">@group.GroupName</a>
+                                       href="@Url.HomeIndex(new { groupId = group.GroupId })">@group.GroupName</a>
                                 }
                             </div>
                         </article>
@@ -124,8 +122,8 @@
         urls: {
             groupPlay: '@Url.Action("PlayByQuery", "GroupPlayer")',
             deleteGroup: '@Url.Action("DeleteGroup", "SongGroup")',
-            homeAll: '@Url.Action("Index", "Home", new { type = "all" })',
-            home: '@Url.Action("Index", "Home")',
+            homeAll: '@Url.HomeIndex(new { type = "all" })',
+            home: '@Url.HomeIndex()',
             groupsContainingSong: '@Url.Action("GetGroupsContainingSong", "SongGroup")',
             createGroup: '@Url.Action("CreateGroup", "SongGroup")',
             getGroups: '@Url.Action("GetGroups", "SongGroup")',
