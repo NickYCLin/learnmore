@@ -412,6 +412,7 @@
         let groupKaraokeMobileVocalsLyricsDelaySeconds = loadGroupKaraokeMobileVocalsLyricsDelay();
         let groupPracticePlaybackRate = 1;
         let groupPracticeWakeLock = null;
+        let groupPracticeViewportBound = false;
 
         async function requestGroupPracticeWakeLock() {
             if (!navigator.wakeLock || document.hidden) {
@@ -470,6 +471,19 @@
             }
         }
 
+        function isGroupPracticeMobileViewport() {
+            return window.matchMedia('(max-width: 991.98px)').matches;
+        }
+
+        function syncGroupPracticeControlsToViewport() {
+            if (isGroupPracticeMobileViewport()) {
+                return;
+            }
+            if (groupPracticePlaybackRate !== 1) {
+                applyGroupPracticePlaybackRate(1);
+            }
+        }
+
         function bindGroupPracticeControls() {
             const speedSelect = document.getElementById('group-practice-speed');
             if (speedSelect) {
@@ -482,6 +496,17 @@
                 });
             }
             applyGroupPracticePlaybackRate();
+            syncGroupPracticeControlsToViewport();
+            if (!groupPracticeViewportBound) {
+                groupPracticeViewportBound = true;
+                const groupPracticeMobileQuery = window.matchMedia('(max-width: 991.98px)');
+                const onGroupPracticeViewportChange = () => syncGroupPracticeControlsToViewport();
+                if (typeof groupPracticeMobileQuery.addEventListener === 'function') {
+                    groupPracticeMobileQuery.addEventListener('change', onGroupPracticeViewportChange);
+                } else if (typeof groupPracticeMobileQuery.addListener === 'function') {
+                    groupPracticeMobileQuery.addListener(onGroupPracticeViewportChange);
+                }
+            }
         }
 
         document.addEventListener('visibilitychange', () => {
