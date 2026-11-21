@@ -161,6 +161,10 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         await member.click('.lyrics-favorite');
         await member.waitForSelector('dialog[open]');
         check(await member.$eval('.favorite-picker', element => getComputedStyle(element).position === 'static' && !element.matches(':modal')), 'favorite picker stays in flow without covering official player');
+        check(await member.$$eval('.favorite-picker input[type=text], .favorite-picker button', controls =>
+            controls.every(control => parseFloat(getComputedStyle(control).borderRadius) >= 8 && control.offsetHeight >= 44)),
+        'favorite form uses rounded, touch-sized controls');
+        await member.screenshot({ path: path.join(artifacts, 'favorite-desktop.png') });
         await member.click('.favorite-picker input[type=checkbox]');
         await member.waitForFunction(() => document.querySelector('.lyrics-favorite').getAttribute('aria-pressed') === 'true');
         await member.click('.favorite-picker input[type=checkbox]');
@@ -171,8 +175,31 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         await member.click('.favorite-picker button[type=submit]');
         await member.waitForFunction(() => document.querySelectorAll('.favorite-picker input[type=checkbox]').length === 2);
         check(true, 'existing group creation API');
-        await member.evaluate(() => document.querySelector('dialog').close());
-        await member.setViewport({ width: 390, height: 900 });
+        await member.keyboard.press('Escape');
+        await member.waitForFunction(() => !document.querySelector('.favorite-picker') && document.activeElement.matches('.lyrics-favorite'));
+        groups.push({ groupId: 3, groupName: '很長的群組名稱'.repeat(12) });
+        await member.setViewport({ width: 320, height: 800 });
+        await member.evaluate(() => window.LearnMoreTheme.toggle());
+        await member.click('.lyrics-favorite');
+        await member.waitForSelector('dialog[open]');
+        await member.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(30, 41, 59)');
+        const pickerLayout = await member.$eval('.favorite-picker', element => {
+            const colors = getComputedStyle(element);
+            const list = element.querySelector('.favorite-picker-groups');
+            const checkbox = list.querySelector('input');
+            return {
+                dark: getComputedStyle(checkbox).colorScheme === 'dark' && colors.color === 'rgb(241, 245, 249)',
+                panelOverflow: element.scrollWidth - element.clientWidth,
+                listOverflow: list.scrollWidth - list.clientWidth,
+                pastViewport: element.getBoundingClientRect().right - innerWidth
+            };
+        });
+        check(pickerLayout.dark && pickerLayout.panelOverflow <= 0 && pickerLayout.listOverflow <= 0 && pickerLayout.pastViewport <= 0,
+            'dark favorite picker fits a narrow screen with a long group name: ' + JSON.stringify(pickerLayout));
+        await member.screenshot({ path: path.join(artifacts, 'favorite-mobile-dark.png') });
+        await member.click('.favorite-picker > button');
+        await member.waitForSelector('.favorite-picker', { hidden: true });
+        await member.evaluate(() => window.LearnMoreTheme.toggle());
         await member.waitForFunction(() => !document.querySelector('.practice-disclosure').open);
         await member.setViewport({ width: 1440, height: 900 });
         await member.waitForFunction(() => document.querySelector('.practice-disclosure').open);

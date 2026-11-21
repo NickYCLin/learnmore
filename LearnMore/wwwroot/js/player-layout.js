@@ -202,18 +202,30 @@
             dialog.setAttribute('aria-label', '收藏到歌曲群組');
             const heading = document.createElement('h2'); heading.textContent = '收藏到歌曲群組';
             const list = document.createElement('div'); list.className = 'favorite-picker-groups';
+            const empty = document.createElement('p');
+            empty.className = 'favorite-picker-empty';
+            empty.textContent = '目前沒有歌曲群組';
+            if (groups.length === 0) list.append(empty);
             const message = document.createElement('p'); message.setAttribute('role', 'status');
             function addGroup(group) {
                 const label = document.createElement('label');
                 const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = memberships.includes(group.groupId);
                 checkbox.addEventListener('change', async () => {
+                    const hadFocus = document.activeElement === checkbox;
                     const wanted = checkbox.checked; checkbox.disabled = true;
                     const form = new FormData(); form.append('groupId', group.groupId); form.append('songUid', heart.dataset.songUid);
                     try { await request(wanted ? heart.dataset.addUrl : heart.dataset.removeUrl, form); await refreshHeart(); message.textContent = '已更新收藏'; }
                     catch (error) { checkbox.checked = !wanted; message.textContent = error.message; }
-                    finally { checkbox.disabled = false; }
+                    finally {
+                        checkbox.disabled = false;
+                        if (hadFocus && dialog.open && document.activeElement === document.body) checkbox.focus();
+                    }
                 });
-                label.append(checkbox, document.createTextNode(group.groupName)); list.append(label);
+                const groupName = document.createElement('span');
+                groupName.textContent = group.groupName;
+                label.append(checkbox, groupName);
+                empty.remove();
+                list.append(label);
             }
             groups.forEach(addGroup);
             const form = document.createElement('form');
@@ -221,11 +233,16 @@
             const create = document.createElement('button'); create.type = 'submit'; create.textContent = '建立群組';
             form.append(name, create);
             form.addEventListener('submit', async event => {
-                event.preventDefault(); if (!name.value.trim()) return; create.disabled = true;
+                event.preventDefault(); if (!name.value.trim()) return;
+                const hadFocus = document.activeElement === create;
+                create.disabled = true;
                 const data = new FormData(); data.append('groupName', name.value.trim());
                 try { const group = await (await request(heart.dataset.createUrl, data)).json(); addGroup(group); name.value = ''; message.textContent = '已建立，勾選即可收藏'; }
                 catch (error) { message.textContent = error.message; }
-                finally { create.disabled = false; }
+                finally {
+                    create.disabled = false;
+                    if (hadFocus && dialog.open && document.activeElement === document.body) name.focus();
+                }
             });
             const close = document.createElement('button'); close.type = 'button'; close.textContent = '完成'; close.addEventListener('click', () => dialog.close());
             dialog.append(heading, list, form, message, close); heart.closest('.player-title-actions').after(dialog);
