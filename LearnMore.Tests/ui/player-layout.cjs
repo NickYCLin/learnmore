@@ -222,6 +222,9 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         await group.evaluate(() => document.querySelector('.player-share').click());
         check((await group.evaluate(() => window.__shares[0].url)).startsWith(base + '/GroupPlayer/Play/'), 'group shares site URL');
         check(await group.$eval('.autoplay-overlay', element => getComputedStyle(element).position === 'static'), 'group consent never covers player on mobile');
+        check(await group.$eval('.autoplay-overlay', element =>
+            getComputedStyle(element).backgroundColor === 'rgb(255, 255, 255)'),
+        'mobile group consent uses the same surface as comments');
         await group.evaluate(() => scrollTo(0, 650));
         await new Promise(resolve => setTimeout(resolve, 200));
         await geometry(group, 'group scrolled');
@@ -248,6 +251,16 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         }
         await group.setViewport({ width: 1440, height: 900 });
         await group.waitForFunction(() => document.querySelector('.toggle-wrapper.player-mode-row').parentElement.classList.contains('lyrics-card'));
+        await group.waitForFunction(() => {
+            const prompt = document.querySelector('.autoplay-overlay');
+            return getComputedStyle(prompt).position === 'fixed' && !prompt.getAnimations({ subtree: true }).length;
+        });
+        const desktopConsent = await group.$eval('.autoplay-overlay h2', heading => ({
+            text: getComputedStyle(heading).color,
+            background: getComputedStyle(heading.parentElement).backgroundColor
+        }));
+        check(desktopConsent.text === 'rgb(255, 255, 255)' && desktopConsent.background === 'rgba(0, 0, 0, 0.85)',
+            'desktop group consent heading stays white on the dark overlay: ' + JSON.stringify(desktopConsent));
         check(await group.$eval('.group-practice-controls', element => getComputedStyle(element).display === 'none'), 'group practice mobile only');
         check(groupErrors.length === 0, 'group runtime errors: ' + groupErrors.join('; '));
         await group.close();

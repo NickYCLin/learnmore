@@ -114,7 +114,17 @@
     .mika-mobile-toggle { display: block; width: 100%; }
     .player-layout .mika-avatar-panel:not(.mobile-expanded) > :not(.mika-mobile-toggle) { display: none; }
     .player-layout .lyrics-avatar-rail .mika-avatar-stage, .player-layout .lyrics-avatar-rail .mika-avatar-image { min-height: 180px; height: 240px; }
-    .player-layout .autoplay-overlay { position: static; inset: auto; padding: 12px; gap: 8px; border-radius: 12px; margin: 12px; }
+    .player-layout .autoplay-overlay {
+        position: static;
+        inset: auto;
+        margin: 12px;
+        padding: 12px;
+        gap: 8px;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+    }
     .player-layout .autoplay-overlay h2 { font-size: 1.1rem; margin: 0; }
     .player-layout .autoplay-overlay p { font-size: 0.9rem; margin: 0; }
     .player-layout .autoplay-overlay .autoplay-btn { min-height: 44px; }
