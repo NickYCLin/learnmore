@@ -20,11 +20,6 @@
         }
         const height = stack?.getBoundingClientRect().height || 0;
         root.style.setProperty('--official-player-height', `${height}px`);
-        const navigation = document.getElementById('navigation-bar');
-        if (navigation) {
-            const room = !mobile.matches || window.innerHeight > navbarBottom + height + 140;
-            navigation.hidden = !room || window.scrollY < 160;
-        }
     }
 
     function schedule() {
@@ -194,7 +189,6 @@
     });
     new MutationObserver(schedule).observe(document.querySelector('main') || document.body, { childList: true, subtree: true });
     window.addEventListener('resize', schedule);
-    window.addEventListener('scroll', schedule, { passive: true });
     enhance(); measure();
 
     const heart = document.querySelector('.lyrics-favorite');

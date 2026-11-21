@@ -318,11 +318,6 @@
     </div>
 </div>
 
-<div id="navigation-bar" hidden aria-label="歌詞導覽">
-    <button id="current-lyric-button" onclick="scrollToCurrentLyric()">跳到目前歌詞</button>
-    <button id="top-button" onclick="scrollToTop()">回到頂部</button>
-</div>
-
 <script>
     const lyrics = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Lyrics));
     const hasInstrumentalAudio = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(hasInstrumentalAudio));
@@ -2128,24 +2123,6 @@
                 });
             }
         }
-    }
-
-    function scrollToCurrentLyric() {
-        const highlightedLine = currentMode === 2 ? document.getElementById('current-lyric-combined')
-            : document.querySelector(currentMode === 4 ? '.mode4-line.highlight' : currentMode === 5 ? '.mode5-line.highlight' : '#mode-1 .lyrics-line.highlight');
-        if (highlightedLine) {
-            highlightedLine.scrollIntoView({
-                behavior: 'smooth',
-                block: 'center',
-            });
-        }
-    }
-
-    function scrollToTop() {
-        window.scrollTo({
-            top: 0,
-            behavior: 'smooth',
-        });
     }
 
     document.getElementById("submit-comment").addEventListener("click", function () {

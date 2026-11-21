@@ -73,7 +73,7 @@ public class PlayerLayoutTests
         Assert.Contains("data-login-url=\"/LearnMore/Login", guest);
         Assert.Contains("data-groups-url=\"/LearnMore/api/SongGroup/list\"", guest);
         Assert.Contains("/LearnMore/css/player-layout.css?v=", guest);
-        Assert.Contains("id=\"navigation-bar\" hidden", guest);
+        Assert.DoesNotContain("id=\"navigation-bar\"", guest);
         song.UserEmail = "fixture@example.invalid";
         var member = await Render("/Views/Lyrics/Index.cshtml", song, "/Lyrics/Index");
         Assert.Contains("data-logged-in=\"true\"", member);

@@ -35,7 +35,6 @@
 .player-search-toggle, .practice-disclosure > summary, .line-more > summary, .mika-mobile-toggle { display: none; }
 .practice-disclosure { display: contents; }
 .line-more { display: contents; }
-#navigation-bar[hidden] { display: none; }
 .favorite-picker {
     position: static;
     width: min(100%, 420px);
@@ -108,7 +107,7 @@
 .group-mode-tabs { display: none; }
 :root { --player-navbar-height: calc(123px + env(safe-area-inset-top, 0px)); }
 @media (max-width: 991.98px) {
-    .player-layout { padding-top: calc(var(--player-navbar-height) + 12px); padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
+    .player-layout { padding-top: calc(var(--player-navbar-height) + 12px); padding-bottom: env(safe-area-inset-bottom, 0px); }
     .player-layout .navbar { padding-top: calc(6px + env(safe-area-inset-top, 0px)); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
     .player-layout .navbar .search-container.search-container-stays-visible { display: none; }
     .player-layout.search-expanded .navbar .search-container.search-container-stays-visible { display: block; }
@@ -136,8 +135,6 @@
     .player-layout .controls { position: static; opacity: 1; display: flex; flex-wrap: wrap; gap: 8px; }
     .player-layout .controls button { min-width: 44px; min-height: 44px; }
     .player-layout .lyrics-line, .player-layout .mode4-line, .player-layout .mode5-line { scroll-margin-top: calc(var(--player-navbar-height) + var(--official-player-height, 0px) + 68px); }
-    .player-layout #navigation-bar { top: auto; right: max(12px, env(safe-area-inset-right, 0px)); left: max(12px, env(safe-area-inset-left, 0px)); bottom: calc(12px + env(safe-area-inset-bottom, 0px)); transform: none; flex-direction: row; justify-content: center; pointer-events: none; z-index: 40; }
-    .player-layout #navigation-bar button { min-height: 44px; pointer-events: auto; }
     .mika-mobile-toggle { display: block; width: 100%; }
     .player-layout .mika-avatar-panel:not(.mobile-expanded) > :not(.mika-mobile-toggle) { display: none; }
     .player-layout .lyrics-avatar-rail .mika-avatar-stage, .player-layout .lyrics-avatar-rail .mika-avatar-image { min-height: 180px; height: 240px; }

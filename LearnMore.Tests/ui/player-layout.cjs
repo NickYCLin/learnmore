@@ -32,6 +32,7 @@ const server = http.createServer(async (request, response) => {
         }
         return json([]);
     }
+    if (route === '/Lyrics/UpdateUserSettings') return json({ success: true });
     if (route === '/GroupPlayer/SongDetail') return json({ success: true, song: { SongUid: 'fixture-song', Title: '合成測試歌曲', Artist: '合成演唱者', YouTubeVideoUrl: 'https://www.youtube.com/watch?v=abcdefghijk' }, lyrics, comments: [] });
     if (route === '/api/wish') return json([{ Id: 1, Message: '測試許願', CanEdit: true }]);
     if (route === '/api/wish/1/replies') return json([{ Id: 1, Message: '測試回覆', CanEdit: true }]);
@@ -135,7 +136,7 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             await page.evaluate(() => scrollTo(0, 350));
             await new Promise(resolve => setTimeout(resolve, 200));
             await geometry(page, 'scrolled lyrics ' + width);
-            check(await page.$eval('#navigation-bar', element => !element.hidden), 'mobile lyric navigation appears when useful');
+            check(!await page.$('#current-lyric-button, #top-button'), 'manual navigation buttons are absent after scrolling');
             await page.click('.practice-disclosure > summary');
             check(await page.$eval('#practice-speed', element => element.getBoundingClientRect().height >= 44), 'practice touch target');
             await page.click('.line-more > summary');
@@ -164,6 +165,17 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         check(await member.$eval('.practice-disclosure', element => element.open), 'desktop replay open');
         check(await member.$eval('.practice-controls-mobile', element => getComputedStyle(element).display === 'none'), 'desktop advanced practice hidden');
         check(await member.$eval('.player-search-toggle', element => getComputedStyle(element).display === 'none'), 'desktop search unchanged');
+        check(!await member.$('#current-lyric-button, #top-button'), 'manual navigation buttons are absent on desktop');
+        await member.evaluate(() => {
+            const sync = document.querySelector('#sync-lyrics-toggle');
+            if (!sync.checked) sync.click();
+            updateLyricsDisplay(55);
+        });
+        await member.waitForFunction(() => {
+            const highlighted = document.querySelector('#lyric-55.highlight');
+            return highlighted && highlighted.closest('.lyric-card').scrollTop > 0;
+        });
+        check(true, 'automatic lyric highlighting and scrolling still work');
         const actions = await member.$eval('.player-title-actions', row => {
             const favorite = row.querySelector('.lyrics-favorite');
             const share = row.querySelector('.player-share');
@@ -233,9 +245,6 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         await member.screenshot({ path: path.join(artifacts, 'lyrics-desktop.png') });
         await member.close();
         const { page: guest } = await open('/Lyrics/Index?songUid=fixture-song', 390, 350);
-        await guest.evaluate(() => scrollTo({ top: 350, behavior: 'instant' }));
-        await new Promise(resolve => setTimeout(resolve, 100));
-        check(await guest.$eval('#navigation-bar', element => element.hidden), 'short viewport hides bottom chrome rather than covering player');
         await guest.evaluate(() => document.querySelector('.lyrics-favorite').click());
         await guest.waitForFunction(() => location.pathname.startsWith('/LearnMore/Login'));
         check(true, 'guest favorite uses existing PathBase login flow');
