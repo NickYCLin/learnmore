@@ -193,6 +193,7 @@
 
     const heart = document.querySelector('.lyrics-favorite');
     if (!heart) return;
+    let dismissPicker;
     const heartIcon = heart.querySelector('i');
     const heartLabel = heart.querySelector('span');
     const login = () => { window.location.assign(heart.dataset.loginUrl); };
@@ -216,8 +217,7 @@
     if (heart.dataset.loggedIn === 'true') refreshHeart().catch(error => reportAction(error.message, true));
     heart.addEventListener('click', async () => {
         if (heart.dataset.loggedIn !== 'true') { login(); return; }
-        const existingPicker = document.querySelector('.favorite-picker');
-        if (existingPicker) { existingPicker.close(); return; }
+        if (dismissPicker) { dismissPicker(); return; }
         heart.disabled = true;
         try {
             const groups = await (await request(heart.dataset.groupsUrl)).json();
@@ -225,6 +225,7 @@
             const dialog = document.createElement('dialog'); dialog.className = 'favorite-picker';
             dialog.setAttribute('aria-label', '收藏到歌曲群組');
             const heading = document.createElement('h2'); heading.textContent = '收藏到歌曲群組';
+            heading.tabIndex = -1;
             const list = document.createElement('div'); list.className = 'favorite-picker-groups';
             const empty = document.createElement('p');
             empty.className = 'favorite-picker-empty';
@@ -242,7 +243,7 @@
                     catch (error) { checkbox.checked = !wanted; message.textContent = error.message; }
                     finally {
                         checkbox.disabled = false;
-                        if (hadFocus && dialog.open && document.activeElement === document.body) checkbox.focus();
+                        if (hadFocus && dialog.isConnected && document.activeElement === document.body) checkbox.focus({ preventScroll: true });
                     }
                 });
                 const groupName = document.createElement('span');
@@ -265,13 +266,38 @@
                 catch (error) { message.textContent = error.message; }
                 finally {
                     create.disabled = false;
-                    if (hadFocus && dialog.open && document.activeElement === document.body) name.focus();
+                    if (hadFocus && dialog.isConnected && document.activeElement === document.body) name.focus({ preventScroll: true });
                 }
             });
-            const close = document.createElement('button'); close.type = 'button'; close.textContent = '完成'; close.addEventListener('click', () => dialog.close());
-            dialog.append(heading, list, form, message, close); heart.closest('.player-title-actions').after(dialog);
-            dialog.addEventListener('keydown', event => { if (event.key === 'Escape') dialog.close(); });
-            dialog.addEventListener('close', () => { dialog.remove(); heart.focus(); }, { once: true }); dialog.show();
+            const close = document.createElement('button'); close.type = 'button'; close.textContent = '完成';
+            close.addEventListener('click', () => dismissPicker());
+            dialog.append(heading, list, form, message, close);
+            heart.closest('.player-title-actions').after(dialog);
+            function removePicker() {
+                const restoreFocus = dialog.contains(document.activeElement) || document.activeElement === document.body;
+                dismissPicker = null;
+                dialog.remove();
+                if (restoreFocus) heart.focus({ preventScroll: true });
+            }
+            if (typeof dialog.showPopover === 'function') {
+                dialog.popover = 'auto';
+                dialog.addEventListener('toggle', event => { if (event.newState === 'closed') removePicker(); });
+                dismissPicker = () => dialog.hidePopover();
+                dialog.showPopover();
+            } else {
+                const dismissOutside = event => {
+                    if (!dialog.contains(event.target) && !heart.contains(event.target)) dialog.close();
+                };
+                dialog.addEventListener('keydown', event => { if (event.key === 'Escape') dialog.close(); });
+                dialog.addEventListener('close', () => {
+                    document.removeEventListener('click', dismissOutside);
+                    removePicker();
+                }, { once: true });
+                dismissPicker = () => dialog.close();
+                dialog.show();
+                document.addEventListener('click', dismissOutside);
+            }
+            heading.focus({ preventScroll: true });
         } catch (error) { reportAction(error.message, true); }
         finally { heart.disabled = false; }
     });

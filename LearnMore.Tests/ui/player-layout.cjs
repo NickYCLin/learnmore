@@ -77,6 +77,12 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
     const browser = await puppeteer.launch({ executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox'] });
     let checks = 0;
     const check = (value, message) => { assert(value, message); checks++; };
+    const songGeometry = page => page.evaluate(() => ({
+        height: document.documentElement.scrollHeight,
+        scrollY: window.scrollY,
+        playerTop: document.querySelector('.video-sticky-stack').getBoundingClientRect().top,
+        lyricsTop: document.querySelector('.lyrics-section').getBoundingClientRect().top
+    }));
     async function open(route, width, height = 900) {
         const page = await browser.newPage();
         await page.setViewport({ width, height });
@@ -192,9 +198,12 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         'copy confirmation is announced without an extra visible label');
         await member.screenshot({ path: path.join(artifacts, 'song-actions-copied.png') });
         await member.waitForFunction(() => document.querySelector('.player-share span').textContent === '複製連結');
+        const desktopGeometry = await songGeometry(member);
         await member.click('.lyrics-favorite');
-        await member.waitForSelector('dialog[open]');
-        check(await member.$eval('.favorite-picker', element => getComputedStyle(element).position === 'static' && !element.matches(':modal')), 'favorite picker stays in flow without covering official player');
+        await member.waitForSelector('.favorite-picker:popover-open', { visible: true });
+        check(await member.$eval('.favorite-picker', element => getComputedStyle(element).position === 'fixed' && !element.matches(':modal')),
+            'favorite picker floats without a modal backdrop');
+        assert.deepEqual(await songGeometry(member), desktopGeometry, 'opening the picker leaves desktop page geometry unchanged');
         check(await member.$$eval('.favorite-picker input[type=text], .favorite-picker button', controls =>
             controls.every(control => parseFloat(getComputedStyle(control).borderRadius) >= 8 && control.offsetHeight >= 44)),
         'favorite form uses rounded, touch-sized controls');
@@ -214,12 +223,16 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         check(true, 'existing group creation API');
         await member.keyboard.press('Escape');
         await member.waitForFunction(() => !document.querySelector('.favorite-picker') && document.activeElement.matches('.lyrics-favorite'));
+        assert.deepEqual(await songGeometry(member), desktopGeometry, 'dismissing the picker leaves desktop page geometry unchanged');
         groups.push({ groupId: 3, groupName: '很長的群組名稱'.repeat(12) });
         await member.setViewport({ width: 320, height: 800 });
         await member.evaluate(() => window.LearnMoreTheme.toggle());
+        await member.waitForFunction(() => !document.querySelector('.practice-disclosure').open
+            && getComputedStyle(document.body).backgroundColor === 'rgb(30, 41, 59)');
+        const mobileGeometry = await songGeometry(member);
         await member.click('.lyrics-favorite');
-        await member.waitForSelector('dialog[open]');
-        await member.waitForFunction(() => getComputedStyle(document.body).backgroundColor === 'rgb(30, 41, 59)');
+        await member.waitForSelector('.favorite-picker:popover-open', { visible: true });
+        assert.deepEqual(await songGeometry(member), mobileGeometry, 'opening the picker leaves mobile page geometry unchanged');
         const pickerLayout = await member.$eval('.favorite-picker', element => {
             const colors = getComputedStyle(element);
             const list = element.querySelector('.favorite-picker-groups');
@@ -236,6 +249,11 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         await member.screenshot({ path: path.join(artifacts, 'favorite-mobile-dark.png') });
         await member.click('.favorite-picker > button');
         await member.waitForSelector('.favorite-picker', { hidden: true });
+        await member.click('.lyrics-favorite');
+        await member.waitForSelector('.favorite-picker:popover-open', { visible: true });
+        await member.click('.title-container h1');
+        await member.waitForFunction(() => !document.querySelector('.favorite-picker'));
+        assert.deepEqual(await songGeometry(member), mobileGeometry, 'outside click dismisses the picker without moving the page');
         await member.evaluate(() => window.LearnMoreTheme.toggle());
         await member.waitForFunction(() => !document.querySelector('.practice-disclosure').open);
         await member.setViewport({ width: 1440, height: 900 });
@@ -244,6 +262,21 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         check(memberErrors.length === 0, 'member runtime errors: ' + memberErrors.join('; '));
         await member.screenshot({ path: path.join(artifacts, 'lyrics-desktop.png') });
         await member.close();
+        const { page: fallback } = await open('/Lyrics/Index?songUid=fixture-song&member=1', 320, 350);
+        const fallbackGeometry = await songGeometry(fallback);
+        await fallback.evaluate(() => {
+            HTMLElement.prototype.showPopover = undefined;
+            document.querySelector('.lyrics-favorite').click();
+        });
+        await fallback.waitForSelector('.favorite-picker[open]', { visible: true });
+        check(await fallback.$eval('.favorite-picker', dialog => {
+            const bounds = dialog.getBoundingClientRect();
+            return getComputedStyle(dialog).position === 'fixed' && bounds.top >= 0 && bounds.bottom <= innerHeight;
+        }), 'legacy dialog stays within a short viewport');
+        assert.deepEqual(await songGeometry(fallback), fallbackGeometry, 'legacy dialog leaves page geometry unchanged');
+        await fallback.keyboard.press('Escape');
+        await fallback.waitForFunction(() => !document.querySelector('.favorite-picker'));
+        await fallback.close();
         const { page: guest } = await open('/Lyrics/Index?songUid=fixture-song', 390, 350);
         await guest.evaluate(() => document.querySelector('.lyrics-favorite').click());
         await guest.waitForFunction(() => location.pathname.startsWith('/LearnMore/Login'));
