@@ -1,11 +1,37 @@
-.player-title-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-block: 8px; }
-.title-container .player-title-actions { justify-content: center; }
-.player-share, .lyrics-favorite, .player-search-toggle, .mika-mobile-toggle {
+.player-title-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; margin-top: 4px; }
+.player-search-toggle, .mika-mobile-toggle {
     min-width: 44px; min-height: 44px; padding: 8px 14px; border-radius: 10px;
     border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary);
 }
-.lyrics-favorite { font-size: 24px; }
-.lyrics-favorite[aria-pressed="true"] { color: #c53057; }
+.player-share, .lyrics-favorite {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    font-size: .875rem;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+.player-share { min-width: 7.5rem; }
+.lyrics-favorite { min-width: 6rem; }
+.player-share:hover, .lyrics-favorite:hover:not(:disabled) {
+    border-color: var(--border-hover);
+    background: var(--bg-tertiary);
+}
+.player-share:focus-visible, .lyrics-favorite:focus-visible {
+    outline: 2px solid var(--primary-hover);
+    outline-offset: 2px;
+}
+.lyrics-favorite:disabled { opacity: .65; cursor: wait; }
+.lyrics-favorite[aria-pressed="true"] i { color: #be185d; }
+.dark-theme .lyrics-favorite[aria-pressed="true"] i { color: var(--secondary-light); }
 .player-search-toggle, .practice-disclosure > summary, .line-more > summary, .mika-mobile-toggle { display: none; }
 .practice-disclosure { display: contents; }
 .line-more { display: contents; }
@@ -77,7 +103,8 @@
 }
 .favorite-picker [role="status"]:not(:empty) { margin-top: 8px; }
 .favorite-picker > button { display: block; margin: 12px 0 0 auto; }
-.player-action-status { font-size: 0.85rem; }
+.player-action-status { color: var(--text-secondary); font-size: .85rem; }
+.player-title-actions .player-action-status { flex-basis: 100%; }
 .group-mode-tabs { display: none; }
 :root { --player-navbar-height: calc(123px + env(safe-area-inset-top, 0px)); }
 @media (max-width: 991.98px) {

@@ -150,6 +150,7 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             await page.click('.mika-mobile-toggle');
             check(await page.$eval('.mika-mobile-toggle', element => element.getAttribute('aria-expanded') === 'true'), 'Mika expands');
             await page.evaluate(() => document.querySelector('.player-share').click());
+            check(await page.$eval('.player-share span', label => label.textContent === '分享'), 'mobile shows the native share action');
             check((await page.evaluate(() => window.__shares[0].url)).startsWith(base + '/Lyrics/'), 'share uses site PathBase URL');
             await page.evaluate(() => { const player = window.__stubPlayers[0]; player.playVideo(); window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); });
             check(await page.evaluate(() => window.__stubPlayers[0].state === 2), 'background playback paused');
@@ -163,8 +164,22 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         check(await member.$eval('.practice-disclosure', element => element.open), 'desktop replay open');
         check(await member.$eval('.practice-controls-mobile', element => getComputedStyle(element).display === 'none'), 'desktop advanced practice hidden');
         check(await member.$eval('.player-search-toggle', element => getComputedStyle(element).display === 'none'), 'desktop search unchanged');
+        const actions = await member.$eval('.player-title-actions', row => {
+            const favorite = row.querySelector('.lyrics-favorite');
+            const share = row.querySelector('.player-share');
+            return { favoriteHeight: favorite.offsetHeight, shareHeight: share.offsetHeight, width: share.offsetWidth };
+        });
+        check(actions.favoriteHeight === actions.shareHeight && actions.shareHeight >= 44, 'song actions align and keep touch targets');
         await member.click('.player-share');
         check((await member.evaluate(() => window.__copies[0])).startsWith(base + '/Lyrics/'), 'desktop copies site link');
+        check(await member.$eval('.player-share', (button, width) =>
+            button.querySelector('span').textContent === '已複製' && button.offsetWidth === width, actions.width),
+        'copy confirmation stays inside the button without shifting its width');
+        check(await member.$eval('.player-action-status', element =>
+            element.classList.contains('visually-hidden') && element.textContent === '已複製連結'),
+        'copy confirmation is announced without an extra visible label');
+        await member.screenshot({ path: path.join(artifacts, 'song-actions-copied.png') });
+        await member.waitForFunction(() => document.querySelector('.player-share span').textContent === '複製連結');
         await member.click('.lyrics-favorite');
         await member.waitForSelector('dialog[open]');
         check(await member.$eval('.favorite-picker', element => getComputedStyle(element).position === 'static' && !element.matches(':modal')), 'favorite picker stays in flow without covering official player');
@@ -174,6 +189,9 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         await member.screenshot({ path: path.join(artifacts, 'favorite-desktop.png') });
         await member.click('.favorite-picker input[type=checkbox]');
         await member.waitForFunction(() => document.querySelector('.lyrics-favorite').getAttribute('aria-pressed') === 'true');
+        check(await member.$eval('.lyrics-favorite', button =>
+            button.querySelector('i').classList.contains('fa-solid') && button.querySelector('span').textContent === '已收藏'),
+        'saved song shows a filled heart and label');
         await member.click('.favorite-picker input[type=checkbox]');
         await member.waitForFunction(() => document.querySelector('.lyrics-favorite').getAttribute('aria-pressed') === 'false');
         check(writes.join(',') === 'addsong,removesong', 'existing favorite APIs add and remove');

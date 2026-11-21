@@ -149,20 +149,46 @@
     });
     mobile.addEventListener('change', () => {
         disclosures.forEach(details => { details.open = !mobile.matches; });
-        document.querySelectorAll('.player-share').forEach(button => { button.textContent = mobile.matches ? '分享' : '複製連結'; });
         schedule();
     });
+    const status = document.querySelector('.player-action-status');
+    function reportAction(message, visible = false) {
+        if (!status) return;
+        status.classList.toggle('visually-hidden', !visible);
+        status.textContent = message;
+    }
     document.querySelectorAll('.player-share').forEach(button => {
-        button.textContent = mobile.matches ? '分享' : '複製連結';
+        const icon = button.querySelector('i');
+        const label = button.querySelector('span');
+        const canShare = () => mobile.matches && typeof navigator.share === 'function';
+        let copiedTimer;
+        function resetShareLabel() {
+            clearTimeout(copiedTimer);
+            icon.className = canShare() ? 'fa-solid fa-share-nodes' : 'fa-solid fa-link';
+            label.textContent = canShare() ? '分享' : '複製連結';
+        }
+        resetShareLabel();
+        mobile.addEventListener('change', resetShareLabel);
         button.addEventListener('click', async () => {
             const url = new URL(window.location.href);
             url.hash = '';
-            const status = document.querySelector('.player-action-status');
+            reportAction('');
             try {
-                if (mobile.matches && navigator.share) await navigator.share({ title: document.title, url: url.href });
-                else { await navigator.clipboard.writeText(url.href); if (status) status.textContent = '已複製連結'; }
+                if (canShare()) {
+                    await navigator.share({ title: document.title, url: url.href });
+                } else {
+                    await navigator.clipboard.writeText(url.href);
+                    clearTimeout(copiedTimer);
+                    icon.className = 'fa-solid fa-check';
+                    label.textContent = '已複製';
+                    reportAction('已複製連結');
+                    copiedTimer = setTimeout(resetShareLabel, 2300);
+                }
             } catch (error) {
-                if (error.name !== 'AbortError' && status) status.textContent = '無法分享，請複製瀏覽器網址。';
+                if (error.name !== 'AbortError') {
+                    resetShareLabel();
+                    reportAction('無法分享，請複製瀏覽器網址。', true);
+                }
             }
         });
     });
@@ -173,7 +199,8 @@
 
     const heart = document.querySelector('.lyrics-favorite');
     if (!heart) return;
-    const status = document.querySelector('.player-action-status');
+    const heartIcon = heart.querySelector('i');
+    const heartLabel = heart.querySelector('span');
     const login = () => { window.location.assign(heart.dataset.loginUrl); };
     async function request(url, form) {
         const response = await fetch(url, { credentials: 'same-origin', ...(form ? { method: 'POST', body: form } : {}) });
@@ -185,11 +212,14 @@
     async function refreshHeart() {
         const memberships = await (await request(containingUrl())).json();
         const saved = memberships.length > 0;
-        heart.setAttribute('aria-pressed', String(saved)); heart.textContent = saved ? '♥' : '♡';
+        heart.setAttribute('aria-pressed', String(saved));
+        heartIcon.classList.toggle('fa-solid', saved);
+        heartIcon.classList.toggle('fa-regular', !saved);
+        heartLabel.textContent = saved ? '已收藏' : '收藏';
         heart.setAttribute('aria-label', saved ? '已收藏，管理歌曲群組' : '收藏歌曲');
         return memberships;
     }
-    if (heart.dataset.loggedIn === 'true') refreshHeart().catch(error => { status.textContent = error.message; });
+    if (heart.dataset.loggedIn === 'true') refreshHeart().catch(error => reportAction(error.message, true));
     heart.addEventListener('click', async () => {
         if (heart.dataset.loggedIn !== 'true') { login(); return; }
         const existingPicker = document.querySelector('.favorite-picker');
@@ -248,7 +278,7 @@
             dialog.append(heading, list, form, message, close); heart.closest('.player-title-actions').after(dialog);
             dialog.addEventListener('keydown', event => { if (event.key === 'Escape') dialog.close(); });
             dialog.addEventListener('close', () => { dialog.remove(); heart.focus(); }, { once: true }); dialog.show();
-        } catch (error) { status.textContent = error.message; }
+        } catch (error) { reportAction(error.message, true); }
         finally { heart.disabled = false; }
     });
 })();

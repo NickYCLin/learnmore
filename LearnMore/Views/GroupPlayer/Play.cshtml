@@ -268,8 +268,7 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <h5 class="mb-0">群組播放 － @Model.GroupName</h5>
-            <button type="button" class="player-share">複製連結</button>
-            <span class="player-action-status" role="status"></span>
+            @await Html.PartialAsync("_PlayerShareAction")
             <div>
                 <button id="prevBtn" class="btn btn-sm btn-outline-primary">上一首</button>
                 <button id="playPauseBtn" class="btn btn-sm btn-primary">播放</button>
