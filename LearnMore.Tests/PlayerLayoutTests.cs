@@ -1,5 +1,6 @@
 using LearnMore.Controllers;
 using LearnMore.Models;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
@@ -48,7 +49,7 @@ public class PlayerLayoutTests
             LyricID = index + 1, TimeStamp = index * 5, Japanese = $"合成歌詞 {index + 1}",
             Chinese = "測試翻譯", Roman = "fixture roman"
         }).ToList();
-        async Task<string> Render(string viewPath, object model, string requestPath)
+        async Task<string> Render(string viewPath, object? model, string requestPath)
         {
             context.Request.Path = requestPath;
             route.Values["controller"] = viewPath.Split('/')[2];
@@ -93,8 +94,12 @@ public class PlayerLayoutTests
         var fixtureDirectory = Environment.GetEnvironmentVariable("LEARNMORE_UI_FIXTURES");
         if (!string.IsNullOrEmpty(fixtureDirectory))
         {
+            var login = await Render("/Views/Login/Index.cshtml", null, "/Login");
+            var wish = await Render("/Views/Media/Wish.cshtml", null, "/Media/Wish");
+            context.Session.SetString("Email", "fixture@example.invalid");
+            var wishMember = await Render("/Views/Media/Wish.cshtml", null, "/Media/Wish");
             Directory.CreateDirectory(fixtureDirectory);
-            foreach (var (name, html) in new[] { ("lyrics", guest), ("member", member), ("group", group), ("home", home) })
+            foreach (var (name, html) in new[] { ("lyrics", guest), ("member", member), ("group", group), ("home", home), ("login", login), ("wish", wish), ("wish-member", wishMember) })
                 await File.WriteAllTextAsync(Path.Combine(fixtureDirectory, name + ".html"), html);
         }
         await application.StopAsync();
@@ -141,13 +146,14 @@ public class PlayerLayoutTests
 
     private sealed class FixtureSession : ISession
     {
+        private readonly Dictionary<string, byte[]> values = new();
         public bool IsAvailable => true;
         public string Id => "synthetic-ui-session";
-        public IEnumerable<string> Keys => Array.Empty<string>();
-        public void Clear() { }
-        public void Remove(string key) { }
-        public void Set(string key, byte[] value) { }
-        public bool TryGetValue(string key, out byte[] value) { value = Array.Empty<byte>(); return false; }
+        public IEnumerable<string> Keys => values.Keys;
+        public void Clear() => values.Clear();
+        public void Remove(string key) => values.Remove(key);
+        public void Set(string key, byte[] value) => values[key] = value;
+        public bool TryGetValue(string key, [NotNullWhen(true)] out byte[]? value) => values.TryGetValue(key, out value);
         public Task LoadAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }

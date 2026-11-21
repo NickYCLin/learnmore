@@ -67,11 +67,11 @@
                                 </div>
 
                                 <!-- 編輯狀態 -->
-                                <div class="wish-edit hidden">
+                                <div class="wish-edit" hidden>
                                     <textarea class="wish-edit-message lm-form-control h-20 sm:h-24 text-sm sm:text-base">${wish.Message}</textarea>
-                                    <div class="mt-2 flex gap-2">
-                                        <button class="save-wish-btn bg-green-500 text-white px-2 sm:px-3 py-1 rounded hover:bg-green-600 text-xs sm:text-sm">儲存</button>
-                                        <button class="cancel-wish-btn bg-gray-500 text-white px-2 sm:px-3 py-1 rounded hover:bg-gray-600 text-xs sm:text-sm">取消</button>
+                                    <div class="mt-2 d-flex flex-wrap gap-2">
+                                        <button class="save-wish-btn lm-primary-button">儲存</button>
+                                        <button class="cancel-wish-btn btn btn-outline-secondary">取消</button>
                                     </div>
                                 </div>
                             </div>
@@ -88,7 +88,7 @@
                         <div class="reply-block">
                             ${isLoggedIn ? `
                                 <textarea class="reply-input lm-form-control h-16 sm:h-24 text-sm sm:text-base" placeholder="回覆這則留言..." rows="2"></textarea>
-                                <button class="reply-btn bg-blue-500 text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-md hover:bg-blue-600 text-sm sm:text-base mt-2" data-wish-id="${wish.Id}">
+                                <button class="reply-btn lm-primary-button mt-2" data-wish-id="${wish.Id}">
                                     回覆
                                 </button>
                             ` : `<p class="text-xs sm:text-sm text-gray-400 italic">請登入後才能回覆 🔒</p>`}
@@ -111,7 +111,7 @@
     $(document).on("click", ".edit-wish-btn", function () {
         const container = $(this).closest("[data-wish-id]");
         container.find(".wish-display").hide();
-        container.find(".wish-edit").removeClass("hidden");
+        container.find(".wish-edit").prop("hidden", false);
     });
 
     // 儲存
@@ -143,7 +143,7 @@
     // 取消
     $(document).on("click", ".cancel-wish-btn", function () {
         const container = $(this).closest("[data-wish-id]");
-        container.find(".wish-edit").addClass("hidden");
+        container.find(".wish-edit").prop("hidden", true);
         container.find(".wish-display").show();
     });
 
@@ -184,11 +184,11 @@
                                 <p class="text-sm sm:text-lg font-semibold whitespace-pre-wrap break-words">${reply.Message}</p>
                                 <span class="text-xs sm:text-sm text-gray-400 mt-1 sm:mt-3 block">— <span class="font-bold text-blue-400">${reply.NickName}</span> 於 ${reply.CreatedAt}</span>
                             </div>
-                            <div class="reply-edit hidden">
-                                <textarea class="reply-edit-message w-full p-2 border border-gray-300 rounded text-sm sm:text-base">${reply.Message}</textarea>
-                                <div class="mt-1 flex gap-2">
-                                    <button class="save-reply-btn bg-green-500 text-white px-2 py-1 rounded hover:bg-green-600 text-xs sm:text-sm">儲存</button>
-                                    <button class="cancel-reply-btn bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 text-xs sm:text-sm">取消</button>
+                            <div class="reply-edit" hidden>
+                                <textarea class="reply-edit-message lm-form-control text-sm sm:text-base">${reply.Message}</textarea>
+                                <div class="mt-2 d-flex flex-wrap gap-2">
+                                    <button class="save-reply-btn lm-primary-button">儲存</button>
+                                    <button class="cancel-reply-btn btn btn-outline-secondary">取消</button>
                                 </div>
                             </div>
                         </div>
@@ -235,13 +235,13 @@
     $(document).on("click", ".edit-reply-btn", function () {
         const container = $(this).closest("[data-reply-id]");
         container.find(".reply-display").hide();
-        container.find(".reply-edit").removeClass("hidden");
+        container.find(".reply-edit").prop("hidden", false);
     });
 
     // 取消編輯
     $(document).on("click", ".cancel-reply-btn", function () {
         const container = $(this).closest("[data-reply-id]");
-        container.find(".reply-edit").addClass("hidden");
+        container.find(".reply-edit").prop("hidden", true);
         container.find(".reply-display").show();
     });
 

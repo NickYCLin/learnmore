@@ -4,7 +4,7 @@
 }
 <div class="login-container">
     <div class="user-avatar">
-        <span class="material-icons">account_circle</span>
+        <img class="login-logo" src="~/favicon-192.png" asp-append-version="true" width="76" height="76" alt="" />
         <h2>使用者登入</h2>
     </div>
     <p class="login-subtitle">使用 Google 帳號快速登入</p>
@@ -30,7 +30,6 @@
         </form>
     </div>
 </div>
-<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 <style>
     .login-container {
         text-align: center;
@@ -42,12 +41,6 @@
 
     .user-avatar {
         margin-bottom: 16px;
-    }
-
-    .material-icons {
-        font-size: 76px;
-        color: #6366f1;
-        filter: drop-shadow(0 10px 24px rgba(99, 102, 241, 0.24));
     }
 
     .login-subtitle {
@@ -122,8 +115,9 @@
             padding: 16px;
         }
 
-        .material-icons {
-            font-size: 64px;
+        .login-logo {
+            width: 64px;
+            height: 64px;
         }
 
         .login-container h2 {
@@ -141,10 +135,6 @@
     }
 
     /* 暗色模式 */
-    .dark-theme .material-icons {
-        color: var(--text-secondary);
-    }
-
     .dark-theme .login-container h2 {
         color: var(--text-primary);
     }

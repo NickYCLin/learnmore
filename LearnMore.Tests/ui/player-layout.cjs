@@ -33,7 +33,14 @@ const server = http.createServer(async (request, response) => {
         return json([]);
     }
     if (route === '/GroupPlayer/SongDetail') return json({ success: true, song: { SongUid: 'fixture-song', Title: '合成測試歌曲', Artist: '合成演唱者', YouTubeVideoUrl: 'https://www.youtube.com/watch?v=abcdefghijk' }, lyrics, comments: [] });
-    const fixture = route.startsWith('/Lyrics') ? (url.searchParams.has('member') ? 'member' : 'lyrics') : route.startsWith('/GroupPlayer/Play') ? 'group' : route === '/Home/Index' ? 'home' : null;
+    if (route === '/api/wish') return json([{ Id: 1, Message: '測試許願', CanEdit: true }]);
+    if (route === '/api/wish/1/replies') return json([{ Id: 1, Message: '測試回覆', CanEdit: true }]);
+    if (route === '/Media/Wish') {
+        const filename = url.searchParams.has('member') ? 'wish-member.html' : 'wish.html';
+        response.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return response.end(fs.readFileSync(path.join(fixtures, filename)));
+    }
+    const fixture = route.startsWith('/Lyrics') ? (url.searchParams.has('member') ? 'member' : 'lyrics') : route.startsWith('/GroupPlayer/Play') ? 'group' : route === '/Home/Index' ? 'home' : route === '/Login' ? 'login' : null;
     if (fixture) { response.setHeader('Content-Type', 'text/html; charset=utf-8'); return response.end(fs.readFileSync(path.join(fixtures, fixture + '.html'))); }
     const file = path.resolve(webroot, '.' + route);
     if (file.startsWith(webroot + path.sep) && fs.existsSync(file) && fs.statSync(file).isFile()) {
@@ -88,7 +95,7 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             navigator.share = async value => { window.__shares.push(value); };
             Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.__copies.push(value); } } });
         });
-        await page.goto(base + route, { waitUntil: 'networkidle0' });
+        await page.goto(base + route, { waitUntil: route === '/Login' ? 'load' : 'networkidle0' });
         return { page, errors };
     }
     async function geometry(page, label) {
@@ -281,6 +288,32 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             check(errors.length === 0, 'home runtime errors: ' + errors.join('; '));
             await page.close();
         }
+        const { page: login } = await open('/Login', 320);
+        check(await login.$eval('.login-logo', logo =>
+            logo.naturalWidth > 0 && logo.width === 64 && document.documentElement.scrollWidth <= innerWidth),
+        'login loads a local logo and fits narrow screens when external assets are unavailable');
+        await login.screenshot({ path: path.join(artifacts, 'login-mobile.png') });
+        await login.close();
+        const { page: wish } = await open('/Media/Wish', 390);
+        await wish.waitForSelector('.reply-edit');
+        check(await wish.$$eval('.wish-edit, .reply-edit', editors =>
+            editors.length === 2 && editors.every(editor => editor.hidden && getComputedStyle(editor).display === 'none')),
+        'wish and reply editors stay hidden for guests without the external stylesheet');
+        await wish.close();
+        const { page: wishMember } = await open('/Media/Wish?member=1', 390);
+        for (const target of ['wish', 'reply']) {
+            await wishMember.click(`.edit-${target}-btn`);
+            await wishMember.waitForSelector(`.${target}-edit`, { visible: true });
+            const control = await wishMember.$eval(`.save-${target}-btn`, button => ({
+                height: button.offsetHeight,
+                radius: parseFloat(getComputedStyle(button).borderRadius)
+            }));
+            check(control.height >= 44 && control.radius > 0,
+                `the ${target} editor keeps its styled save button without the external stylesheet: ${JSON.stringify(control)}`);
+            await wishMember.click(`.cancel-${target}-btn`);
+            await wishMember.waitForSelector(`.${target}-edit`, { hidden: true });
+        }
+        await wishMember.close();
         console.log(`PASS: ${checks} browser assertions; screenshots: ${artifacts}`);
     } finally {
         await browser.close();
