@@ -33,7 +33,17 @@ const server = http.createServer(async (request, response) => {
         return json([]);
     }
     if (route === '/Lyrics/UpdateUserSettings') return json({ success: true });
-    if (route === '/GroupPlayer/SongDetail') return json({ success: true, song: { SongUid: 'fixture-song', Title: '合成測試歌曲', Artist: '合成演唱者', YouTubeVideoUrl: 'https://www.youtube.com/watch?v=abcdefghijk' }, lyrics, comments: [] });
+    if (route === '/GroupPlayer/SongDetail') {
+        const songUid = url.searchParams.get('songUid');
+        const nextSong = songUid === 'fixture-next-song';
+        const song = {
+            SongUid: songUid,
+            Title: nextSong ? '合成下一首歌曲' : '合成測試歌曲',
+            Artist: '合成演唱者',
+            YouTubeVideoUrl: 'https://www.youtube.com/watch?v=' + (nextSong ? 'lmnopqrstuv' : 'abcdefghijk')
+        };
+        return json({ success: true, song, lyrics, comments: [] });
+    }
     if (route === '/api/wish') return json([{ Id: 1, Message: '測試許願', CanEdit: true }]);
     if (route === '/api/wish/1/replies') return json([{ Id: 1, Message: '測試回覆', CanEdit: true }]);
     if (route === '/Media/Wish') {
@@ -336,10 +346,30 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         check(await group.evaluate(() => window.__stubPlayers.at(-1).seeks.at(-1) === 55), 'group last line loops on ended');
         await group.evaluate(() => { document.querySelector('#group-practice-line-loop').click(); document.querySelector('#group-practice-song-loop').click(); window.__stubPlayers.at(-1).end(); });
         check(await group.evaluate(() => window.__stubPlayers.at(-1).seeks.at(-1) === 0), 'group whole-song replay returns to start');
-        await group.evaluate(() => { window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); });
-        check(await group.evaluate(() => window.__stubPlayers.at(-1).state === 2), 'group background paused');
-        await group.evaluate(() => window.__stubPlayers.at(-1).playVideo());
-        check(await group.evaluate(() => window.__stubPlayers.at(-1).state === 2), 'hidden group player cannot restart');
+        const playerCount = await group.evaluate(() => window.__stubPlayers.length);
+        await group.evaluate(() => grantConsent());
+        await group.waitForFunction(count => window.__stubPlayers.length > count && window.__stubPlayers.at(-1).state === 1, {}, playerCount);
+        await group.evaluate(() => {
+            window.__stubPlayers.at(-1).time = 23;
+            window.__hidden = true;
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+        check(await group.evaluate(() => window.__stubPlayers.at(-1).state === 1 && window.__stubPlayers.at(-1).time === 23),
+            'group playback stays active when its tab is hidden');
+        await group.evaluate(() => {
+            const player = window.__stubPlayers.at(-1);
+            player.end();
+            player.end();
+        });
+        await group.waitForFunction(count => document.querySelector('.playlist-item.active').dataset.index === '1'
+            && window.__stubPlayers.length === count + 2 && window.__stubPlayers.at(-1).state === 1, {}, playerCount);
+        check(await group.evaluate(() => document.hidden), 'the next group song starts while the tab is still hidden');
+        await group.evaluate(() => {
+            window.__stubPlayers.at(-1).pauseVideo();
+            window.__hidden = false;
+            document.dispatchEvent(new Event('visibilitychange'));
+        });
+        check(await group.evaluate(() => window.__stubPlayers.at(-1).state === 2), 'returning to the tab preserves a manual pause');
         await group.screenshot({ path: path.join(artifacts, 'group-mobile.png') });
         for (const width of [768, 991]) {
             await group.setViewport({ width, height: 900 });

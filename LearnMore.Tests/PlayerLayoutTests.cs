@@ -81,7 +81,8 @@ public class PlayerLayoutTests
         {
             GroupUid = "fixture-group", GroupName = "合成群組", Songs = new()
             {
-                new() { SongUid = song.SongUid, Title = song.Title, YouTubeVideoUrl = song.VideoPath }
+                new() { SongUid = song.SongUid, Title = song.Title, YouTubeVideoUrl = song.VideoPath },
+                new() { SongUid = "fixture-next-song", Title = "合成下一首歌曲", YouTubeVideoUrl = "https://www.youtube.com/watch?v=lmnopqrstuv" }
             }
         }, "/GroupPlayer/Play/fixture-group");
         var home = await Render("/Views/Home/Index.cshtml", new[]
@@ -128,7 +129,7 @@ public class PlayerLayoutTests
         Assert.Contains("(min-width: 992px)", home);
         Assert.DoesNotContain("picture-in-picture", home);
         var group = Read("Views/GroupPlayer/Play.cshtml");
-        Assert.Contains("!document.hidden && playing", group);
+        Assert.Contains("if (playing && isGroupPracticeMobileViewport()", group);
         Assert.Contains("loopStart !== null) seekGroupPractice(loopStart)", group);
     }
 

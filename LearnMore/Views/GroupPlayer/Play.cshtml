@@ -387,6 +387,7 @@
         const currentUserLoggedIn = @((!string.IsNullOrWhiteSpace(Model.UserEmail)).ToString().ToLowerInvariant());
 
         let currentIndex = 0;
+        let pendingAdvance;
         let groupLoopA = null;
         let groupLoopB = null;
         let groupLineLoop = null;
@@ -541,8 +542,6 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                pauseOriginalRightPlayback();
-                getGroupKaraokeAudioPlayer()?.pause();
                 releaseGroupPracticeWakeLock();
                 return;
             }
@@ -633,6 +632,7 @@
 
         function playIndex(idx, autoPlay = false) {
             if (idx < 0 || idx >= playlistData.length) return;
+            clearTimeout(pendingAdvance);
             currentIndex = idx;
             updateNowInfo();
             const s = playlistData[currentIndex];
@@ -1287,7 +1287,6 @@
                             },
                             onStateChange: function (event) {
                                 if (event.data === YT.PlayerState.PLAYING) {
-                                    if (document.hidden) { pauseOriginalRightPlayback(); return; }
                                     applyGroupPracticePlaybackRate();
                                     if (groupKaraokeAudioActive) {
                                         muteOriginalRightForKaraoke();
@@ -1384,17 +1383,17 @@
         }
 
         function finishGroupPracticePlayback() {
-            if (document.hidden) return;
+            clearTimeout(pendingAdvance);
             const loopStart = groupLoopB !== null ? groupLoopA : groupLineLoop;
             if (isGroupPracticeMobileViewport() && loopStart !== null) seekGroupPractice(loopStart);
             else if (isGroupPracticeMobileViewport() && document.getElementById('group-practice-song-loop')?.checked) seekGroupPractice(0);
-            else setTimeout(() => { if (!document.hidden) playNext(); }, 500);
+            else pendingAdvance = setTimeout(playNext, 500);
         }
 
         function updateLyricsDisplayRight(currentTime) {
             const audio = getGroupKaraokeAudioPlayer();
             const playing = groupKaraokeAudioActive && audio ? !audio.paused : isOriginalRightPlaying();
-            if (!document.hidden && playing && isGroupPracticeMobileViewport() && performance.now() > groupLoopGuardUntil) {
+            if (playing && isGroupPracticeMobileViewport() && performance.now() > groupLoopGuardUntil) {
                 const lines = Array.from(document.querySelectorAll('#lyric-card-right .lyrics-line'));
                 const nextLine = lines.find(line => Number(line.dataset.timestamp) > groupLineLoop);
                 const duration = window.rightYTPlayer?.getDuration?.() || getRightVideoPlayer()?.duration || getGroupKaraokeAudioPlayer()?.duration;
