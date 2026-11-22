@@ -69,11 +69,14 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
     frame.allow = 'autoplay; encrypted-media; picture-in-picture; web-share';
     document.getElementById(id).replaceWith(frame);
     this.time = 0; this.state = 2; this.rate = 1; this.muted = false; this.seeks = [];
+    this.videoId = options.videoId; this.loadedVideos = [];
     this.getIframe = () => frame; this.getCurrentTime = () => this.time; this.getDuration = () => 60;
     this.getPlayerState = () => this.state; this.getPlaybackRate = () => this.rate;
     this.setPlaybackRate = rate => { this.rate = rate; }; this.getAvailablePlaybackRates = () => [0.5, 0.75, 1, 1.25, 1.5, 2];
     this.seekTo = time => { this.time = time; this.seeks.push(time); };
     this.playVideo = () => { this.state = 1; options.events.onStateChange?.({ data: 1, target: this }); };
+    this.cueVideoById = videoId => { this.videoId = videoId; this.time = 0; this.state = 5; };
+    this.loadVideoById = videoId => { this.cueVideoById(videoId); this.loadedVideos.push(videoId); this.playVideo(); };
     this.pauseVideo = () => { this.state = 2; options.events.onStateChange?.({ data: 2, target: this }); };
     this.stopVideo = this.pauseVideo; this.mute = () => { this.muted = true; }; this.unMute = () => { this.muted = false; };
     this.isMuted = () => this.muted; this.setVolume = () => {}; this.destroy = () => frame.remove();
@@ -346,9 +349,12 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         check(await group.evaluate(() => window.__stubPlayers.at(-1).seeks.at(-1) === 55), 'group last line loops on ended');
         await group.evaluate(() => { document.querySelector('#group-practice-line-loop').click(); document.querySelector('#group-practice-song-loop').click(); window.__stubPlayers.at(-1).end(); });
         check(await group.evaluate(() => window.__stubPlayers.at(-1).seeks.at(-1) === 0), 'group whole-song replay returns to start');
-        const playerCount = await group.evaluate(() => window.__stubPlayers.length);
-        await group.evaluate(() => grantConsent());
-        await group.waitForFunction(count => window.__stubPlayers.length > count && window.__stubPlayers.at(-1).state === 1, {}, playerCount);
+        await group.evaluate(() => {
+            window.__firstGroupPlayer = rightYTPlayer;
+            window.__firstGroupIframe = rightYTPlayer.getIframe();
+            grantConsent();
+        });
+        await group.waitForFunction(() => rightYTPlayer.state === 1 && rightYTPlayer.loadedVideos.includes('abcdefghijk'));
         await group.evaluate(() => {
             window.__stubPlayers.at(-1).time = 23;
             window.__hidden = true;
@@ -361,9 +367,13 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             player.end();
             player.end();
         });
-        await group.waitForFunction(count => document.querySelector('.playlist-item.active').dataset.index === '1'
-            && window.__stubPlayers.length === count + 2 && window.__stubPlayers.at(-1).state === 1, {}, playerCount);
-        check(await group.evaluate(() => document.hidden), 'the next group song starts while the tab is still hidden');
+        await group.waitForFunction(() => document.querySelector('.playlist-item.active').dataset.index === '1'
+            && rightYTPlayer.videoId === 'lmnopqrstuv' && rightYTPlayer.state === 1);
+        check(await group.evaluate(() => document.hidden && rightYTPlayer === window.__firstGroupPlayer
+            && document.querySelector('.video-sticky-stack iframe') === window.__firstGroupIframe
+            && rightYTPlayer.loadedVideos.filter(id => id === 'lmnopqrstuv').length === 1
+            && document.querySelector('#detailArea h1').textContent === '合成下一首歌曲'),
+        'one hidden-tab advance loads the next song and updates details without replacing the iframe');
         await group.evaluate(() => {
             window.__stubPlayers.at(-1).pauseVideo();
             window.__hidden = false;

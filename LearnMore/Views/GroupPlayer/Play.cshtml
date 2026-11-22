@@ -388,6 +388,8 @@
 
         let currentIndex = 0;
         let pendingAdvance;
+        let songDetailRequest;
+        let rightPlayerReady = false;
         let groupLoopA = null;
         let groupLoopB = null;
         let groupLineLoop = null;
@@ -654,14 +656,18 @@
         }
 
         function fetchSongDetail(songUid, shouldAutoPlay = false, shouldUnmute = false) {
+            songDetailRequest?.abort();
+            const request = new AbortController();
+            songDetailRequest = request;
             const url = `${songDetailUrl}?songUid=${encodeURIComponent(songUid)}`;
-            fetch(url, { headers: { 'Accept': 'application/json' } })
+            fetch(url, { headers: { 'Accept': 'application/json' }, signal: request.signal })
                 .then(async r => {
                     const txt = await r.text();
                     if (!r.ok) throw new Error(`HTTP ${r.status}`);
                     return JSON.parse(txt);
                 })
                 .then(data => {
+                    if (request.signal.aborted) return;
                     if (data && data.success) {
                         isManage = !!data.isManage;
                         autoSyncLyricsRight = !!data.isEnableAuto;
@@ -669,7 +675,11 @@
                         renderRightArea({ song: data.song, lyrics: data.lyrics || [], comments: data.comments || [] }, shouldAutoPlay, shouldUnmute, data.isLoggedIn ?? currentUserLoggedIn);
                     } else { alert('無法取得歌曲資料'); }
                 })
-                .catch(err => { console.error('Fetch SongDetail failed:', err); alert('取得歌曲細節失敗'); });
+                .catch(err => {
+                    if (request.signal.aborted) return;
+                    console.error('Fetch SongDetail failed:', err);
+                    alert('取得歌曲細節失敗');
+                });
         }
 
         function getSongProperty(song, ...keys) {
@@ -1086,7 +1096,13 @@
             const container = document.getElementById('detailArea');
             if (!container) return;
 
-            container.innerHTML = `
+            const player = window.rightYTPlayer;
+            const iframe = player?.getIframe?.();
+            const videoSection = iframe?.closest('.video-section');
+            const reusePlayer = isYouTubeVideo && rightPlayerReady && iframe?.isConnected && videoSection
+                && typeof player.loadVideoById === 'function' && typeof player.cueVideoById === 'function';
+            const template = document.createElement('template');
+            template.innerHTML = `
                 <div class="title-container">
                     <h1>${htmlEncode(song.Title || '')}</h1>
                     <p class="subtitle song-detail-meta">
@@ -1184,6 +1200,26 @@
                     </div>
                 </div>`;
 
+            if (reusePlayer) {
+                // Keep the iframe and its ancestors connected so changing songs preserves the player session.
+                const next = template.content;
+                container.querySelector('.title-container').replaceWith(next.querySelector('.title-container'));
+                videoSection.querySelector('.group-practice-controls').replaceWith(next.querySelector('.group-practice-controls'));
+                videoSection.querySelector('#group-karaoke-audio-panel')?.remove();
+                const audioPanel = next.querySelector('#group-karaoke-audio-panel');
+                if (audioPanel) videoSection.append(audioPanel);
+                // On mobile the shared layout script can place this row outside the lyrics card.
+                container.querySelector('.toggle-wrapper')?.remove();
+                container.querySelector('.lyrics-card').replaceWith(next.querySelector('.lyrics-card'));
+                container.querySelector('.comments-section').replaceWith(next.querySelector('.comments-section'));
+            } else {
+                rightPlayerReady = false;
+                window.rightYTPlayer = null;
+                window.onYouTubeIframeAPIReady = null;
+                player?.destroy?.();
+                container.replaceChildren(template.content);
+            }
+
             // comments
             const commentsContainer = document.getElementById('comments-container-right');
             if (commentsContainer) {
@@ -1275,17 +1311,27 @@
 
             // init player
             if (isYouTubeVideo) {
+                if (reusePlayer) {
+                    if (shouldAutoPlay) player.loadVideoById(youtubeVideoId);
+                    else player.cueVideoById(youtubeVideoId);
+                    if (shouldUnmute && consentGranted) { try { player.unMute(); player.setVolume(100); } catch {} }
+                    return;
+                }
                 const createRightPlayer = function () {
+                    window.onYouTubeIframeAPIReady = null;
                     window.rightYTPlayer = new YT.Player('youtube-player-right', {
                         height: '100%', width: '100%', videoId: youtubeVideoId,
                         playerVars: { autoplay: shouldAutoPlay ? 1 : 0, playsinline: 1, rel: 0, modestbranding: 1, origin: window.location.origin },
                         events: {
                             onReady: function (event) {
+                                if (event.target !== window.rightYTPlayer) return;
+                                rightPlayerReady = true;
                                 applyGroupPracticePlaybackRate();
                                 if (shouldAutoPlay) { try { if (!consentGranted) { event.target.mute(); } event.target.playVideo(); } catch {} }
                                 if (shouldUnmute && consentGranted) { try { event.target.unMute(); event.target.setVolume(100); } catch {} }
                             },
                             onStateChange: function (event) {
+                                if (event.target !== window.rightYTPlayer) return;
                                 if (event.data === YT.PlayerState.PLAYING) {
                                     applyGroupPracticePlaybackRate();
                                     if (groupKaraokeAudioActive) {
