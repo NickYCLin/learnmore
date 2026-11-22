@@ -166,20 +166,22 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
                 window.__hidden = true;
                 document.dispatchEvent(new Event('visibilitychange'));
             });
-            check(await page.evaluate(() => window.__stubPlayers[0].state === 2), 'background playback paused');
-            await page.evaluate(() => window.__stubPlayers[0].playVideo());
-            check(await page.evaluate(() => window.__stubPlayers[0].state === 2), 'hidden lyrics player cannot restart');
+            check(await page.evaluate(() => window.__stubPlayers[0].state === 1
+                && document.querySelector('#playback-continue-prompt').hidden), 'switching away keeps playback active without a prompt');
+            await page.evaluate(() => {
+                const player = window.__stubPlayers[0];
+                player.state = window.YT.PlayerState.BUFFERING;
+                player.playVideo();
+                player.time = 28;
+            });
+            check(await page.evaluate(() => window.__stubPlayers[0].state === 1), 'resuming after buffering is not interrupted in a hidden tab');
             await page.evaluate(() => {
                 window.__hidden = false;
                 document.dispatchEvent(new Event('visibilitychange'));
             });
-            check(await page.$eval('#playback-continue-prompt', prompt => !prompt.hidden
-                && prompt.textContent.includes('切換分頁時已暫停') && window.__stubPlayers[0].state === 2),
-            'returning to the tab offers resume without auto-starting playback');
-            await page.$eval('#playback-continue-btn', button => button.click());
-            check(await page.evaluate(() => window.__stubPlayers[0].state === 1 && window.__stubPlayers[0].time === 23
+            check(await page.evaluate(() => window.__stubPlayers[0].state === 1 && window.__stubPlayers[0].time === 28
                 && document.querySelector('#playback-continue-prompt').hidden),
-            'resume continues playback from the same position and clears the prompt');
+            'returning to the tab keeps playback active at its current position without a prompt');
             await page.evaluate(() => {
                 window.__stubPlayers[0].pauseVideo();
                 window.__hidden = true;
@@ -187,7 +189,9 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
                 window.__hidden = false;
                 document.dispatchEvent(new Event('visibilitychange'));
             });
-            check(await page.$eval('#playback-continue-prompt', prompt => prompt.hidden), 'manually paused playback does not show a resume prompt');
+            check(await page.evaluate(() => window.__stubPlayers[0].state === 2
+                && document.querySelector('#playback-continue-prompt').hidden),
+            'switching tabs does not start manually paused playback or show a prompt');
             await page.screenshot({ path: path.join(artifacts, `lyrics-${width}.png`) });
             check(errors.length === 0, 'lyrics runtime errors: ' + errors.join('; '));
             await page.close();

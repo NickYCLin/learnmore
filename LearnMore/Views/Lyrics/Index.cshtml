@@ -1603,13 +1603,7 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                const wasPlaying = !isPlaybackPaused();
-                pausePlaybackMedia();
                 releasePracticeWakeLock();
-                if (wasPlaying) {
-                    updatePlaybackButtons(false);
-                    showPlaybackContinuePrompt('切換分頁時已暫停，點一下即可從原處繼續。');
-                }
                 return;
             }
             if (!isPlaybackPaused()) {
@@ -1995,7 +1989,6 @@
     }
 
     function onPlayerStateChange(event) {
-        if (document.hidden && event.data === YT.PlayerState.PLAYING) { pausePlaybackMedia(); return; }
         if (karaokeAudioActive) {
             if (event.data === YT.PlayerState.PAUSED || event.data === YT.PlayerState.ENDED) {
                 pauseKaraokeAudioFromOriginalPlayback();
