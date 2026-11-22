@@ -186,6 +186,10 @@ builder.Services.AddScoped<IReport50Repair, Report50Repair>();
 builder.Services.AddSingleton<IReport50RepairAudit, FileReport50RepairAudit>();
 builder.Services.AddSingleton<IRubyRepairAudit, FileRubyRepairAudit>();
 builder.Services.AddScoped<IErrorReportManagerAccess, ErrorReportManagerAccess>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<SiteTrafficStore>();
+builder.Services.AddHostedService<SiteTrafficWriter>();
+builder.Services.AddHttpClient<SearchConsoleTraffic>(client => client.Timeout = TimeSpan.FromSeconds(8));
 builder.Services.AddScoped<IMobileIdentityVerifier, MobileIdentityVerifier>();
 builder.Services.AddScoped<IMobileAccountStore, MobileAccountStore>();
 builder.Services.AddScoped<MobileAuthorizeFilter>();
@@ -329,6 +333,7 @@ app.Use(async (context, next) =>
 
 app.UseRouting();
 app.UseRateLimiter();
+app.UseMiddleware<SiteTrafficMiddleware>();
 app.Use(async (context, next) =>
 {
     if (!context.Request.Path.StartsWithSegments("/api/mobile/v2") &&

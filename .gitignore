@@ -65,3 +65,4 @@ var/
 /.playwright-cli/
 /output/
 /artifacts/
+/LearnMore/App_Data/site-traffic.json*

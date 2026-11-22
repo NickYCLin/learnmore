@@ -43,6 +43,7 @@ services:
         condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Production
+      SiteTraffic__SnapshotPath: /var/lib/learnmore/data/site-traffic.json
       ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=${LEARNMORE_DB_NAME:-language};User Id=${LEARNMORE_DB_USER:-sa};Password=${LEARNMORE_DB_PASSWORD:-${MSSQL_SA_PASSWORD}};TrustServerCertificate=True;MultipleActiveResultSets=true;"
       YtDlpCookiesPath: ${YTDLP_COOKIES_PATH:-}
       HighAccuracyRemoteApi__Enabled: ${HIGH_ACCURACY_REMOTE_ENABLED:-false}

@@ -28,6 +28,7 @@
     <Content Update="appsettings.Local.json;appsettings.*.local.json">
       <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>
+    <Content Remove="App_Data/site-traffic.json*" />
     <Content Include="wwwroot/js/node_modules/**/*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>

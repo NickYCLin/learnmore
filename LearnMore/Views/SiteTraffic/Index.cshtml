@@ -1,0 +1,93 @@
+@model LearnMore.Controllers.SiteTrafficPage
+@{
+    ViewData["Title"] = "網站流量";
+    var total = Model.Daily.Sum(day => day.Views);
+    var peak = Math.Max(1, Model.Daily.Select(day => day.Views).DefaultIfEmpty().Max());
+}
+@section Styles {
+    <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/site-traffic.css" asp-append-version="true" />
+}
+<section class="mq-page traffic-page" aria-labelledby="traffic-title">
+    <h1 id="traffic-title">網站流量</h1>
+    <p class="mq-subtitle">查看 LearnMore 的瀏覽活動，以及訪客用哪些 Google 搜尋字詞找到網站。</p>
+    <nav class="mq-tabs" aria-label="統計期間">
+        <a asp-action="Index" asp-route-days="7" aria-current="@(Model.Days == 7 ? "page" : null)">最近 7 天</a>
+        <a asp-action="Index" asp-route-days="30" aria-current="@(Model.Days == 30 ? "page" : null)">最近 30 天</a>
+    </nav>
+    @if (Model.StartedAt is DateTimeOffset startedAt)
+    {
+        <div class="mq-overview" aria-label="瀏覽概況">
+            <div><span class="mq-label">今天瀏覽</span><strong>@Model.TodayViews.ToString("N0")</strong><small>台灣時間 @Model.Today.ToString("MM/dd")</small></div>
+            <div><span class="mq-label">期間瀏覽</span><strong>@total.ToString("N0")</strong><small>不重複人數未追蹤</small></div>
+            <div><span class="mq-label">最近一次瀏覽</span><strong class="traffic-last">@(Model.LastViewAt?.ToOffset(TimeSpan.FromHours(8)).ToString("MM/dd HH:mm") ?? "尚無紀錄")</strong><small>台灣時間</small></div>
+        </div>
+        @if (Model.SavePending)
+        {
+            <p class="mq-notice" role="status">流量暫存於記憶體，寫入失敗，系統會重試。重啟前未成功寫入的統計可能遺失。</p>
+        }
+        <section class="mq-card" aria-labelledby="traffic-trend">
+            <h2 id="traffic-trend">每日瀏覽量</h2>
+            <p class="mq-meta">開始統計：@startedAt.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm")。只計部分公開頁面的瀏覽，不含已知機器人；仍可能有未辨識的自動流量。</p>
+            <details class="traffic-details" open="@(Model.Days == 7)">
+                <summary>每日明細</summary>
+                <ul class="traffic-bars">
+                    @foreach (var day in Model.Daily)
+                    {
+                        <li><span>@day.Label</span><meter min="0" max="@peak" value="@day.Views" aria-hidden="true"></meter><span>@day.Views.ToString("N0") 次</span></li>
+                    }
+                </ul>
+            </details>
+        </section>
+        <div class="traffic-breakdown">
+            @foreach (var breakdown in new[] { (Title: "瀏覽來源", Items: Model.Sources), (Title: "瀏覽頁面類型", Items: Model.Pages) })
+            {
+                <section class="mq-card">
+                    <h2>@breakdown.Title</h2>
+                    @if (breakdown.Items.Count == 0)
+                    {
+                        <p class="mq-meta">這段期間尚無瀏覽紀錄。</p>
+                    }
+                    else
+                    {
+                        <table class="traffic-table" aria-label="@breakdown.Title"><thead><tr><th scope="col">分類</th><th scope="col">瀏覽次數</th></tr></thead><tbody>
+                            @foreach (var bucket in breakdown.Items)
+                            {
+                                <tr><th scope="row">@bucket.Label</th><td>@bucket.Views.ToString("N0")</td></tr>
+                            }
+                        </tbody></table>
+                    }
+                </section>
+            }
+        </div>
+    }
+    else
+    {
+        <p class="mq-notice" role="status">站內流量暫時無法讀取，請檢查伺服器的統計儲存設定。這不代表沒有人瀏覽。</p>
+    }
+    <section class="mq-card" aria-labelledby="traffic-keywords">
+        <h2 id="traffic-keywords">Google 搜尋關鍵字</h2>
+        <p class="mq-meta">@Model.Search.Start.ToString("yyyy/MM/dd") 至 @Model.Search.End.ToString("yyyy/MM/dd")（美國太平洋時間）。只顯示 Google 提供的前 20 筆，統計有延遲，無法對應到個別訪客。</p>
+        @if (Model.Search.State == "not-configured")
+        {
+            <p class="mq-notice">尚未連接 Google Search Console。驗證網站並設定唯讀存取後，這裡才會顯示關鍵字。</p>
+        }
+        else if (Model.Search.State == "unavailable")
+        {
+            <p class="mq-notice" role="status">暫時無法取得 Google 資料，請檢查 Search Console 權限與設定，或稍後再試。</p>
+        }
+        else if (Model.Search.Keywords.Count == 0)
+        {
+            <p class="mq-notice">這段期間 Google 未提供可顯示的搜尋字詞，不代表搜尋流量為零。</p>
+        }
+        else
+        {
+            <table class="traffic-table traffic-keywords" aria-labelledby="traffic-keywords"><thead><tr><th scope="col">搜尋字詞</th><th scope="col">點擊</th><th scope="col">曝光</th></tr></thead><tbody>
+                @foreach (var keyword in Model.Search.Keywords)
+                {
+                    <tr><th scope="row">@keyword.Query</th><td>@keyword.Clicks.ToString("N0")</td><td>@keyword.Impressions.ToString("N0")</td></tr>
+                }
+            </tbody></table>
+        }
+    </section>
+</section>
