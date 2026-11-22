@@ -159,10 +159,35 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             await page.evaluate(() => document.querySelector('.player-share').click());
             check(await page.$eval('.player-share span', label => label.textContent === '分享'), 'mobile shows the native share action');
             check((await page.evaluate(() => window.__shares[0].url)).startsWith(base + '/Lyrics/'), 'share uses site PathBase URL');
-            await page.evaluate(() => { const player = window.__stubPlayers[0]; player.playVideo(); window.__hidden = true; document.dispatchEvent(new Event('visibilitychange')); });
+            await page.evaluate(() => {
+                const player = window.__stubPlayers[0];
+                player.time = 23;
+                player.playVideo();
+                window.__hidden = true;
+                document.dispatchEvent(new Event('visibilitychange'));
+            });
             check(await page.evaluate(() => window.__stubPlayers[0].state === 2), 'background playback paused');
             await page.evaluate(() => window.__stubPlayers[0].playVideo());
             check(await page.evaluate(() => window.__stubPlayers[0].state === 2), 'hidden lyrics player cannot restart');
+            await page.evaluate(() => {
+                window.__hidden = false;
+                document.dispatchEvent(new Event('visibilitychange'));
+            });
+            check(await page.$eval('#playback-continue-prompt', prompt => !prompt.hidden
+                && prompt.textContent.includes('切換分頁時已暫停') && window.__stubPlayers[0].state === 2),
+            'returning to the tab offers resume without auto-starting playback');
+            await page.$eval('#playback-continue-btn', button => button.click());
+            check(await page.evaluate(() => window.__stubPlayers[0].state === 1 && window.__stubPlayers[0].time === 23
+                && document.querySelector('#playback-continue-prompt').hidden),
+            'resume continues playback from the same position and clears the prompt');
+            await page.evaluate(() => {
+                window.__stubPlayers[0].pauseVideo();
+                window.__hidden = true;
+                document.dispatchEvent(new Event('visibilitychange'));
+                window.__hidden = false;
+                document.dispatchEvent(new Event('visibilitychange'));
+            });
+            check(await page.$eval('#playback-continue-prompt', prompt => prompt.hidden), 'manually paused playback does not show a resume prompt');
             await page.screenshot({ path: path.join(artifacts, `lyrics-${width}.png`) });
             check(errors.length === 0, 'lyrics runtime errors: ' + errors.join('; '));
             await page.close();

@@ -1603,8 +1603,13 @@
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                const wasPlaying = !isPlaybackPaused();
                 pausePlaybackMedia();
                 releasePracticeWakeLock();
+                if (wasPlaying) {
+                    updatePlaybackButtons(false);
+                    showPlaybackContinuePrompt('切換分頁時已暫停，點一下即可從原處繼續。');
+                }
                 return;
             }
             if (!isPlaybackPaused()) {
