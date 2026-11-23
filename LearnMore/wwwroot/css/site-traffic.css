@@ -68,14 +68,14 @@ html:has(.traffic-page), body:has(.traffic-page) { overflow-x: clip; }
 .traffic-search { --traffic-bar: var(--traffic-search); border-top: 1px solid var(--traffic-line); padding-top: 24px; margin-top: 16px; }
 .traffic-exposure { --traffic-bar: var(--traffic-exposure); }
 .traffic-search > .mq-meta { margin-bottom: 16px; }
-.traffic-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: var(--traffic-gap); }
+.traffic-breakdown { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; column-gap: var(--traffic-gap); }
 .traffic-search .traffic-breakdown:has(h3) { margin-top: 20px; }
 .traffic-chart { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 8px; margin-block: 12px 4px; color: var(--traffic-muted); font-size: .75rem; }
 .traffic-chart, .traffic-total, .traffic-page .mq-overview, .traffic-bars { font-variant-numeric: tabular-nums; }
 .traffic-axis, .traffic-dates { display: flex; justify-content: space-between; }
 .traffic-axis { position: relative; height: 100%; }
 .traffic-axis span { position: absolute; right: 0; transform: translateY(-50%); }
-.traffic-axis span:first-child { position: relative; top: 0; }
+.traffic-axis span:first-child { position: relative; align-self: start; }
 .traffic-axis span:nth-child(2) { top: 50%; }
 .traffic-axis span:last-child { top: 100%; }
 .traffic-dates { grid-column: 2; }
