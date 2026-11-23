@@ -2,7 +2,7 @@
 @{
     ViewData["Title"] = "網站流量";
     var total = Model.Daily.Sum(day => day.Views);
-    var peak = Math.Max(1, Model.Daily.Select(day => day.Views).DefaultIfEmpty().Max());
+    var busiest = Model.Daily.MaxBy(day => day.Views);
 }
 @section Styles {
     <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
@@ -17,9 +17,12 @@
     </nav>
     @if (Model.StartedAt is DateTimeOffset startedAt)
     {
+        <h2 class="traffic-section-title">站內瀏覽</h2>
         <div class="mq-overview" aria-label="瀏覽概況">
             <div><span class="mq-label">今天瀏覽</span><strong>@Model.TodayViews.ToString("N0")</strong><small>台灣時間 @Model.Today.ToString("MM/dd")</small></div>
             <div><span class="mq-label">期間瀏覽</span><strong>@total.ToString("N0")</strong><small>不重複人數未追蹤</small></div>
+            <div><span class="mq-label">日均瀏覽</span><strong>@((Model.Daily.Count == 0 ? 0 : (double)total / Model.Daily.Count).ToString("N1"))</strong><small>含今天，共 @Model.Daily.Count 個統計日</small></div>
+            <div><span class="mq-label">單日最高</span><strong>@((busiest?.Views ?? 0).ToString("N0"))</strong><small>@(busiest is { Views: > 0 } ? busiest.Label : "尚無紀錄")</small></div>
             <div><span class="mq-label">最近一次瀏覽</span><strong class="traffic-last">@(Model.LastViewAt?.ToOffset(TimeSpan.FromHours(8)).ToString("MM/dd HH:mm") ?? "尚無紀錄")</strong><small>台灣時間</small></div>
         </div>
         @if (Model.SavePending)
@@ -29,12 +32,13 @@
         <section class="mq-card" aria-labelledby="traffic-trend">
             <h2 id="traffic-trend">每日瀏覽量</h2>
             <p class="mq-meta">開始統計：@startedAt.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm")。只計部分公開頁面的瀏覽，不含已知機器人；仍可能有未辨識的自動流量。</p>
-            <details class="traffic-details" open="@(Model.Days == 7)">
+            <partial name="_TrafficChart" model="Model.Daily.Select(day => (day.Label, (double?)day.Views)).ToArray()" />
+            <details class="traffic-details">
                 <summary>每日明細</summary>
                 <ul class="traffic-bars">
                     @foreach (var day in Model.Daily)
                     {
-                        <li><span>@day.Label</span><meter min="0" max="@peak" value="@day.Views" aria-hidden="true"></meter><span>@day.Views.ToString("N0") 次</span></li>
+                        <li><span>@day.Label</span><span>@day.Views.ToString("N0") 次</span></li>
                     }
                 </ul>
             </details>
@@ -50,10 +54,10 @@
                     }
                     else
                     {
-                        <table class="traffic-table" aria-label="@breakdown.Title"><thead><tr><th scope="col">分類</th><th scope="col">瀏覽次數</th></tr></thead><tbody>
+                        <table class="traffic-table" aria-label="@breakdown.Title"><thead><tr><th scope="col">分類</th><th scope="col">瀏覽</th><th scope="col">占比</th></tr></thead><tbody>
                             @foreach (var bucket in breakdown.Items)
                             {
-                                <tr><th scope="row">@bucket.Label</th><td>@bucket.Views.ToString("N0")</td></tr>
+                                <tr><th scope="row">@bucket.Label<meter min="0" max="@total" value="@bucket.Views" aria-hidden="true"></meter></th><td>@bucket.Views.ToString("N0")</td><td>@(((double)bucket.Views / total).ToString("P1"))</td></tr>
                             }
                         </tbody></table>
                     }
@@ -65,9 +69,9 @@
     {
         <p class="mq-notice" role="status">站內流量暫時無法讀取，請檢查伺服器的統計儲存設定。這不代表沒有人瀏覽。</p>
     }
-    <section class="mq-card" aria-labelledby="traffic-keywords">
-        <h2 id="traffic-keywords">Google 搜尋關鍵字</h2>
-        <p class="mq-meta">@Model.Search.Start.ToString("yyyy/MM/dd") 至 @Model.Search.End.ToString("yyyy/MM/dd")（美國太平洋時間）。只顯示 Google 提供的前 20 筆，統計有延遲，無法對應到個別訪客。</p>
+    <section aria-labelledby="traffic-search">
+        <h2 id="traffic-search" class="traffic-section-title">Google 搜尋成效</h2>
+        <p class="mq-meta">@Model.Search.Start.ToString("yyyy/MM/dd") 至 @Model.Search.End.ToString("yyyy/MM/dd")（美國太平洋時間）。只含 Google 網頁搜尋已定稿的資料，不等於站內瀏覽或訪客人數。</p>
         @if (Model.Search.State == "not-configured")
         {
             <p class="mq-notice">尚未連接 Google Search Console。驗證網站並設定唯讀存取後，這裡才會顯示關鍵字。</p>
@@ -76,18 +80,46 @@
         {
             <p class="mq-notice" role="status">暫時無法取得 Google 資料，請檢查 Search Console 權限與設定，或稍後再試。</p>
         }
-        else if (Model.Search.Keywords.Count == 0)
+        else if (Model.Search.Totals is not { } searchTotal)
         {
-            <p class="mq-notice">這段期間 Google 未提供可顯示的搜尋字詞，不代表搜尋流量為零。</p>
+            <p class="mq-notice">這段期間 Google 未回傳搜尋成效總計。</p>
         }
         else
         {
-            <table class="traffic-table traffic-keywords" aria-labelledby="traffic-keywords"><thead><tr><th scope="col">搜尋字詞</th><th scope="col">點擊</th><th scope="col">曝光</th></tr></thead><tbody>
-                @foreach (var keyword in Model.Search.Keywords)
-                {
-                    <tr><th scope="row">@keyword.Query</th><td>@keyword.Clicks.ToString("N0")</td><td>@keyword.Impressions.ToString("N0")</td></tr>
-                }
-            </tbody></table>
+            <div class="mq-overview" aria-label="搜尋成效總計">
+                <div><span class="mq-label">總點擊</span><strong>@searchTotal.Clicks.ToString("N0")</strong><small>從搜尋結果點入</small></div>
+                <div><span class="mq-label">總曝光</span><strong>@searchTotal.Impressions.ToString("N0")</strong><small>出現在搜尋結果</small></div>
+                <div><span class="mq-label">平均點閱率</span><strong>@(searchTotal.Impressions > 0 ? searchTotal.Ctr.ToString("P1") : "—")</strong><small>總點擊 ÷ 總曝光</small></div>
+                <div><span class="mq-label">平均排名</span><strong>@(searchTotal.Impressions > 0 ? searchTotal.Position.ToString("N1") : "—")</strong><small>數字越小越靠前</small></div>
+            </div>
+            var dailySearch = Model.Search.Daily?.ToDictionary(row => row.Label, row => row.Metrics) ?? new();
+            var dates = Enumerable.Range(0, Model.Search.End.DayNumber - Model.Search.Start.DayNumber + 1)
+                .Select(Model.Search.Start.AddDays).Select(date => (Label: date.ToString("MM/dd"),
+                    Metrics: dailySearch.GetValueOrDefault(date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)))).ToArray();
+            <section class="mq-card" aria-labelledby="traffic-search-trend">
+                <h2 id="traffic-search-trend">每日搜尋趨勢</h2>
+                <p class="mq-meta">空白日代表 Google 未回傳資料，不以零補值。兩張圖各有自己的刻度。</p>
+                <div class="traffic-breakdown">
+                    <div><h3>點擊</h3><partial name="_TrafficChart" model="dates.Select(day => (day.Label, day.Metrics?.Clicks)).ToArray()" /></div>
+                    <div><h3>曝光</h3><partial name="_TrafficChart" model="dates.Select(day => (day.Label, day.Metrics?.Impressions)).ToArray()" /></div>
+                </div>
+                <details class="traffic-details">
+                    <summary>每日搜尋明細</summary>
+                    <table class="traffic-table" aria-label="每日搜尋明細"><thead><tr><th scope="col">日期</th><th scope="col">點擊</th><th scope="col">曝光</th><th scope="col">點閱率</th><th scope="col">排名</th></tr></thead><tbody>
+                        @foreach (var day in dates)
+                        {
+                            <tr><th scope="row">@day.Label</th><td>@(day.Metrics?.Clicks.ToString("N0") ?? "—")</td><td>@(day.Metrics?.Impressions.ToString("N0") ?? "—")</td><td>@(day.Metrics is { Impressions: > 0 } ? day.Metrics.Ctr.ToString("P1") : "—")</td><td>@(day.Metrics is { Impressions: > 0 } ? day.Metrics.Position.ToString("N1") : "—")</td></tr>
+                        }
+                    </tbody></table>
+                </details>
+            </section>
+            <partial name="_SearchTrafficBreakdown" model='("Google 搜尋關鍵字", "Google 提供的前 20 筆；部分字詞因隱私不列出。", Model.Search.Keywords)' />
+            <partial name="_SearchTrafficBreakdown" model='("熱門搜尋到達頁", "Google 提供的前 10 筆網址；按網址匯總，與總計口徑不同。", Model.Search.Pages)' />
+            <div class="traffic-breakdown">
+                <partial name="_SearchTrafficBreakdown" model='("搜尋裝置", "搜尋時使用的裝置，不代表全站。", Model.Search.Devices)' />
+                <partial name="_SearchTrafficBreakdown" model='("搜尋國家／地區", "Google 提供的前 10 筆國家／地區代碼。", Model.Search.Countries)' />
+            </div>
         }
     </section>
+    <p class="mq-footnote">目前未追蹤不重複訪客、線上人數、工作階段、停留時間、回訪或轉換。這些指標需要額外的訪客或事件統計，不能由瀏覽量推算。</p>
 </section>

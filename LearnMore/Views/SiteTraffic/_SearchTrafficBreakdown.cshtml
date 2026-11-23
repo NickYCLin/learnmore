@@ -1,0 +1,26 @@
+@model (string Title, string Description, IReadOnlyList<LearnMore.Services.SearchTrafficRow>? Rows)
+<section class="mq-card" aria-label="@Model.Title">
+    <h2>@Model.Title</h2>
+    <p class="mq-meta">@Model.Description</p>
+    @if (Model.Rows is not { Count: > 0 } rows)
+    {
+        <p class="mq-meta">Google 未提供這項明細。</p>
+    }
+    else
+    {
+        var maxClicks = rows.Max(row => row.Metrics.Clicks);
+        <table class="traffic-table" aria-label="@Model.Title"><thead><tr><th scope="col">項目</th><th scope="col">點擊</th><th scope="col">曝光</th><th scope="col">點閱率</th><th scope="col">排名</th></tr></thead><tbody>
+            @foreach (var row in rows)
+            {
+                var label = Model.Title == "搜尋裝置" ? row.Label.ToUpperInvariant() switch
+                    { "MOBILE" => "手機", "DESKTOP" => "電腦", "TABLET" => "平板", _ => row.Label } : row.Label;
+                <tr><th scope="row">@label
+                    @if (maxClicks > 0)
+                    {
+                        <meter min="0" max="@maxClicks" value="@row.Metrics.Clicks" aria-hidden="true"></meter>
+                    }
+                </th><td>@row.Metrics.Clicks.ToString("N0")</td><td>@row.Metrics.Impressions.ToString("N0")</td><td>@(row.Metrics.Impressions > 0 ? row.Metrics.Ctr.ToString("P1") : "—")</td><td>@(row.Metrics.Impressions > 0 ? row.Metrics.Position.ToString("N1") : "—")</td></tr>
+            }
+        </tbody></table>
+    }
+</section>

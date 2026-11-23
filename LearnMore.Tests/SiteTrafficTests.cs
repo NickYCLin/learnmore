@@ -117,6 +117,8 @@ public sealed class SiteTrafficTests : IDisposable
         Assert.Contains("尚未連接 Google Search Console", body);
         Assert.Contains("/LearnMore/Management/Traffic?days=7", body);
         Assert.Contains("歌曲與歌詞", body);
+        Assert.Contains("日均瀏覽", body);
+        Assert.Contains("traffic-column", body);
     }
 
     [Fact]
@@ -130,7 +132,28 @@ public sealed class SiteTrafficTests : IDisposable
             new DateOnly(2026, 11, 13), new DateOnly(2026, 11, 19), "fake-token", default);
 
         Assert.Equal("ready", report.State);
-        Assert.Equal(new SearchTrafficKeyword("日文歌詞", 3, 12), Assert.Single(report.Keywords));
+        Assert.Equal(new SearchTrafficMetrics(11, 40, 0.275, 6.5), report.Totals);
+        Assert.Equal(new SearchTrafficRow("日文歌詞", new(3, 12, 0.25, 7.4)), Assert.Single(report.Keywords!));
+        Assert.Equal(new[] { "2026-11-15", "2026-11-19" }, report.Daily!.Select(row => row.Label));
+        Assert.Equal("https://example.com/LearnMore/song", Assert.Single(report.Pages!).Label);
+        Assert.Equal("MOBILE", Assert.Single(report.Devices!).Label);
+        Assert.Equal("twn", Assert.Single(report.Countries!).Label);
+    }
+
+    [Fact]
+    public async Task SearchConsoleKeepsMissingRowsDistinctFromZero()
+    {
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        using var client = new HttpClient(new SearchHandler(empty: true));
+        var search = new SearchConsoleTraffic(client, new ConfigurationBuilder().Build(), cache, clock,
+            NullLogger<SearchConsoleTraffic>.Instance);
+        var report = await search.QueryAsync("sc-domain:example.com", "https://example.com/LearnMore/",
+            new DateOnly(2026, 11, 13), new DateOnly(2026, 11, 19), "fake-token", default);
+
+        Assert.Equal("ready", report.State);
+        Assert.Null(report.Totals);
+        Assert.Empty(report.Keywords!);
+        Assert.Empty(report.Daily!);
     }
 
     public void Dispose()
@@ -162,7 +185,7 @@ public sealed class SiteTrafficTests : IDisposable
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    private sealed class SearchHandler : HttpMessageHandler
+    private sealed class SearchHandler(bool empty = false) : HttpMessageHandler
     {
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -170,14 +193,23 @@ public sealed class SiteTrafficTests : IDisposable
             Assert.Contains("sc-domain%3Aexample.com/searchAnalytics/query", request.RequestUri!.AbsoluteUri);
             Assert.Equal("Bearer", request.Headers.Authorization!.Scheme);
             using var json = JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellationToken));
-            Assert.Equal("query", json.RootElement.GetProperty("dimensions")[0].GetString());
+            var dimensions = json.RootElement.GetProperty("dimensions");
+            var dimension = dimensions.GetArrayLength() == 0 ? "" : dimensions[0].GetString();
             Assert.Equal("final", json.RootElement.GetProperty("dataState").GetString());
             Assert.Equal("^https://example\\.com/LearnMore(/|[?]|$)",
                 json.RootElement.GetProperty("dimensionFilterGroups")[0].GetProperty("filters")[0].GetProperty("expression").GetString());
-            return new(HttpStatusCode.OK)
+            var (limit, rows) = dimension switch
             {
-                Content = new StringContent("""{"rows":[{"keys":["日文歌詞"],"clicks":3,"impressions":12}]}""")
+                "" => (1, """[{"clicks":11,"impressions":40,"ctr":0.275,"position":6.5}]"""),
+                "query" => (20, """[{"keys":["日文歌詞"],"clicks":3,"impressions":12,"ctr":0.25,"position":7.4}]"""),
+                "date" => (7, """[{"keys":["2026-11-19"]},{"keys":["2026-11-15"]}]"""),
+                "page" => (10, """[{"keys":["https://example.com/LearnMore/song"]}]"""),
+                "device" => (10, """[{"keys":["MOBILE"]}]"""),
+                "country" => (10, """[{"keys":["twn"]}]"""),
+                _ => throw new InvalidOperationException($"Unexpected dimension: {dimension}")
             };
+            Assert.Equal(limit, json.RootElement.GetProperty("rowLimit").GetInt32());
+            return new(HttpStatusCode.OK) { Content = new StringContent(empty ? "{}" : "{\"rows\":" + rows + "}") };
         }
     }
 }

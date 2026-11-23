@@ -1,0 +1,26 @@
+@model IReadOnlyList<(string Label, double? Value)>
+@{
+    var max = Math.Max(1, Model.Max(point => point.Value) ?? 1);
+}
+@if (Model.Any(point => point.Value.HasValue))
+{
+    <div class="traffic-chart" aria-hidden="true">
+        <div class="traffic-axis"><span>@max.ToString("N0")</span><span>0</span></div>
+        <div class="traffic-columns">
+            @foreach (var point in Model)
+            {
+                <div title="@point.Label：@(point.Value?.ToString("N0") ?? "無資料")">
+                    @if (point.Value is double value)
+                    {
+                        <div class="traffic-column" style="height: @((100 * value / max).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+                    }
+                </div>
+            }
+        </div>
+        <div class="traffic-dates"><span>@Model[0].Label</span><span>@Model[^1].Label</span></div>
+    </div>
+}
+else
+{
+    <p class="mq-meta">這段期間沒有可繪製的每日資料。</p>
+}

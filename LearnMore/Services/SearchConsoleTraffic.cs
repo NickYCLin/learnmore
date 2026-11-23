@@ -6,9 +6,12 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace LearnMore.Services;
 
-public sealed record SearchTrafficKeyword(string Query, double Clicks, double Impressions);
+public sealed record SearchTrafficMetrics(double Clicks, double Impressions, double Ctr, double Position);
+public sealed record SearchTrafficRow(string Label, SearchTrafficMetrics Metrics);
 public sealed record SearchTrafficReport(string State, DateOnly Start, DateOnly End,
-    IReadOnlyList<SearchTrafficKeyword> Keywords);
+    SearchTrafficMetrics? Totals = null, IReadOnlyList<SearchTrafficRow>? Keywords = null,
+    IReadOnlyList<SearchTrafficRow>? Daily = null, IReadOnlyList<SearchTrafficRow>? Pages = null,
+    IReadOnlyList<SearchTrafficRow>? Devices = null, IReadOnlyList<SearchTrafficRow>? Countries = null);
 
 public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration configuration, IMemoryCache cache,
     TimeProvider clock, ILogger<SearchConsoleTraffic> logger)
@@ -23,7 +26,7 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
         var credentialPath = configuration["SiteTraffic:SearchConsole:CredentialPath"]?.Trim();
         var pagePrefix = configuration["SiteTraffic:SearchConsole:PagePrefix"]?.Trim();
         if (string.IsNullOrEmpty(property) || string.IsNullOrEmpty(credentialPath))
-            return new("not-configured", start, end, []);
+            return new("not-configured", start, end);
 
         var cacheKey = (nameof(SearchConsoleTraffic), property, pagePrefix, credentialPath, start, end);
         if (cache.TryGetValue<SearchTrafficReport>(cacheKey, out var cached) && cached != null) return cached;
@@ -34,7 +37,7 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
         {
             var credential = GoogleCredential.FromFile(credentialPath);
             if (credential.UnderlyingCredential is not ServiceAccountCredential serviceAccount)
-                return new("unavailable", start, end, []);
+                return new("unavailable", start, end);
             var scoped = GoogleCredential.FromServiceAccountCredential(serviceAccount.WithUseJwtAccessWithScopes(false))
                 .CreateScoped("https://www.googleapis.com/auth/webmasters.readonly").UnderlyingCredential;
             var token = await scoped.GetAccessTokenForRequestAsync(cancellationToken: timeout.Token);
@@ -48,12 +51,31 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
             OperationCanceledException or ArgumentException or FormatException or InvalidOperationException or System.Security.Cryptography.CryptographicException))
         {
             logger.LogWarning("Search Console report could not be read ({ExceptionType}).", exception.GetType().Name);
-            return new("unavailable", start, end, []);
+            return new("unavailable", start, end);
         }
     }
 
     public async Task<SearchTrafficReport> QueryAsync(string property, string? pagePrefix, DateOnly start, DateOnly end,
         string token, CancellationToken cancellationToken)
+    {
+        Task<SearchAnalyticsRow[]> Read(string? dimension, int limit) =>
+            ReadRowsAsync(property, pagePrefix, start, end, token, dimension, limit, cancellationToken);
+
+        var totals = Read(null, 1);
+        var keywords = Read("query", 20);
+        var daily = Read("date", end.DayNumber - start.DayNumber + 1);
+        var pages = Read("page", 10);
+        var devices = Read("device", 10);
+        var countries = Read("country", 10);
+        await Task.WhenAll(totals, keywords, daily, pages, devices, countries);
+
+        return new("ready", start, end, (await totals).FirstOrDefault()?.Metrics,
+            Breakdown(await keywords), Breakdown(await daily).OrderBy(row => row.Label, StringComparer.Ordinal).ToArray(),
+            Breakdown(await pages), Breakdown(await devices), Breakdown(await countries));
+    }
+
+    private async Task<SearchAnalyticsRow[]> ReadRowsAsync(string property, string? pagePrefix, DateOnly start, DateOnly end,
+        string token, string? dimension, int limit, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post,
             $"https://www.googleapis.com/webmasters/v3/sites/{Uri.EscapeDataString(property)}/searchAnalytics/query");
@@ -62,10 +84,10 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
         {
             startDate = start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             endDate = end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            dimensions = new[] { "query" },
+            dimensions = dimension == null ? Array.Empty<string>() : new[] { dimension },
             type = "web",
             dataState = "final",
-            rowLimit = 20,
+            rowLimit = limit,
             dimensionFilterGroups = string.IsNullOrWhiteSpace(pagePrefix) ? Array.Empty<object>() : new object[]
             {
                 new { filters = new[] { new { dimension = "page", @operator = "includingRegex", expression = "^" +
@@ -76,14 +98,19 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
         response.EnsureSuccessStatusCode();
         var data = await response.Content.ReadFromJsonAsync<SearchAnalyticsResponse>(cancellationToken)
             ?? throw new JsonException("Search Console response was empty.");
-        var keywords = (data.Rows ?? []).Where(row => row.Keys?.Length == 1 && !string.IsNullOrWhiteSpace(row.Keys[0]))
-            .Select(row => new SearchTrafficKeyword(row.Keys![0], row.Clicks, row.Impressions)).ToArray();
-        return new("ready", start, end, keywords);
+        return data.Rows ?? [];
     }
+
+    private static SearchTrafficRow[] Breakdown(SearchAnalyticsRow[] rows) => rows
+        .Where(row => row.Keys?.Length == 1 && !string.IsNullOrWhiteSpace(row.Keys[0]))
+        .Select(row => new SearchTrafficRow(row.Keys![0], row.Metrics)).ToArray();
 
     private static string EscapePrefix(string prefix) => string.Concat(prefix.Select(character =>
         @"\.^$|?*+()[]{}".Contains(character) ? "\\" + character : character.ToString()));
 
     private sealed record SearchAnalyticsResponse(SearchAnalyticsRow[]? Rows);
-    private sealed record SearchAnalyticsRow(string[]? Keys, double Clicks, double Impressions);
+    private sealed record SearchAnalyticsRow(string[]? Keys, double Clicks, double Impressions, double Ctr, double Position)
+    {
+        public SearchTrafficMetrics Metrics => new(Clicks, Impressions, Ctr, Position);
+    }
 }
