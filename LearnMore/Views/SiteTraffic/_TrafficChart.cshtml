@@ -5,7 +5,7 @@
 @if (Model.Any(point => point.Value.HasValue))
 {
     <div class="traffic-chart" aria-hidden="true">
-        <div class="traffic-axis"><span>@max.ToString("N0")</span><span>0</span></div>
+        <div class="traffic-axis"><span>@max.ToString("N0")</span><span>@((max / 2).ToString("0.#"))</span><span>0</span></div>
         <div class="traffic-columns">
             @foreach (var point in Model)
             {
@@ -17,7 +17,21 @@
                 </div>
             }
         </div>
-        <div class="traffic-dates"><span>@Model[0].Label</span><span>@Model[^1].Label</span></div>
+        <div class="traffic-dates">
+            @if (Model.Count == 1)
+            {
+                <span>@Model[0].Label</span>
+            }
+            else
+            {
+                <span>@Model[0].Label</span>
+                @if (Model.Count > 2)
+                {
+                    <span>@Model[Model.Count / 2].Label</span>
+                }
+                <span>@Model[^1].Label</span>
+            }
+        </div>
     </div>
 }
 else

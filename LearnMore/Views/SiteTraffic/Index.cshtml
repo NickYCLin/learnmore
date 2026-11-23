@@ -5,34 +5,36 @@
     var busiest = Model.Daily.MaxBy(day => day.Views);
 }
 @section Styles {
-    <link rel="stylesheet" href="~/css/management-queues.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/css/site-traffic.css" asp-append-version="true" />
 }
 <section class="mq-page traffic-page" aria-labelledby="traffic-title">
-    <h1 id="traffic-title">網站流量</h1>
-    <p class="mq-subtitle">查看 LearnMore 的瀏覽活動，以及訪客用哪些 Google 搜尋字詞找到網站。</p>
-    <nav class="mq-tabs" aria-label="統計期間">
-        <a asp-action="Index" asp-route-days="7" aria-current="@(Model.Days == 7 ? "page" : null)">最近 7 天</a>
-        <a asp-action="Index" asp-route-days="30" aria-current="@(Model.Days == 30 ? "page" : null)">最近 30 天</a>
-    </nav>
+    <header class="traffic-header">
+        <div>
+            <h1 id="traffic-title">網站流量</h1>
+            <p class="mq-subtitle">查看站內瀏覽與 Google 搜尋成效。</p>
+        </div>
+        <nav class="mq-tabs" aria-label="統計期間">
+            <a asp-action="Index" asp-route-days="7" aria-current="@(Model.Days == 7 ? "page" : null)">最近 7 天</a>
+            <a asp-action="Index" asp-route-days="30" aria-current="@(Model.Days == 30 ? "page" : null)">最近 30 天</a>
+        </nav>
+    </header>
     @if (Model.StartedAt is DateTimeOffset startedAt)
     {
-        <h2 class="traffic-section-title">站內瀏覽</h2>
-        <div class="mq-overview" aria-label="瀏覽概況">
-            <div><span class="mq-label">今天瀏覽</span><strong>@Model.TodayViews.ToString("N0")</strong><small>台灣時間 @Model.Today.ToString("MM/dd")</small></div>
-            <div><span class="mq-label">期間瀏覽</span><strong>@total.ToString("N0")</strong><small>不重複人數未追蹤</small></div>
-            <div><span class="mq-label">日均瀏覽</span><strong>@((Model.Daily.Count == 0 ? 0 : (double)total / Model.Daily.Count).ToString("N1"))</strong><small>含今天，共 @Model.Daily.Count 個統計日</small></div>
-            <div><span class="mq-label">單日最高</span><strong>@((busiest?.Views ?? 0).ToString("N0"))</strong><small>@(busiest is { Views: > 0 } ? busiest.Label : "尚無紀錄")</small></div>
-            <div><span class="mq-label">最近一次瀏覽</span><strong class="traffic-last">@(Model.LastViewAt?.ToOffset(TimeSpan.FromHours(8)).ToString("MM/dd HH:mm") ?? "尚無紀錄")</strong><small>台灣時間</small></div>
-        </div>
         @if (Model.SavePending)
         {
             <p class="mq-notice" role="status">流量暫存於記憶體，寫入失敗，系統會重試。重啟前未成功寫入的統計可能遺失。</p>
         }
-        <section class="mq-card" aria-labelledby="traffic-trend">
-            <h2 id="traffic-trend">每日瀏覽量</h2>
-            <p class="mq-meta">開始統計：@startedAt.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm")。只計部分公開頁面的瀏覽，不含已知機器人；仍可能有未辨識的自動流量。</p>
-            <partial name="_TrafficChart" model="Model.Daily.Select(day => (day.Label, (double?)day.Views)).ToArray()" />
+        <section class="mq-card traffic-lead" aria-labelledby="traffic-trend">
+            <div class="traffic-lead-main">
+                <h2 id="traffic-trend">站內瀏覽</h2>
+                <strong class="traffic-total">@total.ToString("N0")</strong>
+                <p class="mq-meta">期間瀏覽次數，不是不重複人數</p>
+                <p class="mq-meta traffic-since">開始統計：@startedAt.ToOffset(TimeSpan.FromHours(8)).ToString("yyyy/MM/dd HH:mm")。只計部分公開頁面的瀏覽，不含已知機器人；仍可能有未辨識的自動流量。</p>
+            </div>
+            <div class="traffic-lead-chart">
+                <h3>每日瀏覽量</h3>
+                <partial name="_TrafficChart" model="Model.Daily.Select(day => (day.Label, (double?)day.Views)).ToArray()" />
+            </div>
             <details class="traffic-details">
                 <summary>每日明細</summary>
                 <ul class="traffic-bars">
@@ -43,6 +45,12 @@
                 </ul>
             </details>
         </section>
+        <div class="mq-overview" aria-label="瀏覽概況">
+            <div><span class="mq-label">今天瀏覽</span><strong>@Model.TodayViews.ToString("N0")</strong><small>台灣時間 @Model.Today.ToString("MM/dd")</small></div>
+            <div><span class="mq-label">日均瀏覽</span><strong>@((Model.Daily.Count == 0 ? 0 : (double)total / Model.Daily.Count).ToString("N1"))</strong><small>含今天，共 @Model.Daily.Count 個統計日</small></div>
+            <div><span class="mq-label">單日最高</span><strong>@((busiest?.Views ?? 0).ToString("N0"))</strong><small>@(busiest is { Views: > 0 } ? busiest.Label : "尚無紀錄")</small></div>
+            <div><span class="mq-label">最近一次瀏覽</span><strong class="traffic-last">@(Model.LastViewAt?.ToOffset(TimeSpan.FromHours(8)).ToString("MM/dd HH:mm") ?? "尚無紀錄")</strong><small>台灣時間</small></div>
+        </div>
         <div class="traffic-breakdown">
             @foreach (var breakdown in new[] { (Title: "瀏覽來源", Items: Model.Sources), (Title: "瀏覽頁面類型", Items: Model.Pages) })
             {
@@ -69,7 +77,7 @@
     {
         <p class="mq-notice" role="status">站內流量暫時無法讀取，請檢查伺服器的統計儲存設定。這不代表沒有人瀏覽。</p>
     }
-    <section aria-labelledby="traffic-search">
+    <section class="traffic-search" aria-labelledby="traffic-search">
         <h2 id="traffic-search" class="traffic-section-title">Google 搜尋成效</h2>
         <p class="mq-meta">@Model.Search.Start.ToString("yyyy/MM/dd") 至 @Model.Search.End.ToString("yyyy/MM/dd")（美國太平洋時間）。只含 Google 網頁搜尋已定稿的資料，不等於站內瀏覽或訪客人數。</p>
         @if (Model.Search.State == "not-configured")
@@ -101,7 +109,7 @@
                 <p class="mq-meta">空白日代表 Google 未回傳資料，不以零補值。兩張圖各有自己的刻度。</p>
                 <div class="traffic-breakdown">
                     <div><h3>點擊</h3><partial name="_TrafficChart" model="dates.Select(day => (day.Label, day.Metrics?.Clicks)).ToArray()" /></div>
-                    <div><h3>曝光</h3><partial name="_TrafficChart" model="dates.Select(day => (day.Label, day.Metrics?.Impressions)).ToArray()" /></div>
+                    <div class="traffic-exposure"><h3>曝光</h3><partial name="_TrafficChart" model="dates.Select(day => (day.Label, day.Metrics?.Impressions)).ToArray()" /></div>
                 </div>
                 <details class="traffic-details">
                     <summary>每日搜尋明細</summary>
