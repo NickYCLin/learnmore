@@ -2039,40 +2039,6 @@
         handlePlaybackEnded();
     }
 
-    function adjustControlsForScreenSize() {
-        const controls = document.querySelectorAll('.controls');
-        const isMobile = window.matchMedia('(max-width: 991.98px)').matches;
-
-        controls.forEach(control => {
-            if (isMobile) {
-                control.style.position = 'static';
-                control.style.marginTop = '10px';
-                control.style.justifyContent = 'center';
-                control.querySelectorAll('button').forEach(button => {
-                    button.style.fontSize = '12px';
-                });
-                control.querySelectorAll('.fas').forEach(icon => {
-                    icon.style.fontSize = '12px';
-                });
-            } else {
-                control.style.position = 'absolute';
-                control.style.bottom = '2px';
-                control.style.right = '10px';
-                control.style.marginTop = '0';
-                control.style.justifyContent = 'flex-start';
-                control.querySelectorAll('button').forEach(button => {
-                    button.style.fontSize = '14px';
-                });
-                control.querySelectorAll('.fas').forEach(icon => {
-                    icon.style.fontSize = '14px';
-                });
-            }
-        });
-    }
-
-    window.addEventListener('resize', adjustControlsForScreenSize);
-    document.addEventListener('DOMContentLoaded', adjustControlsForScreenSize);
-
     function adjustFontSizeForLyrics() {
         const isMobile = window.innerWidth <= 768;
         document.querySelectorAll('.lyrics-line').forEach(line => {

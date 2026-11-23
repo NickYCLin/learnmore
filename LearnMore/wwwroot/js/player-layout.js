@@ -70,7 +70,6 @@
             }
         });
         document.querySelectorAll('.controls').forEach(controls => {
-            if (!controls.closest('.line-more')) disclosure(controls, 'line-more', '更多');
             controls.querySelectorAll('button').forEach(button => {
                 if (!button.hasAttribute('aria-label')) button.setAttribute('aria-label', button.title || button.textContent || '歌詞操作');
             });

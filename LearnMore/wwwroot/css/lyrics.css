@@ -391,8 +391,8 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
 .roman-line { font-size: 14px; color: var(--primary-color); margin-bottom: 4px; font-weight: 500; }
 .cn-line { font-size: 15px; color: var(--text-secondary); margin-top: 4px; }
 .lyrics-container rt, .lyrics-container rp { font-size: 11px; color: var(--primary-color) !important; font-weight: 600; }
-.controls { position: absolute; bottom: 8px; right: 8px; display: flex; gap: 6px; opacity: 0; transition: opacity var(--transition-fast); }
-.lyrics-line:hover .controls { opacity: 1; }
+.controls { position: absolute; bottom: 2px; right: 10px; display: flex; gap: 6px; opacity: 0; transition: opacity var(--transition-fast); }
+.lyrics-line:hover .controls, .controls:focus-within { opacity: 1; }
 .controls button { padding: 6px 8px; border: 1px solid var(--border-color); background: var(--bg-primary); cursor: pointer; border-radius: 6px; transition: all var(--transition-fast); color: var(--text-secondary); }
 .controls button:hover { background: var(--primary-color); color: white; border-color: var(--primary-color); transform: scale(1.1); }
 .controls button.active { background: var(--accent-orange); color: white; border-color: var(--accent-orange); }
@@ -557,8 +557,6 @@ input:disabled + .slider { opacity: 0.5; cursor: not-allowed; }
     .jp-line { font-size: 16px; line-height: 2; overflow-wrap: anywhere; }
     .cn-line { font-size: 13px; overflow-wrap: anywhere; }
     .roman-line { font-size: 12px; overflow-wrap: anywhere; }
-    .controls { position: static; display: flex; flex-wrap: wrap; justify-content: center; margin-top: 10px; opacity: 1; }
-    .controls button { min-width: 38px; min-height: 38px; font-size: 12px; padding: 6px; }
     .feature-tabs { justify-content: flex-start; flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
     .feature-tabs .tab-button { flex: 0 0 auto; scroll-snap-align: start; padding: 9px 12px; }
     .toggle-wrapper { flex-direction: column; align-items: stretch; gap: 12px; }

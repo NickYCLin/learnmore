@@ -143,6 +143,22 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
         return values;
     }
     try {
+        for (const width of [320, 390, 768, 991]) {
+            const { page } = await open('/Lyrics/Index?songUid=fixture-song', width);
+            const controls = await page.$eval('#mode-1 .lyrics-line .controls', element => {
+                const line = element.closest('.lyrics-line').getBoundingClientRect();
+                const card = element.closest('.lyric-card').getBoundingClientRect();
+                const buttons = [...element.querySelectorAll('button')].map(button => button.getBoundingClientRect());
+                return {
+                    visible: !element.closest('details') && getComputedStyle(element).opacity === '1' && buttons.length === 5,
+                    fits: buttons.every(button => button.width >= 44 && button.height >= 44 && button.left >= Math.max(line.left, card.left) && button.right <= Math.min(line.right, card.right)),
+                    wraps: new Set(buttons.map(button => button.top)).size > 1
+                };
+            });
+            check(controls.visible && controls.fits, `${width}px: five lyric actions visible and within the card`);
+            if (width === 320) check(controls.wraps, '320px: lyric actions wrap instead of shrinking');
+            await page.close();
+        }
         for (const width of [390, 768, 991]) {
             const { page, errors } = await open('/Lyrics/Index?songUid=fixture-song', width);
             await page.waitForSelector('.video-sticky-stack iframe');
@@ -158,8 +174,6 @@ window.YT = { PlayerState: { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUF
             check(!await page.$('#current-lyric-button, #top-button'), 'manual navigation buttons are absent after scrolling');
             await page.click('.practice-disclosure > summary');
             check(await page.$eval('#practice-speed', element => element.getBoundingClientRect().height >= 44), 'practice touch target');
-            await page.click('.line-more > summary');
-            check(await page.$eval('.line-more .controls button', element => element.getBoundingClientRect().width >= 44 && element.getBoundingClientRect().height >= 44), 'line more touch target');
             check(await page.$eval('.lyrics-favorite', element => element.getBoundingClientRect().height >= 44), 'favorite target');
             check(await page.$eval('.mika-avatar-panel', element => !element.classList.contains('mobile-expanded')), 'Mika collapsed');
             await page.evaluate(() => {
