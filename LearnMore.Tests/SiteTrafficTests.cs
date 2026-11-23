@@ -137,7 +137,7 @@ public sealed class SiteTrafficTests : IDisposable
         Assert.Equal(new[] { "2026-11-15", "2026-11-19" }, report.Daily!.Select(row => row.Label));
         Assert.Equal("https://example.com/LearnMore/song", Assert.Single(report.Pages!).Label);
         Assert.Equal("MOBILE", Assert.Single(report.Devices!).Label);
-        Assert.Equal("twn", Assert.Single(report.Countries!).Label);
+        Assert.Equal(new[] { "台灣", "日本", "美國", "未知地區" }, report.Countries!.Select(row => row.Label));
     }
 
     [Fact]
@@ -205,7 +205,7 @@ public sealed class SiteTrafficTests : IDisposable
                 "date" => (7, """[{"keys":["2026-11-19"]},{"keys":["2026-11-15"]}]"""),
                 "page" => (10, """[{"keys":["https://example.com/LearnMore/song"]}]"""),
                 "device" => (10, """[{"keys":["MOBILE"]}]"""),
-                "country" => (10, """[{"keys":["twn"]}]"""),
+                "country" => (10, """[{"keys":["twn"]},{"keys":["JPN"]},{"keys":["usa"]},{"keys":["zzz"]}]"""),
                 _ => throw new InvalidOperationException($"Unexpected dimension: {dimension}")
             };
             Assert.Equal(limit, json.RootElement.GetProperty("rowLimit").GetInt32());

@@ -71,7 +71,7 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
 
         return new("ready", start, end, (await totals).FirstOrDefault()?.Metrics,
             Breakdown(await keywords), Breakdown(await daily).OrderBy(row => row.Label, StringComparer.Ordinal).ToArray(),
-            Breakdown(await pages), Breakdown(await devices), Breakdown(await countries));
+            Breakdown(await pages), Breakdown(await devices), Breakdown(await countries, SearchTrafficCountryNames.Format));
     }
 
     private async Task<SearchAnalyticsRow[]> ReadRowsAsync(string property, string? pagePrefix, DateOnly start, DateOnly end,
@@ -101,9 +101,9 @@ public sealed class SearchConsoleTraffic(HttpClient client, IConfiguration confi
         return data.Rows ?? [];
     }
 
-    private static SearchTrafficRow[] Breakdown(SearchAnalyticsRow[] rows) => rows
+    private static SearchTrafficRow[] Breakdown(SearchAnalyticsRow[] rows, Func<string, string>? formatLabel = null) => rows
         .Where(row => row.Keys?.Length == 1 && !string.IsNullOrWhiteSpace(row.Keys[0]))
-        .Select(row => new SearchTrafficRow(row.Keys![0], row.Metrics)).ToArray();
+        .Select(row => new SearchTrafficRow(formatLabel?.Invoke(row.Keys![0]) ?? row.Keys![0], row.Metrics)).ToArray();
 
     private static string EscapePrefix(string prefix) => string.Concat(prefix.Select(character =>
         @"\.^$|?*+()[]{}".Contains(character) ? "\\" + character : character.ToString()));
