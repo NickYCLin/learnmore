@@ -7,7 +7,7 @@ const DEFAULT_VIEWPORT_WIDTH = 1365;
 const DEFAULT_VIEWPORT_HEIGHT = 900;
 const DEFAULT_VOCAL_DECODE_TIMEOUT_MS = 120000;
 const EXPECTED_SAMPLE_AVATARS = [
-  { id: "mao_pro", runtime: "live2d", label: "mao_pro" }
+  { id: "mao_pro", runtime: "live2d", label: "Mika" }
 ];
 const BLOCKED_LEARNMORE_AVATAR_IDS = [
   "hiyori_pro",
@@ -325,8 +325,8 @@ async function main() {
     assertSmoke(initial.avatarShowAskMika === "false", "Mika embed-config should hide ask-Mika UI", initial);
     assertSmoke(initial.avatarCanSwitchToLive2d === "false", "Mika embed-config should keep unfinished Mika disabled", initial);
     assertSmoke(initial.activeChoice === "mao_pro", "LearnMore should default to mao_pro", initial);
-    assertSmoke(initial.avatarDisplayName === "mao_pro", "mao_pro should display as mao_pro", initial);
-    assertSmoke(initial.activeChoiceText === "mao_pro", "mao_pro switch label should be mao_pro", initial);
+    assertSmoke(initial.avatarDisplayName === "Mika", "the reading avatar should display as Mika", initial);
+    assertSmoke(initial.activeChoiceText === "Mika", "the reading avatar switch label should be Mika", initial);
     EXPECTED_SAMPLE_AVATARS.forEach((avatar) => {
       assertSmoke(
         initial.choices.some(choice => choice.id === avatar.id && choice.text === avatar.label && choice.title === avatar.label),

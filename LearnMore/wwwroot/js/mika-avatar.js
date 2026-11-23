@@ -19,6 +19,7 @@
     const avatarStorageKey = 'learnmore:mika-avatar-id';
     const avatarPreferredStorageKey = 'learnmore:mika-avatar-preferred-id';
     const fallbackSupportedAvatarIds = ['mao_pro'];
+    const readingAvatarDisplayName = panel.dataset.avatarDisplayName || 'Mika';
     const learnMoreBlockedAvatarIds = new Set([
         'mika_live2d',
         'mika_stretchy_test',
@@ -29,7 +30,7 @@
         'ren_foster'
     ]);
     const fallbackAvatarConfigs = {
-        mao_pro: { id: 'mao_pro', runtime: 'live2d', displayName: 'mao_pro', switchLabel: 'mao_pro' }
+        mao_pro: { id: 'mao_pro', runtime: 'live2d', displayName: readingAvatarDisplayName, switchLabel: readingAvatarDisplayName }
     };
     let avatarConfigs = { ...fallbackAvatarConfigs };
     let preferredAvatarId = 'mao_pro';
@@ -186,16 +187,17 @@
             return null;
         }
 
+        const displayName = getAvatarDisplayName(id, runtime, avatar.displayName);
         return {
             id,
             runtime,
-            displayName: String(avatar.displayName || id).trim(),
-            switchLabel: getAvatarSwitchLabel(id, runtime, avatar.displayName)
+            displayName,
+            switchLabel: displayName
         };
     }
 
-    function getAvatarSwitchLabel(id, runtime, displayName) {
-        return String(displayName || id || runtime).trim();
+    function getAvatarDisplayName(id, runtime, displayName) {
+        return id === 'mao_pro' ? readingAvatarDisplayName : String(displayName || id || runtime).trim();
     }
 
     function bindAvatarChoiceButtons() {
@@ -357,7 +359,7 @@
         }
 
         existing.embedUrl = avatarEmbedConfig.embedSrc;
-        existing.displayName = avatarEmbedConfig.displayName || existing.displayName;
+        existing.displayName = getAvatarDisplayName(existing.id, existing.runtime, avatarEmbedConfig.displayName || existing.displayName);
         existing.switchLabel = existing.displayName;
     }
 
