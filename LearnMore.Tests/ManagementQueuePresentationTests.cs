@@ -42,9 +42,9 @@ public sealed class ManagementQueuePresentationTests
             var user = new ManagedUser(17,"Test","","member@example.invalid",false,false,null,lastLogin,0,null);
             var list = WebUtility.HtmlDecode(await Render("ManagerUsers/Index",new ManagedUsersPage("","all",1,1,[user]),true));
             var detail = WebUtility.HtmlDecode(await Render("ManagerUsers/Detail",new ManagedUserDetail(user,new Dictionary<string,long?>(),[],[]),true));
-            Assert.Contains("<th>最後登入（台灣時間）</th>",list);
+            Assert.Contains("<th>最後登入</th>",list);
             Assert.Contains($"<td>{expected}</td>",list);
-            Assert.Contains($"<dt>最後登入（台灣時間）</dt><dd>{expected}</dd>",detail);
+            Assert.Contains($"<dt>最後登入</dt><dd>{expected}</dd>",detail);
         }
     }
 

@@ -21,7 +21,7 @@
         </select></div><button class="btn btn-primary" type="submit">搜尋</button>
     </form>
     <p class="text-muted" role="status">共 @Model.TotalCount 個帳號 · 第 @Model.Page / @Model.TotalPages 頁 · 每頁 25 筆</p>
-    <div class="um-table-wrap"><table class="table align-middle um-table"><thead><tr><th>使用者</th><th>權限／狀態</th><th>最後登入（台灣時間）</th><th>操作</th></tr></thead><tbody>
+    <div class="um-table-wrap"><table class="table align-middle um-table"><thead><tr><th>使用者</th><th>權限／狀態</th><th>最後登入</th><th>操作</th></tr></thead><tbody>
         @foreach (var user in Model.Items)
         {
             <tr><td><div class="um-identity"><partial name="~/Views/ManagerUsers/_Avatar.cshtml" model="user" /><div><strong>@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</strong><div class="um-email">@user.Email</div><small class="text-muted">ID @user.Id</small></div></div></td>
