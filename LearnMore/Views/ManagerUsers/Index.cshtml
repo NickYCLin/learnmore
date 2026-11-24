@@ -21,12 +21,12 @@
         </select></div><button class="btn btn-primary" type="submit">搜尋</button>
     </form>
     <p class="text-muted" role="status">共 @Model.TotalCount 個帳號 · 第 @Model.Page / @Model.TotalPages 頁 · 每頁 25 筆</p>
-    <div class="um-table-wrap"><table class="table align-middle um-table"><thead><tr><th>使用者</th><th>權限／狀態</th><th>最後登入（UTC）</th><th>操作</th></tr></thead><tbody>
+    <div class="um-table-wrap"><table class="table align-middle um-table"><thead><tr><th>使用者</th><th>權限／狀態</th><th>最後登入（台灣時間）</th><th>操作</th></tr></thead><tbody>
         @foreach (var user in Model.Items)
         {
             <tr><td><div class="um-identity"><partial name="~/Views/ManagerUsers/_Avatar.cshtml" model="user" /><div><strong>@(string.IsNullOrWhiteSpace(user.NickName) ? user.Name : user.NickName)</strong><div class="um-email">@user.Email</div><small class="text-muted">ID @user.Id</small></div></div></td>
                 <td><span class="um-badge">@(user.Manager ? "Manager" : "一般會員")</span> <span class="um-badge">@UserState(user)</span></td>
-                <td>@(user.LastLoginAt?.ToString("yyyy-MM-dd HH:mm:ss") ?? "尚無紀錄")</td>
+                <td>@(user.LastLoginAt?.AddHours(8).ToString("yyyy-MM-dd HH:mm:ss") ?? "尚無紀錄")</td>
                 <td><a class="btn btn-outline-primary btn-sm" asp-action="Detail" asp-route-id="@user.Id">查看詳情</a></td></tr>
         }
         @if (Model.Items.Count == 0) { <tr><td colspan="4" class="text-center py-4">沒有符合條件的帳號。</td></tr> }

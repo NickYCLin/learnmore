@@ -30,6 +30,25 @@ public sealed class ManagementQueuePresentationTests
     }
 
     [Fact]
+    public async Task UserManagementShowsLastLoginInTaiwanTimeOnListAndDetail()
+    {
+        var storedUtc = new DateTime(2026, 11, 24, 16, 30, 45);
+        foreach (var (lastLogin, expected) in new (DateTime?, string)[]
+        {
+            (storedUtc, "2026-11-25 00:30:45"),
+            (null, "尚無紀錄")
+        })
+        {
+            var user = new ManagedUser(17,"Test","","member@example.invalid",false,false,null,lastLogin,0,null);
+            var list = WebUtility.HtmlDecode(await Render("ManagerUsers/Index",new ManagedUsersPage("","all",1,1,[user]),true));
+            var detail = WebUtility.HtmlDecode(await Render("ManagerUsers/Detail",new ManagedUserDetail(user,new Dictionary<string,long?>(),[],[]),true));
+            Assert.Contains("<th>最後登入（台灣時間）</th>",list);
+            Assert.Contains($"<td>{expected}</td>",list);
+            Assert.Contains($"<dt>最後登入（台灣時間）</dt><dd>{expected}</dd>",detail);
+        }
+    }
+
+    [Fact]
     public async Task UserManagementShowsAvatarsOnListAndDetail()
     {
         foreach (var source in new[] {

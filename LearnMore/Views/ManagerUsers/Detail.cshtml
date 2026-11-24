@@ -16,7 +16,7 @@
         <article class="mq-card"><h2>帳號資料</h2><dl class="um-details">
             <dt>姓名</dt><dd>@user.Name</dd><dt>暱稱</dt><dd>@(string.IsNullOrWhiteSpace(user.NickName) ? "尚未設定" : user.NickName)</dd>
             <dt>Email</dt><dd class="um-email">@user.Email</dd><dt>權限</dt><dd>@(user.Manager ? "Manager" : "一般會員")</dd><dt>狀態</dt><dd>@state</dd>
-            <dt>建立時間</dt><dd>@Stamp(user.CreatedAt)（資料庫原始時間）</dd><dt>最後登入</dt><dd>@Stamp(user.LastLoginAt)（UTC）</dd><dt>刪除時間</dt><dd>@Stamp(user.DeletedAt)（UTC）</dd>
+            <dt>建立時間</dt><dd>@Stamp(user.CreatedAt)（資料庫原始時間）</dd><dt>最後登入（台灣時間）</dt><dd>@Stamp(user.LastLoginAt?.AddHours(8))</dd><dt>刪除時間</dt><dd>@Stamp(user.DeletedAt)（UTC）</dd>
             <dt>App 登入方式</dt><dd>@(Model.Providers.Count == 0 ? "尚無 App 綁定紀錄" : string.Join("、", Model.Providers))</dd>
         </dl><p class="text-muted">最後登入不代表目前在線；未保存的舊登入時間不推估。本站不顯示登入憑證、權杖或密碼。</p></article>
         <article class="mq-card"><h2>使用情形</h2><div class="um-stats">
