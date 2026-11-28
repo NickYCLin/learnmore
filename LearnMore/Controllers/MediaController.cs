@@ -472,6 +472,7 @@ namespace LearnMore.Controllers
             }
             request.YouTubeUrl = normalizedYouTubeUrl;
 
+            string? unfinishedSongUid = null;
             try
             {
                 // ════════════════════════════════════════════════
@@ -1049,7 +1050,7 @@ namespace LearnMore.Controllers
                 }
 
                 // ════════════════════════════════════════════════
-                // Step 2：建立資料庫記錄，先以「翻譯中...」填入
+                // Step 2：建立未公開歌曲，缺少的中文先以「翻譯中...」填入
                 // ════════════════════════════════════════════════
                 await SendEvent("progress", new { message = "💾 建立歌曲資料..." });
                 _logger.LogInformation("Step 2: 建立資料庫記錄，segmentsToInsert 共 {Count} 行",
@@ -1070,7 +1071,7 @@ namespace LearnMore.Controllers
                     throw;
                 }
 
-                string songUid = placeholderPersistenceResult.SongUid;
+                string songUid = unfinishedSongUid = placeholderPersistenceResult.SongUid;
                 var lyricIds = placeholderPersistenceResult.LyricIds;
 
                 // ── 立即推送 segments，讓使用者看到歌詞 ──
@@ -1093,125 +1094,49 @@ namespace LearnMore.Controllers
                 // Step 3：背景取翻譯（marumaru → 巴哈姆特 → GPT 批次）
                 // 如果 Step 1.5 已經從 marumaru 取得翻譯，直接使用
                 // ════════════════════════════════════════════════
-                List<LyricSegment>? finalSegments = null;
+                var translationResolution = await _translationSourceService.ResolveFinalSegmentsAsync(
+                    request.Title ?? string.Empty,
+                    request.Artist ?? string.Empty,
+                    stableSegmentsToInsert,
+                    preAlignedSegments,
+                    ct);
+                var finalSegments = translationResolution.Segments;
 
-                // 由 translation source workflow service 決定是否可直接沿用 Step 1.5 的翻譯
+                if (translationResolution.Source is TranslationSourceKind.PreAligned or TranslationSourceKind.Marumaru)
+                    await SendEvent("progress", new { message = "✅ 使用 marumaru 翻譯" });
 
-                // 3A / 3B / 3C：交由 translation source workflow service 決定翻譯來源與 fallback
-                if (finalSegments == null)
+                var (timingStatus, timingReason) = GetUploadTimingStatus(
+                    fromTypingTube, fromLrcLibOrNetEase, precisionCorrectionCompleted,
+                    fromYouTubeAutoCaptionTimeAnchors, preAlignedSegments is { Count: > 0 },
+                    stableSegmentsToInsert.Count, precisionCorrectionCompletedReason, precisionCorrectionReviewReason);
+                var needsCodexTranslation = !SongTranslationCompleteness.HasCompleteChineseTranslations(finalSegments);
+                var statusReason = needsCodexTranslation
+                    ? timingStatus == "high_accuracy_pending"
+                        ? "timing_validation_pending: 翻譯未完成，補件驗證通過後再校正秒數。"
+                        : "翻譯未完成，補件驗證通過後自動公開。"
+                    : timingReason;
+
+                // Step 4／5：同一筆交易寫入翻譯、公開狀態與待辦。
+                await _songPersistence.FinalizeUploadTranslationsAsync(
+                    songUid, finalSegments, lyricIds, timingStatus, statusReason, CancellationToken.None);
+                unfinishedSongUid = null;
+                if (!needsCodexTranslation)
                 {
-                    var translationResolution = await _translationSourceService.ResolveFinalSegmentsAsync(
-                        request.Title ?? string.Empty,
-                        request.Artist ?? string.Empty,
-                        stableSegmentsToInsert,
-                        preAlignedSegments,
-                        ct);
-                    finalSegments = translationResolution.Segments;
-
-                    if (translationResolution.Source is TranslationSourceKind.PreAligned or TranslationSourceKind.Marumaru)
-                    {
-                        await SendEvent("progress", new { message = "✅ 使用 marumaru 翻譯" });
-                    }
+                    _postProcessService.EnqueueRubyRomanEnrichment(songUid);
+                    if (timingStatus == "high_accuracy_pending")
+                        _highAccuracyInitialPassService.EnqueueHighAccuracyInitialPass(songUid);
                 }
 
-                ct.ThrowIfCancellationRequested();
-
-                // ════════════════════════════════════════════════
-                // Step 4：用實際翻譯更新資料庫，再推送 translations 事件
-                // ════════════════════════════════════════════════
-                await SendEvent("progress", new { message = "✅ 歌詞已載入！翻譯寫入中..." });
-
-                lyricIds = await _songPersistence.UpdateSongTranslationsAsync(songUid, finalSegments, lyricIds, ct);
-
-                // 推送翻譯更新給前端（前端更新表格中文欄位）
-                var translationUpdates = finalSegments.Select((seg, idx) => new
+                await SendEvent("translations", finalSegments.Select((segment, index) => new
                 {
-                    id = idx,
-                    chinese = seg.Chinese
-                }).ToList();
-                await SendEvent("translations", translationUpdates);
+                    id = index,
+                    chinese = segment.Chinese
+                }).ToList());
 
-                var needsCodexTranslation = !HasCompleteChineseTranslations(finalSegments);
-
-                // ════════════════════════════════════════════════
-                // Step 5：補 Ruby 注音 + 羅馬拼音（用獨立 Task，不受 SSE 連線取消影響）
-                // ════════════════════════════════════════════════
-                // 注意：先標記背景狀態，再推 done，避免前端在 done 後立刻斷線導致狀態更新被取消
-                var shouldRunBackgroundHighAccuracyPass = false;
                 if (needsCodexTranslation)
-                {
-                    var timingPendingReason = fromLrcLibOrNetEase && !precisionCorrectionCompleted
-                        ? $"timing_validation_pending: {precisionCorrectionReviewReason ?? "同步歌詞秒數尚未通過同影片校正"}；"
-                        : string.Empty;
-                    await _songPersistence.UpdateHighAccuracyStatusAsync(
-                        songUid,
-                        "translation_pending_codex",
-                        $"{timingPendingReason}翻譯未完成：已排入後台補件，完成驗證後會依秒數校正狀態更新。",
-                        CancellationToken.None);
-                    await SendEvent("progress", new { message = "📝 中文翻譯待後台補齊，歌曲已建立。" });
-                }
-                else if (fromTypingTube)
-                {
-                    await _songPersistence.UpdateHighAccuracyStatusAsync(
-                        songUid,
-                        "high_accuracy_completed",
-                        $"TypingTube 人工時間軸匯入，共 {stableSegmentsToInsert.Count} 行；未使用 YouTube 自動字幕。",
-                        CancellationToken.None);
-                }
-                else if (fromLrcLibOrNetEase)
-                {
-                    if (precisionCorrectionCompleted)
-                    {
-                        await _songPersistence.UpdateHighAccuracyStatusAsync(
-                            songUid,
-                            "high_accuracy_completed",
-                            precisionCorrectionCompletedReason ?? $"同步歌詞來源已完成同影片精準校正，共 {stableSegmentsToInsert.Count} 行。",
-                            CancellationToken.None);
-                    }
-                    else
-                    {
-                        await _songPersistence.UpdateHighAccuracyStatusAsync(
-                            songUid,
-                            "high_accuracy_pending",
-                            $"timing_validation_pending: {precisionCorrectionReviewReason ?? "逐句精準校正未完整命中"}；已保留同步歌詞來源時間戳，共 {stableSegmentsToInsert.Count} 行，背景高精度補跑中。",
-                            CancellationToken.None);
-                        shouldRunBackgroundHighAccuracyPass = true;
-                    }
-                }
-                else if (preAlignedSegments is { Count: > 0 })
-                {
-                    if (precisionCorrectionCompleted || fromYouTubeAutoCaptionTimeAnchors)
-                    {
-                        await _songPersistence.UpdateHighAccuracyStatusAsync(
-                            songUid,
-                            "high_accuracy_completed",
-                            precisionCorrectionCompleted
-                                ? $"marumaru 正式歌詞已完成逐句精準校正，共 {stableSegmentsToInsert.Count} 行。"
-                                : $"marumaru 正式歌詞已套用 YouTube 時間錨，共 {stableSegmentsToInsert.Count} 行。",
-                            CancellationToken.None);
-                    }
-                    else
-                    {
-                        await _songPersistence.UpdateHighAccuracyStatusAsync(
-                            songUid,
-                            "high_accuracy_pending",
-                            $"{precisionCorrectionReviewReason ?? "正式歌詞逐句對齊未完整命中"}；已先套用 marumaru 正式歌詞，共 {stableSegmentsToInsert.Count} 行，背景高精度補跑中。",
-                            CancellationToken.None);
-                        shouldRunBackgroundHighAccuracyPass = true;
-                    }
-                }
-                else
-                {
-                    await _songPersistence.UpdateHighAccuracyStatusAsync(songUid, "high_accuracy_pending", null, CancellationToken.None);
-                    shouldRunBackgroundHighAccuracyPass = true;
-                }
+                    await SendEvent("progress", new { message = "📝 歌曲已儲存為未公開，等待中文翻譯補件。" });
 
                 await SendEvent("done", new { songUid, redirectUrl = Url.Action("Manage", "Media") });
-                _postProcessService.EnqueueRubyRomanEnrichment(songUid);
-                if (shouldRunBackgroundHighAccuracyPass)
-                {
-                    _highAccuracyInitialPassService.EnqueueHighAccuracyInitialPass(songUid);
-                }
             }
             catch (OperationCanceledException)
             {
@@ -1240,6 +1165,20 @@ namespace LearnMore.Controllers
                     await SendEvent("error", new { message = "❌ 歌曲自動建立失敗，請稍後再試或通知管理員查看伺服器紀錄。" });
                 }
                 catch { /* 寫入失敗時靜默忽略 */ }
+            }
+            finally
+            {
+                if (unfinishedSongUid is not null)
+                {
+                    try
+                    {
+                        await _songPersistence.QueueUnfinishedUploadAsync(unfinishedSongUid, CancellationToken.None);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "上傳中斷後無法排入翻譯補件，將由背景掃描復原。");
+                    }
+                }
             }
             return new EmptyResult();
         }
@@ -1336,7 +1275,7 @@ namespace LearnMore.Controllers
 
         private static bool IsRetryableHighAccuracyStatus(Songs song)
         {
-            return song.HighAccuracyStatus is
+            return song.IsPublished && song.HighAccuracyStatus is
                 "high_accuracy_partial" or
                 "high_accuracy_pending" or
                 "high_accuracy_processing" or
@@ -1475,7 +1414,14 @@ namespace LearnMore.Controllers
                 return Forbid();
             }
 
-            await _lyricsMutationService.UpdateLyricsAsync(request.SongUid, request.Lyrics, HttpContext.RequestAborted);
+            try
+            {
+                await _lyricsMutationService.UpdateLyricsAsync(request.SongUid, request.Lyrics, HttpContext.RequestAborted);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { success = false, message = ex.Message });
+            }
             TempData["SuccessMessage"] = "歌詞已成功更新！";
 
             return Json(new { success = true, redirectUrl = Url.Action("Manage") });
@@ -1586,12 +1532,24 @@ namespace LearnMore.Controllers
             return Task.CompletedTask;
         }
 
-        private static bool HasCompleteChineseTranslations(IReadOnlyList<LyricSegment> segments)
-            => segments.Count > 0 && segments.All(segment => HasUsableChineseTranslation(segment.Chinese));
-
-        private static bool HasUsableChineseTranslation(string? chinese)
-            => !string.IsNullOrWhiteSpace(chinese)
-                && !string.Equals(chinese.Trim(), "翻譯中...", StringComparison.Ordinal);
+        private static (string Status, string? Reason) GetUploadTimingStatus(
+            bool fromTypingTube, bool fromLrcLibOrNetEase, bool precisionCompleted, bool fromCaptionAnchors,
+            bool preAligned, int lineCount, string? completedReason, string? reviewReason)
+        {
+            if (fromTypingTube)
+                return ("high_accuracy_completed", $"TypingTube 人工時間軸匯入，共 {lineCount} 行；未使用 YouTube 自動字幕。");
+            if (fromLrcLibOrNetEase)
+                return precisionCompleted
+                    ? ("high_accuracy_completed", completedReason ?? $"同步歌詞來源已完成同影片精準校正，共 {lineCount} 行。")
+                    : ("high_accuracy_pending", $"timing_validation_pending: {reviewReason ?? "逐句精準校正未完整命中"}；已保留同步歌詞來源時間戳，共 {lineCount} 行，背景高精度補跑中。");
+            if (preAligned && (precisionCompleted || fromCaptionAnchors))
+                return ("high_accuracy_completed", precisionCompleted
+                    ? $"marumaru 正式歌詞已完成逐句精準校正，共 {lineCount} 行。"
+                    : $"marumaru 正式歌詞已套用 YouTube 時間錨，共 {lineCount} 行。");
+            return ("high_accuracy_pending", preAligned
+                ? $"{reviewReason ?? "正式歌詞逐句對齊未完整命中"}；已先套用 marumaru 正式歌詞，共 {lineCount} 行，背景高精度補跑中。"
+                : null);
+        }
 
         private async Task<bool> CanEditLyricsAsync(string userEmail, string songUid, CancellationToken cancellationToken)
             => await _lyricsQueryService.GetEditLyricsViewModelAsync(userEmail, songUid, cancellationToken) != null;

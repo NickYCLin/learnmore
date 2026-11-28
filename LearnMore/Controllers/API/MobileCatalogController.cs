@@ -24,10 +24,10 @@ public sealed class MobileCatalogController(IConfiguration configuration) : Cont
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = new SqlCommand("""
-            SELECT SongUid, Title, Artist, ChannelThumbnailUrl, YouTubeVideoUrl
-            FROM V_SongsData
-            WHERE (@Query = '' OR CHARINDEX(@Query, Title) > 0 OR CHARINDEX(@Query, Artist) > 0)
-            ORDER BY ViewCount DESC, SongID DESC
+            SELECT V.SongUid, V.Title, V.Artist, V.ChannelThumbnailUrl, V.YouTubeVideoUrl
+            FROM V_SongsData V INNER JOIN Songs S ON S.SongUid = V.SongUid
+            WHERE S.IsPublished = 1 AND (@Query = '' OR CHARINDEX(@Query, V.Title) > 0 OR CHARINDEX(@Query, V.Artist) > 0)
+            ORDER BY V.ViewCount DESC, V.SongID DESC
             OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY
             """, connection);
         command.Parameters.Add("@Query", SqlDbType.NVarChar, 200).Value = q?.Trim() ?? "";
@@ -49,7 +49,7 @@ public sealed class MobileCatalogController(IConfiguration configuration) : Cont
         if (!SafeUid.IsMatch(songUid)) return BadRequest(new { error = "Invalid song UID." });
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
-        await using var exists = new SqlCommand("SELECT COUNT(*) FROM V_SongsData WHERE SongUid = @Uid", connection);
+        await using var exists = new SqlCommand("SELECT COUNT(*) FROM V_SongsData V INNER JOIN Songs S ON S.SongUid = V.SongUid WHERE V.SongUid = @Uid AND S.IsPublished = 1", connection);
         exists.Parameters.Add("@Uid", SqlDbType.NVarChar, 100).Value = songUid;
         if (Convert.ToInt32(await exists.ExecuteScalarAsync(cancellationToken)) == 0) return NotFound();
 

@@ -115,6 +115,31 @@ def test_translate_lines(client, monkeypatch: pytest.MonkeyPatch) -> None:
     assert [item["chinese"] for item in body["translations"]] == ["第一行翻譯", "第二行翻譯"]
 
 
+def test_translate_lines_invokes_configured_cli(client, tmp_path) -> None:
+    test_client, main = client
+    executable = tmp_path / "fixture-codex"
+    executable.write_text(
+        "#!/usr/bin/env python3\n"
+        "import sys\n"
+        "from pathlib import Path\n"
+        "assert 'テスト' in sys.stdin.read()\n"
+        "Path(sys.argv[sys.argv.index('-o') + 1]).write_text("
+        "'{\"translations\":[{\"lyricId\":1,\"chinese\":\"測試\"}]}', encoding='utf-8')\n",
+        encoding="utf-8",
+    )
+    executable.chmod(0o700)
+    main.app.state.settings = main.app.state.settings.model_copy(update={
+        "codex_bin": str(executable), "codex_workdir": str(tmp_path),
+    })
+
+    response = test_client.post("/v1/translate-lines",
+                                headers={"Authorization": "Bearer test-token"},
+                                json={"lines": [{"lyricId": 1, "japanese": "テスト"}]})
+
+    assert response.status_code == 200
+    assert response.json()["translations"] == [{"lyricId": 1, "japanese": "テスト", "chinese": "測試"}]
+
+
 def test_translate_rejects_mismatched_codex_ids(client, monkeypatch: pytest.MonkeyPatch) -> None:
     test_client, main = client
 

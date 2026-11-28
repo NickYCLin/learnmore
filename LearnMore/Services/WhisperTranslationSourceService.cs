@@ -123,7 +123,7 @@ public class WhisperTranslationSourceService : IWhisperTranslationSourceService
             var completedPreAligned = await FillMissingTranslationsWithGptAsync(
                 ClearSuspiciousDuplicateTranslations(preAlignedSegments),
                 cancellationToken);
-            if (HasCompleteChineseTranslations(completedPreAligned))
+            if (SongTranslationCompleteness.HasCompleteChineseTranslations(completedPreAligned))
             {
                 _logger.LogInformation("Step 3: 使用 Step 1.5 預比對的 marumaru 翻譯");
                 return new TranslationSourceResolutionResult(completedPreAligned, TranslationSourceKind.PreAligned);
@@ -189,7 +189,7 @@ public class WhisperTranslationSourceService : IWhisperTranslationSourceService
             _logger.LogInformation("LRC 時間戳：{Count} 行，與 marumaru {Maru} 行對齊", lrcTimestamps.Count, marumaruLyrics.Count);
             var aligned = _marumaruCrawlerService.AlignWithLrc(marumaruLyrics, lrcTimestamps);
             var filled = await FillMissingTranslationsWithGptAsync(ClearSuspiciousDuplicateTranslations(aligned), cancellationToken);
-            if (HasCompleteChineseTranslations(filled))
+            if (SongTranslationCompleteness.HasCompleteChineseTranslations(filled))
             {
                 return filled;
             }
@@ -238,7 +238,7 @@ public class WhisperTranslationSourceService : IWhisperTranslationSourceService
                 Chinese = i < bahaLines.Count ? bahaLines[i] : (seg.Chinese ?? "翻譯中...")
             }).ToList();
 
-            if (HasCompleteChineseTranslations(resolved))
+            if (SongTranslationCompleteness.HasCompleteChineseTranslations(resolved))
             {
                 return resolved;
             }
@@ -279,7 +279,7 @@ public class WhisperTranslationSourceService : IWhisperTranslationSourceService
         var missing = completed
             .Select((segment, index) => (segment, index))
             .Where(item =>
-                !HasUsableChineseTranslation(item.segment.Chinese)
+                !SongTranslationCompleteness.IsUsableChinese(item.segment.Chinese)
                 && !string.IsNullOrWhiteSpace(item.segment.Japanese))
             .ToList();
 
@@ -338,13 +338,6 @@ public class WhisperTranslationSourceService : IWhisperTranslationSourceService
 
         return completed;
     }
-
-    private static bool HasCompleteChineseTranslations(IReadOnlyList<LyricSegment> segments)
-        => segments.Count > 0 && segments.All(segment => HasUsableChineseTranslation(segment.Chinese));
-
-    private static bool HasUsableChineseTranslation(string? chinese)
-        => !string.IsNullOrWhiteSpace(chinese)
-            && !string.Equals(chinese.Trim(), "翻譯中...", StringComparison.Ordinal);
 
     private async Task FillMissingBatchLineByLineAsync(
         List<LyricSegment> completed,

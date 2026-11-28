@@ -138,7 +138,7 @@ namespace LearnMore.Controllers
        Translator, TranslationSource, YouTubeVideoUrl, AddedByUserId,
        CASE WHEN COL_LENGTH('dbo.Songs', 'HighAccuracyStatus') IS NOT NULL THEN [HighAccuracyStatus] ELSE NULL END AS [HighAccuracyStatus],
        CASE WHEN COL_LENGTH('dbo.Songs', 'HighAccuracyStatusReason') IS NOT NULL THEN [HighAccuracyStatusReason] ELSE NULL END AS [HighAccuracyStatusReason]
-FROM Songs WHERE SongUid = @SongUid";
+FROM Songs WHERE SongUid = @SongUid AND IsPublished = 1";
                 SqlCommand command = new SqlCommand(query, connection);
                 command.Parameters.AddWithValue("@SongUid", songUid);
 
@@ -516,7 +516,7 @@ END", connection))
 
                 // 取得歌曲上傳者
                 int? addedByUserId = null;
-                string getSongQuery = "SELECT AddedByUserId FROM Songs WHERE SongUid = @SongUid";
+                string getSongQuery = "SELECT AddedByUserId FROM Songs WHERE SongUid = @SongUid AND IsPublished = 1";
                 using (SqlCommand cmd = new SqlCommand(getSongQuery, conn))
                 {
                     cmd.Parameters.AddWithValue("@SongUid", model.SongUid);

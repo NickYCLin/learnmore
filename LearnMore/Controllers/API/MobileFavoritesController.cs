@@ -61,7 +61,7 @@ public sealed class MobileFavoritesController(IConfiguration config) : Controlle
         if (groupId.HasValue && !await OwnsAsync(db, null, groupId.Value, ct)) return NotFound();
         using var cmd = Command(db, null, """
             SELECT S.SongUid, S.Title, S.Artist, S.ChannelThumbnailUrl, S.YouTubeVideoUrl
-            FROM dbo.Songs S WHERE EXISTS (
+            FROM dbo.Songs S WHERE S.IsPublished = 1 AND EXISTS (
                 SELECT 1 FROM dbo.SongGroupMapping M INNER JOIN dbo.SongGroup G ON G.GroupId = M.GroupId
                 WHERE M.SongUid = S.SongUid AND G.UserId = @User AND (@Group IS NULL OR G.GroupId = @Group))
             ORDER BY S.SongID DESC OFFSET @Offset ROWS FETCH NEXT 31 ROWS ONLY
@@ -90,7 +90,7 @@ public sealed class MobileFavoritesController(IConfiguration config) : Controlle
         if (!await OwnsAsync(db, tx, groupId, ct)) return NotFound();
         if (add)
         {
-            using var song = Command(db, tx, "SELECT COUNT(*) FROM dbo.Songs WHERE SongUid = @Song", ("@Song", songId));
+            using var song = Command(db, tx, "SELECT COUNT(*) FROM dbo.Songs WHERE SongUid = @Song AND IsPublished = 1", ("@Song", songId));
             if (Convert.ToInt32(await song.ExecuteScalarAsync(ct)) == 0) return NotFound();
         }
         using var cmd = Command(db, tx, add ? """

@@ -108,7 +108,7 @@ S.[YouTubeVideoUrl], S.[ChannelThumbnailUrl], S.[SongUid]
 FROM [SongGroupMapping] GM
 INNER JOIN [V_SongsData] S ON GM.SongUid = S.SongUid
 LEFT JOIN [Songs] BaseSongs ON BaseSongs.SongUid = S.SongUid
-WHERE GM.GroupId = @GroupId
+WHERE GM.GroupId = @GroupId AND BaseSongs.IsPublished = 1
 ORDER BY S.ViewCount DESC";
 
                 parameters.Add(new SqlParameter("@GroupId", groupId.Value));
@@ -146,18 +146,18 @@ LEFT JOIN [Songs] BaseSongs ON BaseSongs.SongUid = S.SongUid ";
                 switch (type)
                 {
                     case "weekly":
-                        query += "ORDER BY ViewCount_WeeklyGrowth DESC";
+                        query += "WHERE BaseSongs.IsPublished = 1 ORDER BY ViewCount_WeeklyGrowth DESC";
                         break;
                     case "monthly":
-                        query += "ORDER BY ViewCount_MonthlyGrowth DESC";
+                        query += "WHERE BaseSongs.IsPublished = 1 ORDER BY ViewCount_MonthlyGrowth DESC";
                         break;
                     case "new":
-                        query += "WHERE AddedDate >= DATEADD(DAY, -7, GETDATE()) ORDER BY SongID DESC";
+                        query += "WHERE AddedDate >= DATEADD(DAY, -7, GETDATE()) AND IsPublished = 1 ORDER BY SongID DESC";
                         break;
                     default:
                         query += shouldPageHomeAll
-                            ? "ORDER BY ViewCount DESC OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY"
-                            : "ORDER BY ViewCount DESC";
+                            ? "WHERE BaseSongs.IsPublished = 1 ORDER BY ViewCount DESC OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY"
+                            : "WHERE BaseSongs.IsPublished = 1 ORDER BY ViewCount DESC";
                         if (shouldPageHomeAll)
                         {
                             parameters.Add(new SqlParameter("@Offset", (currentPage - 1) * homeAllPageSize));
@@ -346,11 +346,11 @@ SELECT S.[SongID], S.[Title], S.[Artist],
        S.[Translator], S.[YouTubeVideoUrl], S.[SongUid]
 FROM [Songs] S
 LEFT JOIN AliasMatches AliasHit ON AliasHit.SongUid = S.SongUid AND AliasHit.RowNumber = 1
-WHERE S.[Title] LIKE @LikeQuery
+WHERE S.IsPublished = 1 AND (S.[Title] LIKE @LikeQuery
    OR S.[Artist] LIKE @LikeQuery
    OR S.[Translator] LIKE @LikeQuery
    OR (COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL AND S.[Performer] LIKE @LikeQuery)
-   OR AliasHit.AliasText IS NOT NULL
+   OR AliasHit.AliasText IS NOT NULL)
 ORDER BY
   CASE
     WHEN S.[Title] = @ExactQuery THEN 0
@@ -480,11 +480,11 @@ SELECT
         END)
 FROM [Songs] S
 LEFT JOIN AliasMatches AliasHit ON AliasHit.SongUid = S.SongUid AND AliasHit.RowNumber = 1
-WHERE S.Title LIKE @LikeQuery
+WHERE S.IsPublished = 1 AND (S.Title LIKE @LikeQuery
    OR S.Artist LIKE @LikeQuery
    OR S.Translator LIKE @LikeQuery
    OR (COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL AND S.Performer LIKE @LikeQuery)
-   OR AliasHit.AliasText IS NOT NULL
+   OR AliasHit.AliasText IS NOT NULL)
 ORDER BY MatchRank, SongID DESC";
 
             try
@@ -710,7 +710,7 @@ END;";
 
         private static async Task<int> CountHomeSongsAsync(SqlConnection conn)
         {
-            using var cmd = new SqlCommand("SELECT COUNT(1) FROM [V_SongsData]", conn);
+            using var cmd = new SqlCommand("SELECT COUNT(1) FROM [V_SongsData] S INNER JOIN [Songs] BaseSongs ON BaseSongs.SongUid=S.SongUid WHERE BaseSongs.IsPublished=1", conn);
             return Convert.ToInt32(await cmd.ExecuteScalarAsync());
         }
 
@@ -754,7 +754,7 @@ SELECT
     [YouTubeVideoUrl],
     [ChannelThumbnailUrl]
 FROM [Songs]
-WHERE CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN [Performer] ELSE NULL END IS NOT NULL";
+WHERE IsPublished = 1 AND CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN [Performer] ELSE NULL END IS NOT NULL";
 
             using var conn = new SqlConnection(_connectionString);
             await conn.OpenAsync();

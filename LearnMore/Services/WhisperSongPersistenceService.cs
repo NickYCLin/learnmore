@@ -6,6 +6,8 @@ namespace LearnMore.Services;
 
 public class WhisperSongPersistenceService : IWhisperSongPersistenceService
 {
+    private const string SourcePending = "translation_source_pending";
+    private const string CodexPending = "translation_pending_codex";
     private static readonly Regex SongUidPattern = new("^[A-Za-z0-9_-]+$", RegexOptions.Compiled);
     private readonly IConfiguration _configuration;
     private readonly WhisperTranscriptionPersistenceService _transcriptionPersistence;
@@ -32,9 +34,9 @@ public class WhisperSongPersistenceService : IWhisperSongPersistenceService
         ArgumentException.ThrowIfNullOrWhiteSpace(userEmail);
         var songUid = Guid.NewGuid().ToString();
         var query = @"
-        INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl], [AddedByUserId])
+        INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl], [AddedByUserId], AddedDate, IsPublished, HighAccuracyStatus)
         OUTPUT INSERTED.[SongUid]
-        VALUES (@SongUid, @Title, @Artist, @Performer, @YouTubeVideoUrl, @AddedByUserId)";
+        VALUES (@SongUid, @Title, @Artist, @Performer, @YouTubeVideoUrl, @AddedByUserId, GETDATE(), 0, @Status)";
 
         using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync();
@@ -45,6 +47,7 @@ public class WhisperSongPersistenceService : IWhisperSongPersistenceService
 
         using var command = new SqlCommand(query, connection, transaction);
         command.Parameters.AddWithValue("@AddedByUserId", uploaderId);
+        command.Parameters.AddWithValue("@Status", SourcePending);
         command.Parameters.AddWithValue("@SongUid", songUid);
         command.Parameters.AddWithValue("@Title", request.Title);
         command.Parameters.AddWithValue("@Artist", request.Artist);
@@ -94,16 +97,21 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby)";
         using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync();
 
-        var segments = await _transcriptionPersistence.ParseTranscriptionToSegmentsAsync(transcriptionJson);
+        var segments = (await _transcriptionPersistence.ParseTranscriptionToSegmentsAsync(transcriptionJson)).ToList();
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync();
+        await LockUnfinishedUploadAsync(connection, transaction, songUid, CancellationToken.None);
         foreach (var segment in segments)
         {
-            using var command = new SqlCommand(query, connection);
+            using var command = new SqlCommand(query, connection, transaction);
             command.Parameters.AddWithValue("@TimeStamp", segment.TimeStamp);
             command.Parameters.AddWithValue("@Japanese", segment.Japanese ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("@Chinese", segment.Chinese ?? (object)DBNull.Value);
             command.Parameters.AddWithValue("@JapaneseRuby", segment.JapaneseRuby ?? (object)DBNull.Value);
             await command.ExecuteNonQueryAsync();
         }
+        await SetUploadPublicationAsync(connection, transaction, songUid,
+            SongTranslationCompleteness.HasCompleteChineseTranslations(segments), null, null, CancellationToken.None);
+        await transaction.CommitAsync();
     }
 
     public async Task InsertManualSegmentsAsync(string songUid, IReadOnlyCollection<TranscriptionSegment> segments, CancellationToken cancellationToken = default)
@@ -118,6 +126,7 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby)";
 
         try
         {
+            await LockUnfinishedUploadAsync(connection, transaction, songUid, cancellationToken);
             string insertQuery = $@"
 INSERT INTO [dbo].[{tableName}] (TimeStamp, Japanese, Chinese)
 VALUES (@Start, @Text, @Chinese)";
@@ -131,6 +140,10 @@ VALUES (@Start, @Text, @Chinese)";
                 await command.ExecuteNonQueryAsync(cancellationToken);
             }
 
+            await SetUploadPublicationAsync(connection, transaction, songUid,
+                segments.Count > 0 && segments.All(segment => !string.IsNullOrWhiteSpace(segment.Text)
+                    && SongTranslationCompleteness.IsUsableChinese(segment.Chinese)),
+                null, null, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
         catch
@@ -158,11 +171,15 @@ VALUES (@Start, @Text, @Chinese)";
             await ThrowIfDuplicateYouTubeSongAsync(connection, transaction, request.YouTubeLink, cancellationToken);
 
             const string insertSongQuery = @"
-INSERT INTO [dbo].[Songs] (SongUid, Title, Artist, Performer, Translator, YouTubeVideoUrl, AddedByUserId)
-VALUES (@SongUid, @Title, @Artist, @Performer, @Translator, @YouTubeVideoUrl, @AddedByUserId)";
+INSERT INTO [dbo].[Songs] (SongUid, Title, Artist, Performer, Translator, YouTubeVideoUrl, AddedByUserId, IsPublished, HighAccuracyStatus)
+VALUES (@SongUid, @Title, @Artist, @Performer, @Translator, @YouTubeVideoUrl, @AddedByUserId, @IsPublished, @Status)";
 
             await using (var command = new SqlCommand(insertSongQuery, connection, transaction))
             {
+                var isPublished = lyrics.Count > 0 && lyrics.All(lyric => !string.IsNullOrWhiteSpace(lyric.Japanese)
+                    && SongTranslationCompleteness.IsUsableChinese(lyric.Chinese));
+                command.Parameters.AddWithValue("@IsPublished", isPublished);
+                command.Parameters.AddWithValue("@Status", isPublished ? (object)DBNull.Value : CodexPending);
                 command.Parameters.AddWithValue("@AddedByUserId", uploaderId);
                 command.Parameters.AddWithValue("@SongUid", songUid);
                 command.Parameters.AddWithValue("@Title", request.SongTitle);
@@ -239,12 +256,13 @@ VALUES (@TimeStamp, @Japanese, @Chinese, @JapaneseRuby, @Roman)";
 
             const string insertSongQuery = @"
 INSERT INTO [dbo].[Songs]
-    ([SongUid], [Title], [Artist], [Performer], [Translator], [TranslationSource], [YouTubeVideoUrl], [ChannelThumbnailUrl], [SongType], [AddedDate], [AddedByUserId])
+    ([SongUid], [Title], [Artist], [Performer], [Translator], [TranslationSource], [YouTubeVideoUrl], [ChannelThumbnailUrl], [SongType], [AddedDate], [AddedByUserId], IsPublished, HighAccuracyStatus)
 VALUES
-    (@SongUid, @Title, @Artist, @Performer, NULL, NULL, @YouTubeVideoUrl, NULL, NULL, GETDATE(), @AddedByUserId)";
+    (@SongUid, @Title, @Artist, @Performer, NULL, NULL, @YouTubeVideoUrl, NULL, NULL, GETDATE(), @AddedByUserId, 0, @Status)";
 
             await using (var insertSongCommand = new SqlCommand(insertSongQuery, connection, transaction))
             {
+                insertSongCommand.Parameters.AddWithValue("@Status", SourcePending);
                 insertSongCommand.Parameters.AddWithValue("@AddedByUserId", uploaderId);
                 insertSongCommand.Parameters.AddWithValue("@SongUid", songUid);
                 insertSongCommand.Parameters.AddWithValue("@Title", string.IsNullOrWhiteSpace(request.Title) ? (object)DBNull.Value : request.Title);
@@ -304,7 +322,18 @@ VALUES (@Start, @Text, @Chinese)";
         };
     }
 
-    public async Task<List<int>> UpdateSongTranslationsAsync(string songUid, IReadOnlyList<LyricSegment> finalSegments, IReadOnlyList<int> existingLyricIds, CancellationToken cancellationToken = default)
+    public Task<List<int>> UpdateSongTranslationsAsync(string songUid, IReadOnlyList<LyricSegment> finalSegments,
+        IReadOnlyList<int> existingLyricIds, CancellationToken cancellationToken = default) =>
+        PersistTranslationsAsync(songUid, finalSegments, existingLyricIds, null, cancellationToken);
+
+    public async Task FinalizeUploadTranslationsAsync(string songUid, IReadOnlyList<LyricSegment> segments,
+        IReadOnlyList<int> existingLyricIds, string status, string? reason, CancellationToken cancellationToken = default)
+    {
+        await PersistTranslationsAsync(songUid, segments, existingLyricIds, (status, reason), cancellationToken);
+    }
+
+    private async Task<List<int>> PersistTranslationsAsync(string songUid, IReadOnlyList<LyricSegment> finalSegments,
+        IReadOnlyList<int> existingLyricIds, (string Status, string? Reason)? uploadOutcome, CancellationToken cancellationToken)
     {
         string tableName = BuildSongTableName(songUid);
         var lyricIds = existingLyricIds.ToList();
@@ -316,6 +345,19 @@ VALUES (@Start, @Text, @Chinese)";
 
         try
         {
+            if (uploadOutcome.HasValue)
+            {
+                await LockUnfinishedUploadAsync(connection, transaction, songUid, cancellationToken);
+                await using var snapshot = new SqlCommand(
+                    $"SELECT LyricID FROM [dbo].[{tableName}] WITH (UPDLOCK,HOLDLOCK) ORDER BY LyricID", connection, transaction);
+                await using var reader = await snapshot.ExecuteReaderAsync(cancellationToken);
+                var storedIds = new List<int>();
+                while (await reader.ReadAsync(cancellationToken))
+                    storedIds.Add(reader.GetInt32(0));
+                if (!storedIds.SequenceEqual(existingLyricIds))
+                    throw new InvalidOperationException("上傳中的歌詞行號已變更。");
+            }
+
             if (finalSegments.Count != lyricIds.Count)
             {
                 string deleteQuery = $"DELETE FROM [dbo].[{tableName}]";
@@ -349,9 +391,16 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     updateCommand.Parameters.AddWithValue("@Japanese", string.IsNullOrWhiteSpace(finalSegments[i].Japanese) ? (object)DBNull.Value : finalSegments[i].Japanese);
                     updateCommand.Parameters.AddWithValue("@TimeStamp", finalSegments[i].TimeStamp);
                     updateCommand.Parameters.AddWithValue("@LyricID", lyricIds[i]);
-                    await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+                    var updated = await updateCommand.ExecuteNonQueryAsync(cancellationToken);
+                    if (uploadOutcome.HasValue && updated != 1)
+                        throw new InvalidOperationException("上傳歌詞寫入不完整。");
                 }
             }
+
+            if (uploadOutcome is { } outcome)
+                await SetUploadPublicationAsync(connection, transaction, songUid,
+                    SongTranslationCompleteness.HasCompleteChineseTranslations(finalSegments),
+                    outcome.Status, outcome.Reason, cancellationToken);
 
             await transaction.CommitAsync(cancellationToken);
             return lyricIds;
@@ -361,6 +410,48 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
             await transaction.RollbackAsync(cancellationToken);
             throw;
         }
+    }
+
+    private static async Task LockUnfinishedUploadAsync(SqlConnection connection, SqlTransaction transaction,
+        string songUid, CancellationToken cancellationToken)
+    {
+        const string sql = "SELECT HighAccuracyStatus FROM dbo.Songs WITH (UPDLOCK, HOLDLOCK) WHERE SongUid=@SongUid AND IsPublished=0";
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("@SongUid", songUid);
+        if (!string.Equals(await command.ExecuteScalarAsync(cancellationToken) as string, SourcePending, StringComparison.Ordinal))
+            throw new InvalidOperationException("歌曲已離開上傳翻譯階段。");
+    }
+
+    private static async Task SetUploadPublicationAsync(SqlConnection connection, SqlTransaction transaction,
+        string songUid, bool complete, string? status, string? reason, CancellationToken cancellationToken)
+    {
+        const string sql = """
+            UPDATE dbo.Songs SET IsPublished=@Complete, HighAccuracyStatus=@Status, HighAccuracyStatusReason=@Reason
+            WHERE SongUid=@SongUid AND IsPublished=0 AND HighAccuracyStatus=@SourcePending
+            """;
+        await using var command = new SqlCommand(sql, connection, transaction);
+        command.Parameters.AddWithValue("@SongUid", songUid);
+        command.Parameters.AddWithValue("@Complete", complete);
+        command.Parameters.AddWithValue("@Status", complete ? (object?)status ?? DBNull.Value : CodexPending);
+        command.Parameters.AddWithValue("@Reason", (object?)reason ?? DBNull.Value);
+        command.Parameters.AddWithValue("@SourcePending", SourcePending);
+        if (await command.ExecuteNonQueryAsync(cancellationToken) != 1)
+            throw new InvalidOperationException("歌曲公開狀態更新失敗。");
+    }
+
+    public async Task QueueUnfinishedUploadAsync(string songUid, CancellationToken cancellationToken = default)
+    {
+        const string sql = """
+            UPDATE dbo.Songs SET HighAccuracyStatus=@CodexPending, HighAccuracyStatusReason=N'上傳翻譯中斷，等待背景補件。'
+            WHERE SongUid=@SongUid AND IsPublished=0 AND HighAccuracyStatus=@SourcePending
+            """;
+        await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
+        await connection.OpenAsync(cancellationToken);
+        await using var command = new SqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@SongUid", songUid);
+        command.Parameters.AddWithValue("@CodexPending", CodexPending);
+        command.Parameters.AddWithValue("@SourcePending", SourcePending);
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task UpdateHighAccuracyStatusAsync(string songUid, string? highAccuracyStatus, string? highAccuracyStatusReason = null, CancellationToken cancellationToken = default)

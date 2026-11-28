@@ -59,7 +59,7 @@ public class SeoController : Controller
         const string sql = @"
 SELECT TOP (@Limit) [SongUid]
 FROM [Songs]
-WHERE [SongUid] IS NOT NULL AND LTRIM(RTRIM([SongUid])) <> ''
+WHERE IsPublished = 1 AND [SongUid] IS NOT NULL AND LTRIM(RTRIM([SongUid])) <> ''
 ORDER BY [SongID] DESC";
 
         try

@@ -57,7 +57,7 @@ namespace LearnMore.Controllers
             string sql = $@"SELECT s.SongUid, s.Title, s.Artist, s.YouTubeVideoUrl,
 CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN s.Performer ELSE NULL END AS Performer
 FROM Songs s
-WHERE {string.Join(" OR ", aliasConditions)}
+WHERE s.IsPublished = 1 AND ({string.Join(" OR ", aliasConditions)})
 ORDER BY s.SongID DESC";
 
             using (var conn = new SqlConnection(_connectionString))
@@ -108,7 +108,7 @@ ORDER BY s.SongID DESC";
 CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN s.Performer ELSE NULL END AS Performer
 FROM SongGroupMapping m
 INNER JOIN SongGroup g ON m.GroupId = g.GroupId
-LEFT JOIN Songs s ON s.SongUid = m.SongUid
+INNER JOIN Songs s ON s.SongUid = m.SongUid AND s.IsPublished = 1
 WHERE g.GroupUid = @GroupUid";
 
             using (var conn = new SqlConnection(_connectionString))
@@ -209,7 +209,7 @@ WHERE g.GroupUid = @GroupUid";
                 // 1) 取得 Songs 表的基本資訊
                 string songQuery = @"SELECT Title, Artist,
 CASE WHEN COL_LENGTH('dbo.Songs', 'Performer') IS NOT NULL THEN Performer ELSE NULL END AS Performer,
-Translator, TranslationSource, YouTubeVideoUrl, SongUid FROM Songs WHERE SongUid = @SongUid";
+Translator, TranslationSource, YouTubeVideoUrl, SongUid FROM Songs WHERE SongUid = @SongUid AND IsPublished = 1";
                 using (var cmd = new SqlCommand(songQuery, conn))
                 {
                     cmd.Parameters.AddWithValue("@SongUid", songUid);

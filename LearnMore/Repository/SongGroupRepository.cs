@@ -56,6 +56,7 @@ VALUES (@UserId, @GroupName, GETDATE());";
 SELECT DISTINCT m.SongUid
 FROM SongGroupMapping m
 INNER JOIN SongGroup g ON g.GroupId = m.GroupId
+INNER JOIN Songs s ON s.SongUid = m.SongUid AND s.IsPublished = 1
 WHERE g.UserId = @UserId;";
             var list = new List<string>();
             using var conn = new SqlConnection(_connectionString);
@@ -74,6 +75,7 @@ WHERE g.UserId = @UserId;";
 SELECT m.GroupId
 FROM SongGroupMapping m
 INNER JOIN SongGroup g ON g.GroupId = m.GroupId
+INNER JOIN Songs s ON s.SongUid = m.SongUid AND s.IsPublished = 1
 WHERE g.UserId = @UserId AND m.SongUid = @SongUid;";
 
             var ids = new List<int>();
@@ -137,7 +139,7 @@ WHERE g.UserId = @UserId AND m.SongUid = @SongUid;";
 
         public async Task AddSongToGroupAsync(int groupId, string songUid)
         {
-            const string query = "INSERT INTO SongGroupMapping (GroupId, SongUid) VALUES (@GroupId, @SongUid)";
+            const string query = "INSERT INTO SongGroupMapping (GroupId, SongUid) SELECT @GroupId, SongUid FROM Songs WHERE SongUid = @SongUid AND IsPublished = 1";
             using var connection = new SqlConnection(_connectionString);
             await connection.OpenAsync();
             using var command = new SqlCommand(query, connection);
@@ -148,7 +150,7 @@ WHERE g.UserId = @UserId AND m.SongUid = @SongUid;";
 
         public List<string> GetSongsInGroup(int groupId)
         {
-            const string sql = "SELECT SongUid FROM SongGroupMapping WHERE GroupId = @GroupId";
+            const string sql = "SELECT m.SongUid FROM SongGroupMapping m INNER JOIN Songs s ON s.SongUid = m.SongUid AND s.IsPublished = 1 WHERE m.GroupId = @GroupId";
             var songs = new List<string>();
             using var connection = new SqlConnection(_connectionString);
             using var command = new SqlCommand(sql, connection);

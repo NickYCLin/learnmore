@@ -338,7 +338,7 @@ public class WhisperSongPersistenceDelegationTests
         Assert.Contains("FillMissingTranslationsWithGptAsync(", source);
         Assert.Contains("ClearSuspiciousDuplicateTranslations(preAlignedSegments)", source);
         Assert.Contains("HasCompleteChineseTranslations(completedPreAligned)", source);
-        Assert.Contains("!string.Equals(chinese.Trim(), \"翻譯中...\", StringComparison.Ordinal)", source);
+        Assert.Contains("SongTranslationCompleteness.IsUsableChinese", source);
     }
 
     [Fact]
