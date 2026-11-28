@@ -81,3 +81,5 @@ python3 -m unittest discover -s scripts -p test_learnmore_codex_backfill_sql.py 
 ```
 
 Codex 非互動執行、唯讀權限、結構化輸出與既有登入的行為依 [OpenAI 官方文件](https://learn.chatgpt.com/docs/non-interactive-mode)。
+
+Linux Compose 補件、驗證與自動公開流程見 [翻譯補件與歌曲公開](CODEX_TRANSLATION_PUBLICATION.md)。

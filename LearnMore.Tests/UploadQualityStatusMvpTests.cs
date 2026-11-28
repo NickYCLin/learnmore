@@ -53,21 +53,15 @@ public class UploadQualityStatusMvpTests
             "Controllers",
             "MediaController.cs"));
 
-        var syncedBranchIndex = source.IndexOf("else if (fromLrcLibOrNetEase)", StringComparison.Ordinal);
-        var marumaruBranchIndex = source.IndexOf("else if (preAlignedSegments is { Count: > 0 })", StringComparison.Ordinal);
-
-        Assert.True(syncedBranchIndex >= 0, "WebTranscribe should handle synced lyric sources.");
-        Assert.True(marumaruBranchIndex > syncedBranchIndex, "The synced branch should be bounded before the marumaru branch.");
-
+        var syncedBranchIndex = source.IndexOf("if (fromLrcLibOrNetEase)\n                return precisionCompleted", StringComparison.Ordinal);
+        Assert.True(syncedBranchIndex >= 0);
+        var marumaruBranchIndex = source.IndexOf("if (preAligned &&", syncedBranchIndex, StringComparison.Ordinal);
+        Assert.True(marumaruBranchIndex > syncedBranchIndex);
         var syncedBranch = source[syncedBranchIndex..marumaruBranchIndex];
-        Assert.Contains("precisionCorrectionCompleted", syncedBranch);
-        Assert.Contains("precisionCorrectionReviewReason", syncedBranch);
-        Assert.Contains("\"high_accuracy_completed\"", syncedBranch);
-        Assert.Contains("\"high_accuracy_pending\"", syncedBranch);
+        Assert.Contains("high_accuracy_completed", syncedBranch);
+        Assert.Contains("high_accuracy_pending", syncedBranch);
         Assert.Contains("timing_validation_pending", syncedBranch);
         Assert.Contains("已保留同步歌詞來源時間戳", syncedBranch);
-        Assert.Contains("shouldRunBackgroundHighAccuracyPass = true;", syncedBranch);
-        Assert.Contains("背景高精度補跑中", syncedBranch);
     }
 
     [Fact]
@@ -80,15 +74,13 @@ public class UploadQualityStatusMvpTests
             "Controllers",
             "MediaController.cs"));
 
-        var translationGuardIndex = source.IndexOf("HasCompleteChineseTranslations(finalSegments)", StringComparison.Ordinal);
-        var completedStatusIndex = source.IndexOf("else if (fromLrcLibOrNetEase)", StringComparison.Ordinal);
+        var persistence = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..",
+            "LearnMore", "Services", "WhisperSongPersistenceService.cs"));
 
-        Assert.True(translationGuardIndex >= 0, "WebTranscribe should guard incomplete translations.");
-        Assert.True(completedStatusIndex >= 0, "WebTranscribe should still complete clean synced lyrics.");
-        Assert.True(translationGuardIndex < completedStatusIndex, "Incomplete translations must be rejected before completed status is written.");
-        Assert.Contains("\"translation_pending_codex\"", source);
-        Assert.Contains("後台補件", source);
-        Assert.DoesNotContain("\"translation_incomplete\"", source);
+        Assert.Contains("FinalizeUploadTranslationsAsync", source);
+        Assert.Contains("SongTranslationCompleteness.HasCompleteChineseTranslations(finalSegments)", persistence);
+        Assert.Contains("complete ? (object?)status ?? DBNull.Value : CodexPending", persistence);
+        Assert.Contains("IsPublished=@Complete", persistence);
     }
 
     [Fact]
@@ -343,7 +335,7 @@ public class UploadQualityStatusMvpTests
             "WhisperSongPersistenceService.cs"));
 
         Assert.Contains("var songUid = Guid.NewGuid().ToString();", source);
-        Assert.Contains("INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl], [AddedByUserId])", source);
+        Assert.Contains("INSERT INTO [Songs] ([SongUid], [Title], [Artist], [Performer], [YouTubeVideoUrl], [AddedByUserId], AddedDate, IsPublished, HighAccuracyStatus)", source);
         Assert.Contains("command.Parameters.AddWithValue(\"@SongUid\", songUid);", source);
     }
 

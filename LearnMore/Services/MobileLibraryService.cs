@@ -40,7 +40,7 @@ public sealed class MobileLibraryService(IConfiguration configuration)
         var sql = $"""
             SELECT S.SongUid, S.Title, S.Artist, S.Performer, S.YouTubeVideoUrl
             FROM {source}
-            WHERE (@Query = '' OR S.Title LIKE @Pattern ESCAPE '\' OR S.Artist LIKE @Pattern ESCAPE '\' OR S.Performer LIKE @Pattern ESCAPE '\')
+            WHERE S.IsPublished = 1 AND (@Query = '' OR S.Title LIKE @Pattern ESCAPE '\' OR S.Artist LIKE @Pattern ESCAPE '\' OR S.Performer LIKE @Pattern ESCAPE '\')
               AND (@UserId IS NULL OR EXISTS (
                 SELECT 1 FROM SongGroupMapping M JOIN SongGroup G ON G.GroupId = M.GroupId
                 WHERE M.SongUid = S.SongUid AND G.UserId = @UserId))
@@ -62,7 +62,7 @@ public sealed class MobileLibraryService(IConfiguration configuration)
         if (!ValidSongUid(uid)) return null;
         await using var connection = Connection();
         await connection.OpenAsync(ct);
-        await using var command = new SqlCommand("SELECT SongUid, Title, Artist, Performer, YouTubeVideoUrl FROM Songs WHERE SongUid = @Uid", connection);
+        await using var command = new SqlCommand("SELECT SongUid, Title, Artist, Performer, YouTubeVideoUrl FROM Songs WHERE SongUid = @Uid AND IsPublished = 1", connection);
         command.Parameters.Add("@Uid", SqlDbType.NVarChar, 80).Value = uid;
         Song song;
         await using (var reader = await command.ExecuteReaderAsync(ct))
@@ -98,7 +98,7 @@ public sealed class MobileLibraryService(IConfiguration configuration)
         command.Parameters.Add("@UserId", SqlDbType.Int).Value = userId;
         command.Parameters.Add("@Uid", SqlDbType.NVarChar, 80).Value = uid;
         if (Convert.ToInt32(await command.ExecuteScalarAsync(ct)) == 0) return false;
-        command.CommandText = "SELECT COUNT(*) FROM Songs WHERE SongUid=@Uid";
+        command.CommandText = "SELECT COUNT(*) FROM Songs WHERE SongUid=@Uid AND IsPublished = 1";
         if (Convert.ToInt32(await command.ExecuteScalarAsync(ct)) == 0) return false;
         command.CommandText = included
             ? "IF NOT EXISTS (SELECT 1 FROM SongGroupMapping WHERE GroupId=@GroupId AND SongUid=@Uid) INSERT INTO SongGroupMapping (GroupId,SongUid) VALUES (@GroupId,@Uid)"

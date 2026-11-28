@@ -38,9 +38,9 @@ public class WhisperManageQueryService : IWhisperManageQueryService
 
         var (producerUids, collaborationUids) = await LoadUserSongLinksAsync(connection, userEmail, cancellationToken);
 
-        var producer = await GetSongsByUidsAsync(connection, producerUids, producerPage, cancellationToken);
+        var producer = await GetSongsByUidsAsync(connection, producerUids, producerPage, isManager, cancellationToken);
 
-        var collaboration = await GetSongsByUidsAsync(connection, collaborationUids, collaborationPage, cancellationToken);
+        var collaboration = await GetSongsByUidsAsync(connection, collaborationUids, collaborationPage, false, cancellationToken);
 
         return new ManageViewModel
         {
@@ -81,9 +81,11 @@ public class WhisperManageQueryService : IWhisperManageQueryService
         SqlConnection connection,
         IReadOnlyList<string> songUids,
         int? requestedPage,
+        bool includeAllDrafts,
         CancellationToken cancellationToken)
     {
-        if (songUids.Count == 0) return ([], 1, 0);
+        if (songUids.Count == 0 && !includeAllDrafts) return ([], 1, 0);
+        bool hasPublicationColumn = await HasColumnAsync(connection, "IsPublished", cancellationToken);
         bool hasPerformerColumn = await HasColumnAsync(connection, "Performer", cancellationToken);
         bool hasHighAccuracyStatusColumn = await HasColumnAsync(connection, "HighAccuracyStatus", cancellationToken);
         bool hasHighAccuracyStatusReasonColumn = await HasColumnAsync(connection, "HighAccuracyStatusReason", cancellationToken);
@@ -111,14 +113,16 @@ public class WhisperManageQueryService : IWhisperManageQueryService
                 CAST(0 AS bit) AS HasInstrumentalAudioStem,
                 CAST(0 AS bit) AS HasVocalsAudioStem";
         const string songFilter = "FROM dbo.Songs WHERE SongUid IN (SELECT item.value('.', 'nvarchar(450)') FROM @SongUids.nodes('/songs/uid') AS links(item))";
+        string publicationFilter = includeAllDrafts && hasPublicationColumn ? " OR IsPublished = 0" : "";
+        string publicationSelect = hasPublicationColumn ? "IsPublished" : "CAST(1 AS bit) AS IsPublished";
         await using var transaction = connection.BeginTransaction(IsolationLevel.Serializable);
-        await using var command = new SqlCommand("SELECT COUNT_BIG(*) " + songFilter, connection, transaction);
+        await using var command = new SqlCommand("SELECT COUNT_BIG(*) " + songFilter + publicationFilter, connection, transaction);
         command.Parameters.Add("@SongUids", SqlDbType.Xml).Value = new XElement("songs",
             songUids.Distinct(StringComparer.Ordinal).Select(uid => new XElement("uid", uid))).ToString(SaveOptions.DisableFormatting);
         var totalCount = Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
         var page = (int)Math.Min(requestedPage ?? 1, Math.Max(1, (totalCount + ManageSongPagination.PageSize - 1) / ManageSongPagination.PageSize));
-        command.CommandText = $"SELECT Title, Artist{performerSelect}, YouTubeVideoUrl, SongUid, SongType{highAccuracyStatusSelect}{highAccuracyStatusReasonSelect}{audioStemSelect} "
-            + songFilter + " ORDER BY SongID DESC, SongUid";
+        command.CommandText = $"SELECT Title, Artist{performerSelect}, YouTubeVideoUrl, SongUid, SongType{highAccuracyStatusSelect}{highAccuracyStatusReasonSelect}{audioStemSelect}, {publicationSelect} "
+            + songFilter + publicationFilter + " ORDER BY SongID DESC, SongUid";
         if (requestedPage.HasValue)
         {
             command.CommandText += " OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY";
@@ -139,6 +143,7 @@ public class WhisperManageQueryService : IWhisperManageQueryService
                     YouTubeVideoUrl = reader["YouTubeVideoUrl"].ToString() ?? string.Empty,
                     SongUid = reader["SongUid"].ToString() ?? string.Empty,
                     SongType = reader["SongType"].ToString(),
+                    IsPublished = (bool)reader["IsPublished"],
                     HighAccuracyStatus = reader["HighAccuracyStatus"].ToString(),
                     HighAccuracyStatusReason = reader["HighAccuracyStatusReason"].ToString(),
                     HasInstrumentalAudioStem = reader["HasInstrumentalAudioStem"] is bool hasInstrumental && hasInstrumental,

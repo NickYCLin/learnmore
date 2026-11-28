@@ -35,9 +35,19 @@ WHERE [LyricID] = @LyricID";
         await using var connection = new SqlConnection(_configuration.GetConnectionString("DefaultConnection"));
         await connection.OpenAsync(cancellationToken);
 
+        await using var transaction = (SqlTransaction)await connection.BeginTransactionAsync(cancellationToken);
+        const string lockSong = """
+            SELECT HighAccuracyStatus FROM dbo.Songs WITH (UPDLOCK,HOLDLOCK) WHERE SongUid=@SongUid AND IsPublished=0
+            """;
+        await using var song = new SqlCommand(lockSong, connection, transaction);
+        song.Parameters.AddWithValue("@SongUid", songUid);
+        var draftStatus = await song.ExecuteScalarAsync(cancellationToken) as string;
+        if (draftStatus == "translation_source_pending")
+            throw new InvalidOperationException("歌曲仍在比對翻譯來源，請稍後重新載入再編輯。");
+
         foreach (var lyric in lyrics)
         {
-            await using var command = new SqlCommand(updateQuery, connection);
+            await using var command = new SqlCommand(updateQuery, connection, transaction);
             command.Parameters.AddWithValue("@TimeStamp", lyric.TimeStamp);
             command.Parameters.AddWithValue("@Japanese", string.IsNullOrWhiteSpace(lyric.Japanese) ? (object)DBNull.Value : lyric.Japanese);
             command.Parameters.AddWithValue("@Chinese", string.IsNullOrWhiteSpace(lyric.Chinese) ? (object)DBNull.Value : lyric.Chinese);
@@ -45,6 +55,16 @@ WHERE [LyricID] = @LyricID";
             command.Parameters.AddWithValue("@LyricID", lyric.LyricID);
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+
+        if (draftStatus == "high_accuracy_needs_review")
+        {
+            song.CommandText = """
+                UPDATE dbo.Songs SET HighAccuracyStatus=N'translation_pending_codex'
+                WHERE SongUid=@SongUid AND IsPublished=0 AND HighAccuracyStatus=N'high_accuracy_needs_review'
+                """;
+            await song.ExecuteNonQueryAsync(cancellationToken);
+        }
+        await transaction.CommitAsync(cancellationToken);
     }
 
     public async Task UpdateOrderAsync(string songUid, IReadOnlyList<int> newOrder, CancellationToken cancellationToken = default)

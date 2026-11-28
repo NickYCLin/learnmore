@@ -211,7 +211,8 @@ public sealed class SqlAccountIntegrationTests : IAsyncLifetime
 
     private Task PrepareSongCreationSchemaAsync() => SqlAsync("""
         ALTER TABLE dbo.Songs ADD Title nvarchar(255), Artist nvarchar(255), Performer nvarchar(255),
-            Translator nvarchar(255), TranslationSource nvarchar(255), SongType nvarchar(100), AddedDate datetime;
+            Translator nvarchar(255), TranslationSource nvarchar(255), SongType nvarchar(100), AddedDate datetime,
+            IsPublished bit NOT NULL DEFAULT (1), HighAccuracyStatus nvarchar(50), HighAccuracyStatusReason nvarchar(200);
         """);
 
     private async Task<string> CreateSongAsync(string mode, string email)

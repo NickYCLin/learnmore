@@ -81,7 +81,7 @@ public class WhisperLyricsQueryService : IWhisperLyricsQueryService
         var query = $@"
 SELECT [Title], [Artist], [YouTubeVideoUrl], [SongUid], [HighAccuracyStatus], [HighAccuracyStatusReason]
 FROM [Songs]
-WHERE [HighAccuracyStatus] IN (
+WHERE IsPublished = 1 AND [HighAccuracyStatus] IN (
     N'high_accuracy_pending',
     N'high_accuracy_processing'{reviewStatusFilter},
     N'high_accuracy_failed'
@@ -111,9 +111,16 @@ ORDER BY [SongID]";
 
     private static async Task<bool> HasPermissionAsync(SqlConnection connection, string userEmail, string songUid, CancellationToken cancellationToken)
     {
-        const string query = "SELECT [Producer], [Collaboration] FROM [Users] WHERE [Email] = @Email";
+        const string query = """
+            SELECT Producer, Collaboration,
+                CAST(CASE WHEN Manager=1 AND IsDisabled=0 AND DeletedAt IS NULL AND EXISTS
+                    (SELECT 1 FROM dbo.Songs WHERE SongUid=@SongUid AND IsPublished=0)
+                    THEN 1 ELSE 0 END AS bit) AS CanEditDraft
+            FROM dbo.Users WHERE Email=@Email
+            """;
         await using var command = new SqlCommand(query, connection);
         command.Parameters.AddWithValue("@Email", userEmail);
+        command.Parameters.AddWithValue("@SongUid", songUid);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         if (!await reader.ReadAsync(cancellationToken))
@@ -123,7 +130,7 @@ ORDER BY [SongID]";
 
         string producerList = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
         string collaborationList = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-        return producerList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(songUid, StringComparer.Ordinal)
+        return reader.GetBoolean(2) || producerList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(songUid, StringComparer.Ordinal)
             || collaborationList.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Contains(songUid, StringComparer.Ordinal);
     }
 

@@ -19,7 +19,7 @@ public sealed class HomeNewSongsFilterTests
     {
         var controller = Source("LearnMore", "Controllers", "HomeController.cs");
 
-        Assert.Contains("WHERE AddedDate >= DATEADD(DAY, -7, GETDATE()) ORDER BY SongID DESC", controller);
+        Assert.Contains("WHERE AddedDate >= DATEADD(DAY, -7, GETDATE()) AND IsPublished = 1 ORDER BY SongID DESC", controller);
         Assert.DoesNotContain("DATEADD(WEEK, -2, GETDATE())", controller);
     }
 }

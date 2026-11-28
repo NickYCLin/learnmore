@@ -188,6 +188,9 @@ public class WhisperHighAccuracyProcessingReasonTests
     {
         public List<string?> HighAccuracyStatuses { get; } = new();
         public List<string?> HighAccuracyStatusReasons { get; } = new();
+        public Task FinalizeUploadTranslationsAsync(string songUid, IReadOnlyList<LyricSegment> segments, IReadOnlyList<int> existingLyricIds, string status, string? reason, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task QueueUnfinishedUploadAsync(string songUid, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<string> AddSongToDatabaseAsync(TranscribeRequest request, string userEmail) => Task.FromResult(string.Empty);
         public Task CreateDynamicSongTableAsync(string songUid) => Task.CompletedTask;
         public Task InsertTranscriptionToDynamicTableAsync(string songUid, string transcriptionJson) => Task.CompletedTask;

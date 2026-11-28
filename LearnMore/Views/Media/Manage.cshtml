@@ -56,6 +56,10 @@
                                             <div><strong>@song.Title</strong><div class="lm-manage-artist">@song.Artist@if (!string.IsNullOrWhiteSpace(song.Performer) && !string.Equals(song.Artist?.Trim(), song.Performer.Trim(), StringComparison.OrdinalIgnoreCase)) { <span> · 演唱：@song.Performer</span> }</div></div>
                                         </td>
                                         <td>
+                                            @if (!song.IsPublished)
+                                            {
+                                                <span class="badge bg-secondary">未公開</span>
+                                            }
                                             <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
                                             {
                                                 Status = song.HighAccuracyStatus,
@@ -130,6 +134,10 @@
                                             <div><strong>@song.Title</strong><div class="lm-manage-artist">@song.Artist@if (!string.IsNullOrWhiteSpace(song.Performer) && !string.Equals(song.Artist?.Trim(), song.Performer.Trim(), StringComparison.OrdinalIgnoreCase)) { <span> · 演唱：@song.Performer</span> }</div></div>
                                         </td>
                                         <td>
+                                            @if (!song.IsPublished)
+                                            {
+                                                <span class="badge bg-secondary">未公開</span>
+                                            }
                                             <partial name="_HighAccuracyStatusSummary" model='new HighAccuracyStatusSummaryViewModel
                                             {
                                                 Status = song.HighAccuracyStatus,

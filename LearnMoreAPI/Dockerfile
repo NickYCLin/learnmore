@@ -1,5 +1,18 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS codex-base
 
+ARG CODEX_VERSION=0.172.0
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates nodejs npm \
+    && npm install --global --include=optional "@openai/codex@${CODEX_VERSION}" \
+    && codex --version \
+    && useradd --create-home --uid 1000 learnmore \
+    && install -d -o 1000 -g 1000 /home/learnmore/.codex \
+    && npm cache clean --force \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV CODEX_BIN=/usr/local/bin/codex CODEX_HOME=/home/learnmore/.codex
+
+FROM codex-base AS api
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     HF_HOME=/home/learnmore/.cache/huggingface \
@@ -8,9 +21,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib:/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib
 
 WORKDIR /app
-
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates ffmpeg nodejs \
+    && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

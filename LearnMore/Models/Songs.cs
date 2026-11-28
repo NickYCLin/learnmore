@@ -17,6 +17,7 @@ namespace LearnMore.Models
         public string ChannelThumbnailUrl { get; set; } = string.Empty;
         public string SongUid { get; set; } = string.Empty;
         public string? SongType { get; set; }
+        public bool IsPublished { get; set; } = true;
         public string? HighAccuracyStatus { get; set; }
         public string? HighAccuracyStatusReason { get; set; }
         public bool HasInstrumentalAudioStem { get; set; }

@@ -71,6 +71,61 @@ services:
       - default
       - ycspace_apps   # 與 learnmore-api（Whisper/UVR）同網路，用 http://learnmore-api:8080 連線
 
+  # Build dependency for the worker. Start the runtime services by name.
+  codex-base:
+    build:
+      context: ../../LearnMoreAPI
+      target: codex-base
+      args: &codex-build-args
+        CODEX_VERSION: ${CODEX_VERSION:-0.172.0}
+    image: learnmore-codex-base:local
+    profiles: ["codex-worker"]
+    command: ["codex", "--version"]
+
+  codex-api:
+    build:
+      context: ../../LearnMoreAPI
+      args: *codex-build-args
+    image: learnmore-codex-api:local
+    restart: unless-stopped
+    profiles: ["codex-api"]
+    environment:
+      LEARNMORE_API_TOKEN: ${LEARNMORE_API_TOKEN:-}
+      CODEX_MODEL: ${CODEX_MODEL:-}
+      CODEX_WORKDIR: /tmp/learnmore-api-codex
+      CODEX_TIMEOUT_SECONDS: ${CODEX_TIMEOUT_SECONDS:-240}
+    ports:
+      - "127.0.0.1:${CODEX_API_HOST_PORT:-18091}:8080"
+    volumes:
+      - codex-api-home:/home/learnmore/.codex
+
+  codex-worker:
+    build:
+      context: ../..
+      dockerfile: deploy/learnmore/CodexWorker.Dockerfile
+      additional_contexts:
+        codex-base: service:codex-base
+    image: learnmore-codex-worker:local
+    init: true
+    restart: unless-stopped
+    profiles: ["codex-worker"]
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      CODEX_WORKER_DB_HOST: sqlserver
+      CODEX_WORKER_DB_NAME: ${LEARNMORE_DB_NAME:-language}
+      CODEX_WORKER_DB_USER: ${CODEX_WORKER_DB_USER:-}
+      CODEX_WORKER_DB_PASSWORD: ${CODEX_WORKER_DB_PASSWORD:-}
+    volumes:
+      - codex-worker-home:/home/learnmore/.codex
+      - codex-worker-state:/var/lib/learnmore-codex-worker
+
+volumes:
+  codex-api-home:
+  codex-worker-home:
+  codex-worker-state:
+
 networks:
   ycspace_apps:
     external: true

@@ -339,12 +339,12 @@ public class WhisperHighAccuracyInitialPassService : IWhisperHighAccuracyInitial
             await SetHighAccuracyStatusSafeAsync(songUid, "high_accuracy_processing", PostProcessingReason, cancellationToken);
             await postProcessService.RunRubyRomanEnrichmentAsync(songUid, cancellationToken);
             AppendTrace($"postprocess songUid={songUid}");
-            if (!HasCompleteChineseTranslations(translationResolution.Segments))
+            if (!SongTranslationCompleteness.HasCompleteChineseTranslations(translationResolution.Segments))
             {
                 await SetHighAccuracyStatusSafeAsync(
                     songUid,
                     "translation_pending_codex",
-                    "翻譯未完成：已排入後台補件，完成驗證後會自動標記高精度完成。",
+                    "翻譯未完成：已排入後台補件，完成驗證後會回到秒數校正流程。",
                     cancellationToken);
                 return;
             }
@@ -916,11 +916,6 @@ public class WhisperHighAccuracyInitialPassService : IWhisperHighAccuracyInitial
             AppendTrace($"high-accuracy-status-failed songUid={songUid}; value={(highAccuracyStatus ?? "<null>")}; reason={(highAccuracyStatusReason ?? "<null>")}; error={ex.Message}");
         }
     }
-
-    private static bool HasCompleteChineseTranslations(IReadOnlyList<LyricSegment> segments)
-        => segments.Count > 0 && segments.All(segment =>
-            !string.IsNullOrWhiteSpace(segment.Chinese)
-            && !string.Equals(segment.Chinese.Trim(), "翻譯中...", StringComparison.Ordinal));
 
     private async Task<double?> TryGetAudioDurationSecondsAsync(string? audioFilePath, CancellationToken cancellationToken)
     {

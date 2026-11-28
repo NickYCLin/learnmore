@@ -38,7 +38,7 @@ SELECT comments.CommentId, comments.SongUid, comments.UserName, comments.Message
        comments.TimeStamp, comments.IsPrivate, comments.Avatar,
        author.Id AS AuthorId, song.AddedByUserId
 FROM V_Comments comments
-INNER JOIN Songs song ON song.SongUid = comments.SongUid
+INNER JOIN Songs song ON song.SongUid = comments.SongUid AND song.IsPublished = 1
 LEFT JOIN Users author ON author.Email = comments.UserEmail
 WHERE comments.SongUid = @SongUid
 ORDER BY comments.TimeStamp DESC", connection))
